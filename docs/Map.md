@@ -65,9 +65,46 @@ The current starting map (`buildStartingMap()` in `main.cpp`) is 3200 units wide
 
 Spawn point: **(150, 475)** — ground surface at y = 500, player half-height = 25.
 
-## Adding New Maps
+## Map File Format
 
-1. Instantiate a `Map`
-2. Call `addPlatform` with each `Platform { bounds, color }`
-3. Set `spawnPoint` and `bounds`
-4. Pass the map to `PhysicsComponent` and the camera logic
+Maps are stored as JSON files in the `maps/` directory. At build time CMake copies the `maps/` folder next to the executable, so files are loaded with relative paths.
+
+### Schema
+
+```json
+{
+  "name": "World 1 - Starting Area",
+  "bounds":     { "x": -200.0, "y": -500.0, "width": 3600.0, "height": 1200.0 },
+  "spawnPoint": { "x": 150.0,  "y": 475.0 },
+  "platforms": [
+    { "x": -200.0, "y": 500.0, "width": 3600.0, "height": 40.0, "r": 80, "g": 80, "b": 80 }
+  ]
+}
+```
+
+| Field        | Type   | Required | Description |
+|--------------|--------|----------|-------------|
+| `name`       | string | no       | Human-readable level name |
+| `bounds`     | object | yes      | World extents; used for death zone + camera clamping |
+| `spawnPoint` | object | yes      | Player start / respawn world position |
+| `platforms`  | array  | yes      | List of platform objects |
+
+Each platform object:
+
+| Field    | Type  | Required | Description |
+|----------|-------|----------|-------------|
+| `x`,`y`  | float | yes      | Top-left world position |
+| `width`  | float | yes      | Width in world units |
+| `height` | float | yes      | Height in world units |
+| `r`,`g`,`b` | int | no (default 100) | Fill colour channels |
+
+### MapLoader (src/Map/MapLoader.h / .cpp)
+
+Static utility class. Uses **nlohmann/json** (fetched automatically via CMake FetchContent).
+
+```cpp
+Map map = MapLoader::loadFromFile("maps/world_01.json");
+```
+
+Throws `std::runtime_error` if the file cannot be opened or the JSON is malformed.
+

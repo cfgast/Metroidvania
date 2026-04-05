@@ -1,44 +1,27 @@
+#include <iostream>
+
 #include <SFML/Graphics.hpp>
 
 #include "Core/GameObject.h"
 #include "Components/PhysicsComponent.h"
 #include "Components/RenderComponent.h"
-#include "Map/Map.h"
-
-static Map buildStartingMap()
-{
-    Map map;
-    map.setBounds({ -200.f, -500.f, 3600.f, 1200.f });
-
-    const sf::Color groundColor  { 80,  80,  80 };
-    const sf::Color platformColor{ 120, 80,  40 };
-
-    // Ground — full width
-    map.addPlatform({ { -200.f, 500.f, 3600.f, 40.f }, groundColor });
-
-    // Raised platforms
-    map.addPlatform({ {  250.f, 380.f,  200.f, 20.f }, platformColor });
-    map.addPlatform({ {  550.f, 300.f,  150.f, 20.f }, platformColor });
-    map.addPlatform({ {  800.f, 220.f,  180.f, 20.f }, platformColor });
-    map.addPlatform({ { 1050.f, 340.f,  200.f, 20.f }, platformColor });
-    map.addPlatform({ { 1350.f, 260.f,  150.f, 20.f }, platformColor });
-    map.addPlatform({ { 1600.f, 180.f,  200.f, 20.f }, platformColor });
-    map.addPlatform({ { 1900.f, 340.f,  180.f, 20.f }, platformColor });
-    map.addPlatform({ { 2150.f, 260.f,  150.f, 20.f }, platformColor });
-    map.addPlatform({ { 2400.f, 180.f,  200.f, 20.f }, platformColor });
-
-    // Spawn just above ground (player half-height = 25)
-    map.setSpawnPoint({ 150.f, 475.f });
-
-    return map;
-}
+#include "Map/MapLoader.h"
 
 int main()
 {
     sf::RenderWindow window(sf::VideoMode(800, 600), "Metroidvania");
     window.setFramerateLimit(60);
 
-    Map map = buildStartingMap();
+    Map map;
+    try
+    {
+        map = MapLoader::loadFromFile("maps/world_01.json");
+    }
+    catch (const std::exception& e)
+    {
+        std::cerr << e.what() << '\n';
+        return -1;
+    }
 
     const sf::Vector2f playerSize{ 50.f, 50.f };
 

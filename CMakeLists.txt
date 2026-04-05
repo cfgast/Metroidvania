@@ -14,6 +14,16 @@ FetchContent_Declare(
 )
 FetchContent_MakeAvailable(SFML)
 
+set(JSON_BuildTests OFF CACHE INTERNAL "")
+set(JSON_Install    OFF CACHE INTERNAL "")
+FetchContent_Declare(
+    nlohmann_json
+    GIT_REPOSITORY https://github.com/nlohmann/json.git
+    GIT_TAG        v3.11.3
+    GIT_SHALLOW    TRUE
+)
+FetchContent_MakeAvailable(nlohmann_json)
+
 add_executable(Metroidvania
     src/main.cpp
     src/Core/GameObject.cpp
@@ -21,6 +31,7 @@ add_executable(Metroidvania
     src/Components/RenderComponent.cpp
     src/Components/PhysicsComponent.cpp
     src/Map/Map.cpp
+    src/Map/MapLoader.cpp
 )
 
 target_link_libraries(Metroidvania
@@ -28,6 +39,7 @@ target_link_libraries(Metroidvania
         sfml-graphics
         sfml-window
         sfml-system
+        nlohmann_json::nlohmann_json
 )
 
 # Copy SFML DLLs next to the executable on Windows
@@ -39,3 +51,10 @@ if(WIN32)
         COMMAND_EXPAND_LISTS
     )
 endif()
+
+# Copy maps folder next to the executable so relative paths work at runtime
+add_custom_command(TARGET Metroidvania POST_BUILD
+    COMMAND ${CMAKE_COMMAND} -E copy_directory
+        ${CMAKE_SOURCE_DIR}/maps
+        $<TARGET_FILE_DIR:Metroidvania>/maps
+)

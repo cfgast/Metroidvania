@@ -26,3 +26,7 @@ Implemented: true
 ==============================================================================
 Task: Make is possible for the player to jump using the space bar key.
 Implemented: true
+
+==============================================================================
+Task: Instead of harddcoding the platforms, make a map file format that describes the map, migrate the current map into the file, and then use the file to load the current map
+Implemented: true
