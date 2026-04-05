@@ -1,0 +1,38 @@
+# Build output
+build/
+
+# Visual Studio
+.vs/
+*.user
+*.suo
+*.sln.docdata
+*.vcxproj.user
+out/
+
+# CMake generated
+CMakeFiles/
+CMakeCache.txt
+cmake_install.cmake
+install_manifest.txt
+CPackConfig.cmake
+CPackSourceConfig.cmake
+_CPack_Packages/
+
+# Compiled binaries
+*.exe
+*.dll
+*.lib
+*.pdb
+*.ilk
+*.exp
+*.obj
+*.o
+
+# VS Code (keep workspace settings, ignore local overrides)
+.vscode/ipch/
+.vscode/*.db
+.vscode/*.opendb
+
+# OS
+Thumbs.db
+.DS_Store
