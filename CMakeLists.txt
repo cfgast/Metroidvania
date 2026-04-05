@@ -19,6 +19,8 @@ add_executable(Metroidvania
     src/Core/GameObject.cpp
     src/Components/MovementComponent.cpp
     src/Components/RenderComponent.cpp
+    src/Components/PhysicsComponent.cpp
+    src/Map/Map.cpp
 )
 
 target_link_libraries(Metroidvania
