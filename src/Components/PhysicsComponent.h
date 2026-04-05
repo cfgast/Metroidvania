@@ -15,10 +15,14 @@ public:
 
     bool isGrounded() const { return m_grounded; }
 
-    float        speed      = 300.f;
-    float        gravity    = 980.f;
-    float        jumpForce  = -520.f;
-    sf::Vector2f velocity   { 0.f, 0.f };
+    float        speed             = 300.f;
+    float        gravity           = 980.f;
+    float        jumpForce         = -520.f;
+    // Multipliers applied to gravity on the descent and when Space is released
+    // mid-rise. Higher values = snappier arc, quicker fall.
+    float        fallMultiplier    = 2.5f;
+    float        lowJumpMultiplier = 2.0f;
+    sf::Vector2f velocity          { 0.f, 0.f };
     sf::Vector2f collisionSize;
 
 private:

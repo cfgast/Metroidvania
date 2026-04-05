@@ -25,9 +25,15 @@ void PhysicsComponent::update(float dt)
         velocity.y = jumpForce;
     m_jumpKeyWasDown = jumpKeyDown;
 
-    // --- Gravity ---
-    if (!m_grounded)
-        velocity.y += gravity * dt;
+    // --- Gravity (always applied so grounding detection is stable every frame)
+    // Faster descent and a "cut" when Space is released while rising make the
+    // arc feel like real acceleration rather than a smooth float.
+    if (velocity.y > 0.f)
+        velocity.y += gravity * fallMultiplier * dt;       // descending: snappy fall
+    else if (velocity.y < 0.f && !jumpKeyDown)
+        velocity.y += gravity * lowJumpMultiplier * dt;    // rising, key released: cut height
+    else
+        velocity.y += gravity * dt;                        // rising, key held: normal arc
 
     // --- Collision resolution ---
     bool grounded = false;
