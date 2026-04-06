@@ -7,9 +7,12 @@
 #include "Components/RenderComponent.h"
 #include "Map/MapLoader.h"
 #include "Debug/DebugMenu.h"
+#include "Physics/PhysXWorld.h"
 
 int main()
 {
+    PhysXWorld::instance().init();
+
     sf::RenderWindow window(sf::VideoMode(800, 600), "Metroidvania");
     window.setFramerateLimit(60);
 
@@ -21,8 +24,11 @@ int main()
     catch (const std::exception& e)
     {
         std::cerr << e.what() << '\n';
+        PhysXWorld::instance().shutdown();
         return -1;
     }
+
+    map.registerPhysXStatics();
 
     const sf::Vector2f playerSize{ 50.f, 50.f };
 
@@ -60,6 +66,7 @@ int main()
             try
             {
                 map = MapLoader::loadFromFile(selectedMap);
+                map.registerPhysXStatics();
                 player.position = map.getSpawnPoint();
                 if (auto* physics = player.getComponent<PhysicsComponent>())
                     physics->velocity = { 0.f, 0.f };
@@ -99,5 +106,6 @@ int main()
         window.display();
     }
 
+    PhysXWorld::instance().shutdown();
     return 0;
 }

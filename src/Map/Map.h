@@ -21,14 +21,8 @@ public:
     sf::FloatRect getBounds() const                 { return m_bounds; }
     void          setBounds(sf::FloatRect bounds)   { m_bounds = bounds; }
 
-    // Moves position one axis at a time, resolves AABB overlaps with platforms.
-    // Writes corrected velocity back (zeroed on collision axis).
-    // Sets grounded=true if the object landed on a platform top this frame.
-    sf::Vector2f resolveCollision(sf::Vector2f position,
-                                  sf::Vector2f size,
-                                  sf::Vector2f& velocity,
-                                  float dt,
-                                  bool& grounded) const;
+    // Register every platform as a PhysX static rigid body.
+    void registerPhysXStatics() const;
 
     void render(sf::RenderWindow& window) const;
 

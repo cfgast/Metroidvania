@@ -9,7 +9,7 @@ Project Parts
 The game should have a component based object structure that makes is easy to create game objects that are a group of funtionality.
 
 Game Renderer: SMTL
-Game Physics: Nvidia PhysX
+Game Physics: Nvidia PhysX (integrated via PhysXWorld singleton; PhysX SDK in third_party/PhysX-src)
 
 ==============================================================================
 Current Implementation Plan

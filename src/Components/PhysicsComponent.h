@@ -4,12 +4,15 @@
 
 #include "../Core/Component.h"
 
+namespace physx { class PxRigidDynamic; }
+
 class Map;
 
 class PhysicsComponent : public Component
 {
 public:
     PhysicsComponent(Map& map, sf::Vector2f collisionSize, float speed = 300.f);
+    ~PhysicsComponent() override;
 
     void update(float dt) override;
 
@@ -18,15 +21,16 @@ public:
     float        speed             = 300.f;
     float        gravity           = 980.f;
     float        jumpForce         = -520.f;
-    // Multipliers applied to gravity on the descent and when Space is released
-    // mid-rise. Higher values = snappier arc, quicker fall.
     float        fallMultiplier    = 2.5f;
     float        lowJumpMultiplier = 2.0f;
     sf::Vector2f velocity          { 0.f, 0.f };
     sf::Vector2f collisionSize;
 
 private:
+    bool checkGrounded() const;
+
     Map& m_map;
+    physx::PxRigidDynamic* m_actor = nullptr;
     bool m_grounded        = false;
     bool m_jumpKeyWasDown  = false;
 };

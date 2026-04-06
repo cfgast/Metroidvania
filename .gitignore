@@ -1,6 +1,10 @@
 # Build output
 build/
 
+# PhysX build artifacts
+third_party/PhysX-build/
+third_party/PhysX-install/
+
 # Visual Studio
 .vs/
 *.user
