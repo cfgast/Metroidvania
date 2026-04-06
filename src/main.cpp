@@ -7,6 +7,7 @@
 #include "Components/PhysicsComponent.h"
 #include "Components/RenderComponent.h"
 #include "Components/AnimationComponent.h"
+#include "Components/HealthComponent.h"
 #include "Map/MapLoader.h"
 #include "Debug/DebugMenu.h"
 #include "Physics/PhysXWorld.h"
@@ -39,6 +40,14 @@ int main()
     player.addComponent<InputComponent>();
     player.addComponent<RenderComponent>(playerSize, sf::Color::Green);
     player.addComponent<PhysicsComponent>(map, playerSize, 300.f);
+    auto* health = player.addComponent<HealthComponent>(100.f);
+    health->onDeath = [&player, &map]() {
+        player.position = map.getSpawnPoint();
+        if (auto* physics = player.getComponent<PhysicsComponent>())
+            physics->velocity = { 0.f, 0.f };
+        if (auto* hp = player.getComponent<HealthComponent>())
+            hp->heal(hp->getMaxHp());
+    };
 
     // --- Sprite-sheet animation setup ---
     auto* anim = player.addComponent<AnimationComponent>();

@@ -78,3 +78,18 @@ player.render(window);
 - **Update order matters**: components are updated in the order they were added. `MovementComponent` should be added before `RenderComponent` so the shape is synced to the updated position in the same frame.
 - **Ownership**: `GameObject` exclusively owns its components via `unique_ptr`. Components hold a raw (non-owning) back-pointer to their owner.
 - **Physics**: When Nvidia PhysX is integrated, a `PhysicsComponent` will drive position instead of `MovementComponent`, which will shift to providing intent (desired velocity) rather than directly writing position.
+
+### HealthComponent (src/Components/HealthComponent.h / .cpp)
+
+Tracks current and maximum hit points. Renders a colour-coded HP bar above the owning `GameObject` in world space.
+
+| Method / Field | Purpose |
+|----------------|---------|
+| `HealthComponent(float maxHp)` | Initialises both current and max HP |
+| `takeDamage(float amount)` | Reduces HP (clamped to 0). Fires `onDeath` when HP reaches zero |
+| `heal(float amount)` | Restores HP (clamped to max). No effect if already dead |
+| `getCurrentHp()` | Returns current HP |
+| `getMaxHp()` | Returns maximum HP |
+| `isDead()` | Returns `true` when HP ≤ 0 |
+| `onDeath` | `std::function<void()>` callback invoked once when HP hits zero |
+| `render(window)` | Draws a background + fill HP bar above the owner's position |
