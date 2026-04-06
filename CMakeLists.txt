@@ -32,6 +32,7 @@ add_executable(Metroidvania
     src/Components/PhysicsComponent.cpp
     src/Map/Map.cpp
     src/Map/MapLoader.cpp
+    src/Debug/DebugMenu.cpp
 )
 
 target_link_libraries(Metroidvania
@@ -40,6 +41,7 @@ target_link_libraries(Metroidvania
         sfml-window
         sfml-system
         nlohmann_json::nlohmann_json
+        $<$<PLATFORM_ID:Windows>:comdlg32>
 )
 
 # Copy SFML DLLs next to the executable on Windows

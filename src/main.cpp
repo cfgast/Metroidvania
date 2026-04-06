@@ -6,6 +6,7 @@
 #include "Components/PhysicsComponent.h"
 #include "Components/RenderComponent.h"
 #include "Map/MapLoader.h"
+#include "Debug/DebugMenu.h"
 
 int main()
 {
@@ -33,11 +34,11 @@ int main()
     // Game-world view: 800x600 window onto the larger map
     sf::View gameView(sf::FloatRect(0.f, 0.f, 800.f, 600.f));
 
-    const sf::FloatRect& mapBounds = map.getBounds();
     const float halfW = 400.f;
     const float halfH = 300.f;
 
     sf::Clock clock;
+    DebugMenu debugMenu;
 
     while (window.isOpen())
     {
@@ -48,13 +49,38 @@ int main()
                 window.close();
             if (event.type == sf::Event::KeyPressed && event.key.code == sf::Keyboard::Escape)
                 window.close();
+
+            debugMenu.handleEvent(event, window);
         }
 
-        float dt = clock.restart().asSeconds();
+        // Reload map if the user selected one via the debug menu
+        const std::string selectedMap = debugMenu.pollSelectedMap();
+        if (!selectedMap.empty())
+        {
+            try
+            {
+                map = MapLoader::loadFromFile(selectedMap);
+                player.position = map.getSpawnPoint();
+                if (auto* physics = player.getComponent<PhysicsComponent>())
+                    physics->velocity = { 0.f, 0.f };
+            }
+            catch (const std::exception& e)
+            {
+                std::cerr << "Failed to load map: " << e.what() << '\n';
+            }
+        }
+
+        // Pause gameplay while debug menu is open
+        float dt = 0.f;
+        if (!debugMenu.isOpen())
+            dt = clock.restart().asSeconds();
+        else
+            clock.restart();
 
         player.update(dt);
 
         // Camera: follow player, clamp to map bounds
+        const sf::FloatRect& mapBounds = map.getBounds();
         float cx = player.position.x;
         float cy = player.position.y;
         cx = std::max(cx, mapBounds.left  + halfW);
@@ -69,6 +95,7 @@ int main()
         player.render(window);
 
         window.setView(window.getDefaultView());
+        debugMenu.render(window);
         window.display();
     }
 
