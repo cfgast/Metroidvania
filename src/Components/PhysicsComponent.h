@@ -8,6 +8,7 @@ namespace physx { class PxRigidDynamic; }
 
 class Map;
 struct InputState;
+struct PlayerState;
 
 class PhysicsComponent : public Component
 {
@@ -18,6 +19,8 @@ public:
     void update(float dt) override;
 
     bool isGrounded() const { return m_grounded; }
+
+    void setPlayerState(PlayerState* state) { m_playerState = state; }
 
     float        speed             = 300.f;
     float        gravity           = 980.f;
@@ -32,6 +35,8 @@ private:
 
     Map& m_map;
     physx::PxRigidDynamic* m_actor = nullptr;
+    PlayerState*           m_playerState  = nullptr;
     bool m_grounded        = false;
     bool m_jumpWasDown     = false;
+    int  m_airJumpsUsed    = 0;
 };

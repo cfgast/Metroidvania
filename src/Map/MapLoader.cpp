@@ -113,5 +113,25 @@ Map MapLoader::loadFromFile(const std::string& filePath)
         }
     }
 
+    // Ability pick-ups (optional).
+    if (j.contains("abilityPickups"))
+    {
+        for (const auto& a : j["abilityPickups"])
+        {
+            AbilityPickupDefinition def;
+            def.id       = a.at("id").get<std::string>();
+            def.ability  = abilityFromString(a.at("ability").get<std::string>());
+            def.position = {
+                a.at("x").get<float>(),
+                a.at("y").get<float>()
+            };
+            def.size = {
+                a.value("width",  30.f),
+                a.value("height", 30.f)
+            };
+            map.addAbilityPickup(def);
+        }
+    }
+
     return map;
 }

@@ -4,6 +4,7 @@
 #include <PxPhysicsAPI.h>
 
 #include "../Core/GameObject.h"
+#include "../Core/PlayerState.h"
 #include "../Map/Map.h"
 #include "../Physics/PhysXWorld.h"
 
@@ -77,7 +78,16 @@ void PhysicsComponent::update(float dt)
 
     // --- Jump (only on the frame jump is first pressed) ---
     if (m_grounded && input.jump && !m_jumpWasDown)
+    {
         velocity.y = jumpForce;
+    }
+    else if (!m_grounded && input.jump && !m_jumpWasDown
+             && m_playerState && m_playerState->hasAbility(Ability::DoubleJump)
+             && m_airJumpsUsed < 1)
+    {
+        velocity.y = jumpForce;
+        ++m_airJumpsUsed;
+    }
     m_jumpWasDown = input.jump;
 
     // --- Gravity with multipliers for snappy feel ---
@@ -100,6 +110,8 @@ void PhysicsComponent::update(float dt)
     m_grounded = checkGrounded();
     if (m_grounded && velocity.y > 0.f)
         velocity.y = 0.f;
+    if (m_grounded)
+        m_airJumpsUsed = 0;
 
     // Zero upward velocity when hitting a ceiling (overlap above head).
     if (velocity.y < 0.f)

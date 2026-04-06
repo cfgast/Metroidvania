@@ -10,6 +10,7 @@
 #include "Platform.h"
 #include "EnemyDefinition.h"
 #include "TransitionZone.h"
+#include "AbilityPickupDefinition.h"
 
 namespace sf { class RenderWindow; }
 
@@ -39,15 +40,26 @@ public:
     // Returns pointer to the TransitionZone the rectangle overlaps, or nullptr.
     const TransitionZone* checkTransition(sf::Vector2f position, sf::Vector2f size) const;
 
+    // Ability pick-ups.
+    void addAbilityPickup(const AbilityPickupDefinition& def) { m_abilityPickups.push_back(def); }
+    const std::vector<AbilityPickupDefinition>& getAbilityPickups() const { return m_abilityPickups; }
+
+    // Returns pointer to the first overlapping ability pick-up, or nullptr.
+    const AbilityPickupDefinition* checkAbilityPickup(sf::Vector2f position, sf::Vector2f size) const;
+
+    // Remove a consumed pick-up by its unique id.
+    void removeAbilityPickup(const std::string& id);
+
     // Register every platform as a PhysX static rigid body.
     void registerPhysXStatics() const;
 
     void render(sf::RenderWindow& window) const;
 
 private:
-    std::vector<Platform>          m_platforms;
-    std::vector<EnemyDefinition>   m_enemyDefinitions;
-    std::vector<TransitionZone>    m_transitionZones;
+    std::vector<Platform>                m_platforms;
+    std::vector<EnemyDefinition>         m_enemyDefinitions;
+    std::vector<TransitionZone>          m_transitionZones;
+    std::vector<AbilityPickupDefinition> m_abilityPickups;
     std::unordered_map<std::string, sf::Vector2f> m_namedSpawns;
     sf::Vector2f                   m_spawnPoint { 0.f, 0.f };
     sf::FloatRect                  m_bounds     { 0.f, 0.f, 3200.f, 1200.f };

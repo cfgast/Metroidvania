@@ -31,5 +31,13 @@
       "targetMap": "maps/world_01.json",
       "targetSpawn": "from_world_02"
     }
+  ],
+  "abilityPickups": [
+    {
+      "id": "double_jump_01",
+      "ability": "DoubleJump",
+      "x": 775.0, "y": 215.0,
+      "width": 30.0, "height": 30.0
+    }
   ]
 }

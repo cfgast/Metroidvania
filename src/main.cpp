@@ -5,6 +5,7 @@
 #include <SFML/Graphics.hpp>
 
 #include "Core/GameObject.h"
+#include "Core/PlayerState.h"
 #include "Components/InputComponent.h"
 #include "Components/PhysicsComponent.h"
 #include "Components/RenderComponent.h"
@@ -37,6 +38,16 @@ int main()
 
     map.registerPhysXStatics();
 
+    // Persistent player state (survives room transitions).
+    PlayerState playerState;
+
+    // Helper: remove already-consumed ability pick-ups from a freshly loaded map.
+    auto pruneConsumedPickups = [&](Map& m) {
+        for (const auto& id : playerState.consumedPickups)
+            m.removeAbilityPickup(id);
+    };
+    pruneConsumedPickups(map);
+
     const sf::Vector2f playerSize{ 50.f, 50.f };
 
     GameObject player;
@@ -44,6 +55,8 @@ int main()
     player.addComponent<InputComponent>();
     player.addComponent<RenderComponent>(playerSize, sf::Color::Green);
     player.addComponent<PhysicsComponent>(map, playerSize, 300.f);
+    if (auto* physics = player.getComponent<PhysicsComponent>())
+        physics->setPlayerState(&playerState);
     auto* health = player.addComponent<HealthComponent>(100.f);
     health->onDeath = [&player, &map]() {
         player.position = map.getSpawnPoint();
@@ -105,6 +118,7 @@ int main()
                 enemies.clear();
                 map = MapLoader::loadFromFile(targetFile);
                 map.registerPhysXStatics();
+                pruneConsumedPickups(map);
 
                 sf::Vector2f spawn = map.getNamedSpawn(targetSpawn);
                 player.position = spawn;
@@ -150,6 +164,7 @@ int main()
                 enemies.clear(); // destroy old enemy actors before clearing statics
                 map = MapLoader::loadFromFile(selectedMap);
                 map.registerPhysXStatics();
+                pruneConsumedPickups(map);
                 player.position = map.getSpawnPoint();
                 if (auto* physics = player.getComponent<PhysicsComponent>())
                     physics->velocity = { 0.f, 0.f };
@@ -213,6 +228,14 @@ int main()
         if (const TransitionZone* zone = map.checkTransition(player.position, playerSize))
         {
             transitionMgr.startTransition(zone->targetMap, zone->targetSpawn);
+        }
+
+        // --- Check for ability pick-up overlap ---
+        if (const AbilityPickupDefinition* pickup = map.checkAbilityPickup(player.position, playerSize))
+        {
+            playerState.unlockAbility(pickup->ability);
+            playerState.consumePickup(pickup->id);
+            map.removeAbilityPickup(pickup->id);
         }
 
         // Drive animation state from physics / input
