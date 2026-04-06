@@ -18,3 +18,14 @@ inline Ability abilityFromString(const std::string& s)
     if (s == "Dash")       return Ability::Dash;
     throw std::runtime_error("Unknown ability: " + s);
 }
+
+inline std::string abilityToString(Ability a)
+{
+    switch (a)
+    {
+        case Ability::DoubleJump: return "DoubleJump";
+        case Ability::WallSlide:  return "WallSlide";
+        case Ability::Dash:       return "Dash";
+    }
+    return "Unknown";
+}

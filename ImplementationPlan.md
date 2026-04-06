@@ -65,4 +65,4 @@ Implemented: true
 
 ==============================================================================
 Task: Add a persistent save/load system. PlayerState (position, current map filename, unlocked abilities, HP) should be serializable to a JSON save file. Add a save slot selection screen accessible from the main menu. Auto-save on room transition. Allow manual save from the pause menu (Escape key).
-Implemented: false
+Implemented: true

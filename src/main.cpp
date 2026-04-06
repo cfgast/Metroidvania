@@ -6,6 +6,7 @@
 
 #include "Core/GameObject.h"
 #include "Core/PlayerState.h"
+#include "Core/SaveSystem.h"
 #include "Components/InputComponent.h"
 #include "Components/PhysicsComponent.h"
 #include "Components/RenderComponent.h"
@@ -16,6 +17,8 @@
 #include "Map/TransitionManager.h"
 #include "Debug/DebugMenu.h"
 #include "Physics/PhysXWorld.h"
+#include "UI/SaveSlotScreen.h"
+#include "UI/PauseMenu.h"
 
 int main()
 {
@@ -24,89 +27,111 @@ int main()
     sf::RenderWindow window(sf::VideoMode(800, 600), "Metroidvania");
     window.setFramerateLimit(60);
 
+    // --- Game state ---
     Map map;
-    try
-    {
-        map = MapLoader::loadFromFile("maps/world_01.json");
-    }
-    catch (const std::exception& e)
-    {
-        std::cerr << e.what() << '\n';
-        PhysXWorld::instance().shutdown();
-        return -1;
-    }
-
-    map.registerPhysXStatics();
-
-    // Persistent player state (survives room transitions).
     PlayerState playerState;
+    std::string currentMapFile = "maps/world_01.json";
+    int         activeSaveSlot = 1;
 
-    // Helper: remove already-consumed ability pick-ups from a freshly loaded map.
+    const sf::Vector2f playerSize{ 50.f, 50.f };
+    std::vector<std::unique_ptr<GameObject>> enemies;
+    GameObject player;
+
+    // Helper: build a SaveData snapshot from current game state.
+    auto buildSaveData = [&]() -> SaveData {
+        SaveData sd;
+        sd.playerPosition = player.position;
+        sd.currentMapFile = currentMapFile;
+        if (auto* hp = player.getComponent<HealthComponent>())
+        {
+            sd.currentHp = hp->getCurrentHp();
+            sd.maxHp     = hp->getMaxHp();
+        }
+        sd.playerState = playerState;
+        return sd;
+    };
+
+    auto performSave = [&]() {
+        SaveData sd = buildSaveData();
+        if (SaveSystem::save(activeSaveSlot, sd))
+            std::cout << "Game saved to slot " << activeSaveSlot << '\n';
+        else
+            std::cerr << "Save failed for slot " << activeSaveSlot << '\n';
+    };
+
     auto pruneConsumedPickups = [&](Map& m) {
         for (const auto& id : playerState.consumedPickups)
             m.removeAbilityPickup(id);
     };
-    pruneConsumedPickups(map);
 
-    const sf::Vector2f playerSize{ 50.f, 50.f };
-
-    GameObject player;
-    player.position = map.getSpawnPoint();
-    player.addComponent<InputComponent>();
-    player.addComponent<RenderComponent>(playerSize, sf::Color::Green);
-    player.addComponent<PhysicsComponent>(map, playerSize, 300.f);
-    if (auto* physics = player.getComponent<PhysicsComponent>())
-        physics->setPlayerState(&playerState);
-    auto* health = player.addComponent<HealthComponent>(100.f);
-    health->onDeath = [&player, &map]() {
-        player.position = map.getSpawnPoint();
+    auto setupPlayer = [&]() {
+        player.addComponent<InputComponent>();
+        player.addComponent<RenderComponent>(playerSize, sf::Color::Green);
+        player.addComponent<PhysicsComponent>(map, playerSize, 300.f);
         if (auto* physics = player.getComponent<PhysicsComponent>())
-            physics->velocity = { 0.f, 0.f };
-        if (auto* hp = player.getComponent<HealthComponent>())
-            hp->heal(hp->getMaxHp());
+            physics->setPlayerState(&playerState);
+        auto* health = player.addComponent<HealthComponent>(100.f);
+        health->onDeath = [&player, &map]() {
+            player.position = map.getSpawnPoint();
+            if (auto* physics = player.getComponent<PhysicsComponent>())
+                physics->velocity = { 0.f, 0.f };
+            if (auto* hp = player.getComponent<HealthComponent>())
+                hp->heal(hp->getMaxHp());
+        };
+
+        auto* anim = player.addComponent<AnimationComponent>();
+        {
+            const std::string atlas = "assets/player_spritesheet.png";
+            const int fw = 50, fh = 50;
+            auto makeFrames = [&](int row, int count) {
+                std::vector<sf::IntRect> frames;
+                for (int i = 0; i < count; ++i)
+                    frames.emplace_back(i * fw, row * fh, fw, fh);
+                return frames;
+            };
+            anim->addAnimation("idle",      atlas, makeFrames(0, 4), 0.20f);
+            anim->addAnimation("run-right", atlas, makeFrames(1, 4), 0.10f);
+            anim->addAnimation("run-left",  atlas, makeFrames(2, 4), 0.10f);
+            anim->addAnimation("jump",      atlas, makeFrames(3, 2), 0.15f, false);
+            anim->addAnimation("fall",      atlas, makeFrames(4, 2), 0.15f, false);
+            anim->play("idle");
+        }
     };
 
-    // --- Helper: create enemy GameObjects from map definitions ---
     auto spawnEnemies = [&](Map& m, GameObject& p)
     {
-        std::vector<std::unique_ptr<GameObject>> enemies;
+        std::vector<std::unique_ptr<GameObject>> result;
         for (const auto& def : m.getEnemyDefinitions())
         {
             auto enemy = std::make_unique<GameObject>();
             enemy->position = def.position;
-
-            // AI must update before PhysicsComponent reads the InputState.
             enemy->addComponent<EnemyAIComponent>(p, def.waypointA, def.waypointB,
                                                   def.damage, 0.5f);
             enemy->addComponent<InputComponent>();
             enemy->addComponent<RenderComponent>(def.size, sf::Color::Red);
             enemy->addComponent<PhysicsComponent>(m, def.size, def.speed);
             enemy->addComponent<HealthComponent>(def.hp);
-            enemies.push_back(std::move(enemy));
+            result.push_back(std::move(enemy));
         }
-        return enemies;
+        return result;
     };
 
-    auto enemies = spawnEnemies(map, player);
+    auto loadMapAndSetup = [&](const std::string& mapFile, sf::Vector2f spawnPos) {
+        currentMapFile = mapFile;
+        enemies.clear();
+        map = MapLoader::loadFromFile(mapFile);
+        map.registerPhysXStatics();
+        pruneConsumedPickups(map);
+        player.position = spawnPos;
+        if (auto* physics = player.getComponent<PhysicsComponent>())
+            physics->velocity = { 0.f, 0.f };
+        enemies = spawnEnemies(map, player);
+    };
 
-    // --- Sprite-sheet animation setup ---
-    auto* anim = player.addComponent<AnimationComponent>();
-    {
-        const std::string atlas = "assets/player_spritesheet.png";
-        const int fw = 50, fh = 50;
-        auto makeFrames = [&](int row, int count) {
-            std::vector<sf::IntRect> frames;
-            for (int i = 0; i < count; ++i)
-                frames.emplace_back(i * fw, row * fh, fw, fh);
-            return frames;
-        };
-        anim->addAnimation("idle",      atlas, makeFrames(0, 4), 0.20f);
-        anim->addAnimation("run-right", atlas, makeFrames(1, 4), 0.10f);
-        anim->addAnimation("run-left",  atlas, makeFrames(2, 4), 0.10f);
-        anim->addAnimation("jump",      atlas, makeFrames(3, 2), 0.15f, false);
-        anim->addAnimation("fall",      atlas, makeFrames(4, 2), 0.15f, false);
-        anim->play("idle");
-    }
+    // Save-slot selection screen (shown at launch)
+    SaveSlotScreen saveSlotScreen;
+    saveSlotScreen.open();
+    bool gameStarted = false;
 
     // --- Room transition manager ---
     TransitionManager transitionMgr;
@@ -117,6 +142,7 @@ int main()
             {
                 enemies.clear();
                 map = MapLoader::loadFromFile(targetFile);
+                currentMapFile = targetFile;
                 map.registerPhysXStatics();
                 pruneConsumedPickups(map);
 
@@ -126,6 +152,9 @@ int main()
                     physics->velocity = { 0.f, 0.f };
 
                 enemies = spawnEnemies(map, player);
+
+                // Auto-save on room transition.
+                performSave();
             }
             catch (const std::exception& e)
             {
@@ -133,14 +162,13 @@ int main()
             }
         });
 
-    // Game-world view: 800x600 window onto the larger map
     sf::View gameView(sf::FloatRect(0.f, 0.f, 800.f, 600.f));
-
     const float halfW = 400.f;
     const float halfH = 300.f;
 
     sf::Clock clock;
-    DebugMenu debugMenu;
+    DebugMenu  debugMenu;
+    PauseMenu  pauseMenu;
 
     while (window.isOpen())
     {
@@ -148,12 +176,120 @@ int main()
         while (window.pollEvent(event))
         {
             if (event.type == sf::Event::Closed)
+            {
                 window.close();
+                break;
+            }
+
+            // --- Save-slot screen has priority ---
+            if (saveSlotScreen.isOpen())
+            {
+                SaveSlotResult slotResult = saveSlotScreen.handleEvent(event, window);
+                if (slotResult.action == SaveSlotResult::NewGame)
+                {
+                    activeSaveSlot = slotResult.slot;
+                    saveSlotScreen.close();
+                    playerState = PlayerState{};
+                    currentMapFile = "maps/world_01.json";
+
+                    if (!gameStarted)
+                    {
+                        map = MapLoader::loadFromFile(currentMapFile);
+                        map.registerPhysXStatics();
+                        pruneConsumedPickups(map);
+                        player.position = map.getSpawnPoint();
+                        setupPlayer();
+                        enemies = spawnEnemies(map, player);
+                        gameStarted = true;
+                    }
+                    else
+                    {
+                        loadMapAndSetup(currentMapFile, map.getSpawnPoint());
+                    }
+                    performSave();
+                    clock.restart();
+                }
+                else if (slotResult.action == SaveSlotResult::LoadSlot)
+                {
+                    activeSaveSlot = slotResult.slot;
+                    SaveData sd;
+                    if (SaveSystem::load(activeSaveSlot, sd))
+                    {
+                        playerState    = sd.playerState;
+                        currentMapFile = sd.currentMapFile;
+                        saveSlotScreen.close();
+
+                        if (!gameStarted)
+                        {
+                            map = MapLoader::loadFromFile(currentMapFile);
+                            map.registerPhysXStatics();
+                            pruneConsumedPickups(map);
+                            player.position = sd.playerPosition;
+                            setupPlayer();
+                            if (auto* hp = player.getComponent<HealthComponent>())
+                            {
+                                hp->heal(hp->getMaxHp());
+                                hp->takeDamage(hp->getMaxHp() - sd.currentHp);
+                            }
+                            enemies = spawnEnemies(map, player);
+                            gameStarted = true;
+                        }
+                        else
+                        {
+                            loadMapAndSetup(currentMapFile, sd.playerPosition);
+                            if (auto* hp = player.getComponent<HealthComponent>())
+                            {
+                                hp->heal(hp->getMaxHp());
+                                hp->takeDamage(hp->getMaxHp() - sd.currentHp);
+                            }
+                        }
+                        clock.restart();
+                    }
+                }
+                continue;
+            }
+
+            // --- Pause menu ---
+            if (pauseMenu.isOpen())
+            {
+                PauseMenu::Action pa = pauseMenu.handleEvent(event);
+                if (pa == PauseMenu::Resume)
+                    clock.restart();
+                else if (pa == PauseMenu::Save)
+                {
+                    performSave();
+                    pauseMenu.close();
+                    clock.restart();
+                }
+                else if (pa == PauseMenu::Quit)
+                    window.close();
+                continue;
+            }
+
+            // Escape opens the pause menu instead of closing the window.
             if (event.type == sf::Event::KeyPressed && event.key.code == sf::Keyboard::Escape)
-                window.close();
+            {
+                pauseMenu.open();
+                continue;
+            }
 
             debugMenu.handleEvent(event, window);
         }
+
+        if (!window.isOpen())
+            break;
+
+        // --- Save-slot screen rendering ---
+        if (saveSlotScreen.isOpen())
+        {
+            window.clear(sf::Color(15, 15, 30));
+            saveSlotScreen.render(window);
+            window.display();
+            continue;
+        }
+
+        if (!gameStarted)
+            continue;
 
         // Reload map if the user selected one via the debug menu
         const std::string selectedMap = debugMenu.pollSelectedMap();
@@ -161,14 +297,7 @@ int main()
         {
             try
             {
-                enemies.clear(); // destroy old enemy actors before clearing statics
-                map = MapLoader::loadFromFile(selectedMap);
-                map.registerPhysXStatics();
-                pruneConsumedPickups(map);
-                player.position = map.getSpawnPoint();
-                if (auto* physics = player.getComponent<PhysicsComponent>())
-                    physics->velocity = { 0.f, 0.f };
-                enemies = spawnEnemies(map, player);
+                loadMapAndSetup(selectedMap, map.getSpawnPoint());
             }
             catch (const std::exception& e)
             {
@@ -176,9 +305,9 @@ int main()
             }
         }
 
-        // Pause gameplay while debug menu is open
+        // Pause gameplay while debug or pause menu is open
         float dt = 0.f;
-        if (!debugMenu.isOpen())
+        if (!debugMenu.isOpen() && !pauseMenu.isOpen())
             dt = clock.restart().asSeconds();
         else
             clock.restart();
@@ -188,7 +317,6 @@ int main()
         {
             transitionMgr.update(dt);
 
-            // Still render the scene behind the fade overlay.
             const sf::FloatRect& mapBounds = map.getBounds();
             float cx = player.position.x;
             float cy = player.position.y;
@@ -211,7 +339,6 @@ int main()
             continue;
         }
 
-        // Mark the start of a new physics frame (allows one PhysX step).
         PhysXWorld::instance().beginFrame();
 
         player.update(dt);
@@ -224,13 +351,11 @@ int main()
             enemy->update(dt);
         }
 
-        // --- Check for transition zone overlap ---
         if (const TransitionZone* zone = map.checkTransition(player.position, playerSize))
         {
             transitionMgr.startTransition(zone->targetMap, zone->targetSpawn);
         }
 
-        // --- Check for ability pick-up overlap ---
         if (const AbilityPickupDefinition* pickup = map.checkAbilityPickup(player.position, playerSize))
         {
             playerState.unlockAbility(pickup->ability);
@@ -238,7 +363,6 @@ int main()
             map.removeAbilityPickup(pickup->id);
         }
 
-        // Drive animation state from physics / input
         if (auto* animComp = player.getComponent<AnimationComponent>())
         {
             auto* physics  = player.getComponent<PhysicsComponent>();
@@ -259,7 +383,6 @@ int main()
             }
         }
 
-        // Camera: follow player, clamp to map bounds
         const sf::FloatRect& mapBounds = map.getBounds();
         float cx = player.position.x;
         float cy = player.position.y;
@@ -283,10 +406,10 @@ int main()
 
         player.render(window);
 
-        // Draw transition fade overlay on top of game scene.
         transitionMgr.render(window);
 
         window.setView(window.getDefaultView());
+        pauseMenu.render(window);
         debugMenu.render(window);
         window.display();
     }

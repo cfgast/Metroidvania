@@ -40,3 +40,6 @@ _CPack_Packages/
 # OS
 Thumbs.db
 .DS_Store
+
+# Save files
+saves/

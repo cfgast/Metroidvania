@@ -31,6 +31,7 @@ set(PHYSX_LIB_DIR "${CMAKE_SOURCE_DIR}/third_party/PhysX-install/bin/win.x86_64.
 add_executable(Metroidvania
     src/main.cpp
     src/Core/GameObject.cpp
+    src/Core/SaveSystem.cpp
     src/Components/MovementComponent.cpp
     src/Components/RenderComponent.cpp
     src/Components/InputComponent.cpp
@@ -43,6 +44,8 @@ add_executable(Metroidvania
     src/Map/TransitionManager.cpp
     src/Debug/DebugMenu.cpp
     src/Physics/PhysXWorld.cpp
+    src/UI/SaveSlotScreen.cpp
+    src/UI/PauseMenu.cpp
 )
 
 target_include_directories(Metroidvania PRIVATE
