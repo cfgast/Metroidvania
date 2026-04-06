@@ -54,5 +54,33 @@ Map MapLoader::loadFromFile(const std::string& filePath)
         map.addPlatform(platform);
     }
 
+    if (j.contains("enemies"))
+    {
+        for (const auto& e : j["enemies"])
+        {
+            EnemyDefinition def;
+            def.position = {
+                e.at("x").get<float>(),
+                e.at("y").get<float>()
+            };
+
+            const auto& wA = e.at("waypointA");
+            def.waypointA = { wA.at("x").get<float>(), wA.at("y").get<float>() };
+
+            const auto& wB = e.at("waypointB");
+            def.waypointB = { wB.at("x").get<float>(), wB.at("y").get<float>() };
+
+            def.speed  = e.value("speed",  100.f);
+            def.damage = e.value("damage", 10.f);
+            def.hp     = e.value("hp",     50.f);
+            def.size   = {
+                e.value("width",  40.f),
+                e.value("height", 40.f)
+            };
+
+            map.addEnemyDefinition(def);
+        }
+    }
+
     return map;
 }

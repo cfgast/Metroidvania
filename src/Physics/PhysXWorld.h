@@ -19,7 +19,10 @@ public:
     void init();
     void shutdown();
 
-    // Advance the PhysX simulation by dt seconds.
+    // Call once per frame before any entity updates.
+    void beginFrame();
+
+    // Advance the PhysX simulation by dt seconds (at most once per frame).
     void step(float dt);
 
     // Create a dynamic box actor (for the player / moving objects).
@@ -55,4 +58,6 @@ private:
 
     // Track static actors so we can remove them when loading a new map.
     std::vector<PxRigidStatic*> m_staticActors;
+
+    bool m_steppedThisFrame = false;
 };

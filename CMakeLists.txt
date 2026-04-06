@@ -37,6 +37,7 @@ add_executable(Metroidvania
     src/Components/AnimationComponent.cpp
     src/Components/PhysicsComponent.cpp
     src/Components/HealthComponent.cpp
+    src/Components/EnemyAIComponent.cpp
     src/Map/Map.cpp
     src/Map/MapLoader.cpp
     src/Debug/DebugMenu.cpp

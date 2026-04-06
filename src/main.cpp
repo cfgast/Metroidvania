@@ -1,4 +1,6 @@
 #include <iostream>
+#include <vector>
+#include <memory>
 
 #include <SFML/Graphics.hpp>
 
@@ -8,6 +10,7 @@
 #include "Components/RenderComponent.h"
 #include "Components/AnimationComponent.h"
 #include "Components/HealthComponent.h"
+#include "Components/EnemyAIComponent.h"
 #include "Map/MapLoader.h"
 #include "Debug/DebugMenu.h"
 #include "Physics/PhysXWorld.h"
@@ -48,6 +51,29 @@ int main()
         if (auto* hp = player.getComponent<HealthComponent>())
             hp->heal(hp->getMaxHp());
     };
+
+    // --- Helper: create enemy GameObjects from map definitions ---
+    auto spawnEnemies = [&](Map& m, GameObject& p)
+    {
+        std::vector<std::unique_ptr<GameObject>> enemies;
+        for (const auto& def : m.getEnemyDefinitions())
+        {
+            auto enemy = std::make_unique<GameObject>();
+            enemy->position = def.position;
+
+            // AI must update before PhysicsComponent reads the InputState.
+            enemy->addComponent<EnemyAIComponent>(p, def.waypointA, def.waypointB,
+                                                  def.damage, 0.5f);
+            enemy->addComponent<InputComponent>();
+            enemy->addComponent<RenderComponent>(def.size, sf::Color::Red);
+            enemy->addComponent<PhysicsComponent>(m, def.size, def.speed);
+            enemy->addComponent<HealthComponent>(def.hp);
+            enemies.push_back(std::move(enemy));
+        }
+        return enemies;
+    };
+
+    auto enemies = spawnEnemies(map, player);
 
     // --- Sprite-sheet animation setup ---
     auto* anim = player.addComponent<AnimationComponent>();
@@ -96,11 +122,13 @@ int main()
         {
             try
             {
+                enemies.clear(); // destroy old enemy actors before clearing statics
                 map = MapLoader::loadFromFile(selectedMap);
                 map.registerPhysXStatics();
                 player.position = map.getSpawnPoint();
                 if (auto* physics = player.getComponent<PhysicsComponent>())
                     physics->velocity = { 0.f, 0.f };
+                enemies = spawnEnemies(map, player);
             }
             catch (const std::exception& e)
             {
@@ -115,7 +143,18 @@ int main()
         else
             clock.restart();
 
+        // Mark the start of a new physics frame (allows one PhysX step).
+        PhysXWorld::instance().beginFrame();
+
         player.update(dt);
+
+        for (auto& enemy : enemies)
+        {
+            auto* hp = enemy->getComponent<HealthComponent>();
+            if (hp && hp->isDead())
+                continue;
+            enemy->update(dt);
+        }
 
         // Drive animation state from physics / input
         if (auto* animComp = player.getComponent<AnimationComponent>())
@@ -151,6 +190,15 @@ int main()
         window.setView(gameView);
         window.clear(sf::Color(30, 30, 50));
         map.render(window);
+
+        for (auto& enemy : enemies)
+        {
+            auto* hp = enemy->getComponent<HealthComponent>();
+            if (hp && hp->isDead())
+                continue;
+            enemy->render(window);
+        }
+
         player.render(window);
 
         window.setView(window.getDefaultView());

@@ -42,12 +42,18 @@ void PhysXWorld::shutdown()
     if (m_foundation) { m_foundation->release(); m_foundation = nullptr; }
 }
 
+void PhysXWorld::beginFrame()
+{
+    m_steppedThisFrame = false;
+}
+
 void PhysXWorld::step(float dt)
 {
-    if (!m_scene || dt <= 0.f)
+    if (!m_scene || dt <= 0.f || m_steppedThisFrame)
         return;
     m_scene->simulate(dt);
     m_scene->fetchResults(true);
+    m_steppedThisFrame = true;
 }
 
 PxRigidDynamic* PhysXWorld::createDynamicBox(sf::Vector2f position,
