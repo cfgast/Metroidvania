@@ -44,12 +44,8 @@ Task: Separate input handling from PhysicsComponent into a dedicated InputCompon
 Implemented: true
 
 ==============================================================================
-Task: Add a basic multiplayer lobby and networking layer using a client-server model (up to 8 players). Use a simple UDP transport (SFML sockets or a thin wrapper). The server is authoritative: it runs the PhysX simulation, broadcasts player positions and velocities at a fixed tick rate (20 Hz), and accepts InputState packets from clients. Each client renders all players with dead-reckoning interpolation. For now, host the server in-process when the first player starts a game, and have other players join by IP address entered in a simple connect dialog.
-Implemented: false
-
-==============================================================================
 Task: Add an AnimationComponent that plays sprite-sheet animations. Each animation is defined by a name, a path to a texture atlas, a list of frame rects, and a frame duration. AnimationComponent should support play(name), stop(), and looping. Hook it into the player GameObject so that idle, run-left, run-right, jump, and fall each use a distinct animation. The existing RenderComponent should be bypassed when AnimationComponent is present.
-Implemented: false
+Implemented: true
 
 ==============================================================================
 Task: Add a HealthComponent that tracks current and maximum hit points. Expose takeDamage(float) and heal(float) methods. When HP reaches zero emit an onDeath event (use a simple std::function callback). Add a visible HP bar rendered above the owning GameObject in world space using a RenderComponent-style draw call (no UI system needed yet).

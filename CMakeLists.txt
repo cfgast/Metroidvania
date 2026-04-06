@@ -34,6 +34,7 @@ add_executable(Metroidvania
     src/Components/MovementComponent.cpp
     src/Components/RenderComponent.cpp
     src/Components/InputComponent.cpp
+    src/Components/AnimationComponent.cpp
     src/Components/PhysicsComponent.cpp
     src/Map/Map.cpp
     src/Map/MapLoader.cpp
@@ -83,4 +84,11 @@ add_custom_command(TARGET Metroidvania POST_BUILD
     COMMAND ${CMAKE_COMMAND} -E copy_directory
         ${CMAKE_SOURCE_DIR}/maps
         $<TARGET_FILE_DIR:Metroidvania>/maps
+)
+
+# Copy assets folder next to the executable so sprite sheets are found at runtime
+add_custom_command(TARGET Metroidvania POST_BUILD
+    COMMAND ${CMAKE_COMMAND} -E copy_directory
+        ${CMAKE_SOURCE_DIR}/assets
+        $<TARGET_FILE_DIR:Metroidvania>/assets
 )

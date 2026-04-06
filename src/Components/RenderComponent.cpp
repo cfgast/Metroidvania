@@ -1,4 +1,5 @@
 #include "RenderComponent.h"
+#include "AnimationComponent.h"
 
 #include <SFML/Graphics/RenderWindow.hpp>
 
@@ -18,5 +19,9 @@ void RenderComponent::update(float dt)
 
 void RenderComponent::render(sf::RenderWindow& window)
 {
+    // Bypass when an AnimationComponent is handling visuals.
+    if (getOwner() && getOwner()->getComponent<AnimationComponent>())
+        return;
+
     window.draw(shape);
 }

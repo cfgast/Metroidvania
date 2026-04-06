@@ -6,6 +6,7 @@
 #include "Components/InputComponent.h"
 #include "Components/PhysicsComponent.h"
 #include "Components/RenderComponent.h"
+#include "Components/AnimationComponent.h"
 #include "Map/MapLoader.h"
 #include "Debug/DebugMenu.h"
 #include "Physics/PhysXWorld.h"
@@ -38,6 +39,25 @@ int main()
     player.addComponent<InputComponent>();
     player.addComponent<RenderComponent>(playerSize, sf::Color::Green);
     player.addComponent<PhysicsComponent>(map, playerSize, 300.f);
+
+    // --- Sprite-sheet animation setup ---
+    auto* anim = player.addComponent<AnimationComponent>();
+    {
+        const std::string atlas = "assets/player_spritesheet.png";
+        const int fw = 50, fh = 50;
+        auto makeFrames = [&](int row, int count) {
+            std::vector<sf::IntRect> frames;
+            for (int i = 0; i < count; ++i)
+                frames.emplace_back(i * fw, row * fh, fw, fh);
+            return frames;
+        };
+        anim->addAnimation("idle",      atlas, makeFrames(0, 4), 0.20f);
+        anim->addAnimation("run-right", atlas, makeFrames(1, 4), 0.10f);
+        anim->addAnimation("run-left",  atlas, makeFrames(2, 4), 0.10f);
+        anim->addAnimation("jump",      atlas, makeFrames(3, 2), 0.15f, false);
+        anim->addAnimation("fall",      atlas, makeFrames(4, 2), 0.15f, false);
+        anim->play("idle");
+    }
 
     // Game-world view: 800x600 window onto the larger map
     sf::View gameView(sf::FloatRect(0.f, 0.f, 800.f, 600.f));
@@ -87,6 +107,27 @@ int main()
             clock.restart();
 
         player.update(dt);
+
+        // Drive animation state from physics / input
+        if (auto* animComp = player.getComponent<AnimationComponent>())
+        {
+            auto* physics  = player.getComponent<PhysicsComponent>();
+            auto* inputComp = player.getComponent<InputComponent>();
+            if (physics && inputComp)
+            {
+                const auto& inp = inputComp->getInputState();
+                if (!physics->isGrounded() && physics->velocity.y <= 0.f)
+                    animComp->play("jump");
+                else if (!physics->isGrounded() && physics->velocity.y > 0.f)
+                    animComp->play("fall");
+                else if (inp.moveLeft)
+                    animComp->play("run-left");
+                else if (inp.moveRight)
+                    animComp->play("run-right");
+                else
+                    animComp->play("idle");
+            }
+        }
 
         // Camera: follow player, clamp to map bounds
         const sf::FloatRect& mapBounds = map.getBounds();
