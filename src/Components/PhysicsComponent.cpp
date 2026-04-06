@@ -19,7 +19,9 @@ PhysicsComponent::~PhysicsComponent()
 {
     if (m_actor)
     {
-        PhysXWorld::instance().getScene()->removeActor(*m_actor);
+        PxScene* scene = PhysXWorld::instance().getScene();
+        if (scene)
+            scene->removeActor(*m_actor);
         m_actor->release();
         m_actor = nullptr;
     }
