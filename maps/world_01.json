@@ -2,6 +2,10 @@
   "name": "World 1 - Starting Area",
   "bounds": { "x": -200.0, "y": -500.0, "width": 3600.0, "height": 1200.0 },
   "spawnPoint": { "x": 150.0, "y": 475.0 },
+  "spawnPoints": {
+    "default":        { "x": 150.0,  "y": 475.0 },
+    "from_world_02":  { "x": 100.0,  "y": 475.0 }
+  },
   "platforms": [
     { "x": -200.0, "y":  500.0, "width": 3600.0, "height": 40.0, "r":  80, "g":  80, "b":  80 },
     { "x":  250.0, "y":  380.0, "width":  200.0, "height": 20.0, "r": 120, "g":  80, "b":  40 },
@@ -35,6 +39,14 @@
       "waypointB": { "x": 2600.0, "y": 475.0 },
       "speed": 80.0, "damage": 20.0, "hp": 50.0,
       "width": 40.0, "height": 40.0
+    }
+  ],
+  "transitions": [
+    {
+      "name": "to_world_02",
+      "x": 3200.0, "y": 300.0, "width": 50.0, "height": 240.0,
+      "targetMap": "maps/world_02.json",
+      "targetSpawn": "from_world_01"
     }
   ]
 }

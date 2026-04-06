@@ -12,6 +12,7 @@
 #include "Components/HealthComponent.h"
 #include "Components/EnemyAIComponent.h"
 #include "Map/MapLoader.h"
+#include "Map/TransitionManager.h"
 #include "Debug/DebugMenu.h"
 #include "Physics/PhysXWorld.h"
 
@@ -94,6 +95,30 @@ int main()
         anim->play("idle");
     }
 
+    // --- Room transition manager ---
+    TransitionManager transitionMgr;
+    transitionMgr.setLoadCallback(
+        [&](const std::string& targetFile, const std::string& targetSpawn)
+        {
+            try
+            {
+                enemies.clear();
+                map = MapLoader::loadFromFile(targetFile);
+                map.registerPhysXStatics();
+
+                sf::Vector2f spawn = map.getNamedSpawn(targetSpawn);
+                player.position = spawn;
+                if (auto* physics = player.getComponent<PhysicsComponent>())
+                    physics->velocity = { 0.f, 0.f };
+
+                enemies = spawnEnemies(map, player);
+            }
+            catch (const std::exception& e)
+            {
+                std::cerr << "Transition failed: " << e.what() << '\n';
+            }
+        });
+
     // Game-world view: 800x600 window onto the larger map
     sf::View gameView(sf::FloatRect(0.f, 0.f, 800.f, 600.f));
 
@@ -143,6 +168,34 @@ int main()
         else
             clock.restart();
 
+        // Advance room transition (skips gameplay while active).
+        if (transitionMgr.isActive())
+        {
+            transitionMgr.update(dt);
+
+            // Still render the scene behind the fade overlay.
+            const sf::FloatRect& mapBounds = map.getBounds();
+            float cx = player.position.x;
+            float cy = player.position.y;
+            cx = std::max(cx, mapBounds.left  + halfW);
+            cx = std::min(cx, mapBounds.left  + mapBounds.width  - halfW);
+            cy = std::max(cy, mapBounds.top   + halfH);
+            cy = std::min(cy, mapBounds.top   + mapBounds.height - halfH);
+            gameView.setCenter(cx, cy);
+
+            window.setView(gameView);
+            window.clear(sf::Color(30, 30, 50));
+            map.render(window);
+            player.render(window);
+
+            transitionMgr.render(window);
+
+            window.setView(window.getDefaultView());
+            debugMenu.render(window);
+            window.display();
+            continue;
+        }
+
         // Mark the start of a new physics frame (allows one PhysX step).
         PhysXWorld::instance().beginFrame();
 
@@ -154,6 +207,12 @@ int main()
             if (hp && hp->isDead())
                 continue;
             enemy->update(dt);
+        }
+
+        // --- Check for transition zone overlap ---
+        if (const TransitionZone* zone = map.checkTransition(player.position, playerSize))
+        {
+            transitionMgr.startTransition(zone->targetMap, zone->targetSpawn);
         }
 
         // Drive animation state from physics / input
@@ -200,6 +259,9 @@ int main()
         }
 
         player.render(window);
+
+        // Draw transition fade overlay on top of game scene.
+        transitionMgr.render(window);
 
         window.setView(window.getDefaultView());
         debugMenu.render(window);

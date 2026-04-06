@@ -10,6 +10,29 @@ void Map::addPlatform(const Platform& platform)
     m_platforms.push_back(platform);
 }
 
+sf::Vector2f Map::getNamedSpawn(const std::string& name) const
+{
+    auto it = m_namedSpawns.find(name);
+    if (it != m_namedSpawns.end())
+        return it->second;
+    return m_spawnPoint;   // fallback to default spawn
+}
+
+const TransitionZone* Map::checkTransition(sf::Vector2f position,
+                                           sf::Vector2f size) const
+{
+    sf::FloatRect playerRect(position.x - size.x * 0.5f,
+                             position.y - size.y * 0.5f,
+                             size.x, size.y);
+
+    for (const auto& zone : m_transitionZones)
+    {
+        if (playerRect.intersects(zone.bounds))
+            return &zone;
+    }
+    return nullptr;
+}
+
 void Map::registerPhysXStatics() const
 {
     PhysXWorld& world = PhysXWorld::instance();

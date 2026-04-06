@@ -37,6 +37,18 @@ Map MapLoader::loadFromFile(const std::string& filePath)
         s.at("y").get<float>()
     });
 
+    // Named spawn points (optional).
+    if (j.contains("spawnPoints"))
+    {
+        for (auto& [name, val] : j["spawnPoints"].items())
+        {
+            map.addNamedSpawn(name, {
+                val.at("x").get<float>(),
+                val.at("y").get<float>()
+            });
+        }
+    }
+
     for (const auto& p : j.at("platforms"))
     {
         Platform platform;
@@ -79,6 +91,25 @@ Map MapLoader::loadFromFile(const std::string& filePath)
             };
 
             map.addEnemyDefinition(def);
+        }
+    }
+
+    // Transition zones (optional).
+    if (j.contains("transitions"))
+    {
+        for (const auto& t : j["transitions"])
+        {
+            TransitionZone zone;
+            zone.name        = t.value("name", "");
+            zone.bounds      = {
+                t.at("x").get<float>(),
+                t.at("y").get<float>(),
+                t.at("width").get<float>(),
+                t.at("height").get<float>()
+            };
+            zone.targetMap   = t.at("targetMap").get<std::string>();
+            zone.targetSpawn = t.value("targetSpawn", "default");
+            map.addTransitionZone(zone);
         }
     }
 

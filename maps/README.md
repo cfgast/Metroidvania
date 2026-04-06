@@ -11,21 +11,35 @@ Maps are JSON files loaded at runtime by `MapLoader::loadFromFile()`. Place any 
   "name": "World 1 - Starting Area",
   "bounds":     { "x": -200.0, "y": -500.0, "width": 3600.0, "height": 1200.0 },
   "spawnPoint": { "x": 150.0,  "y": 475.0 },
+  "spawnPoints": {
+    "default":       { "x": 150.0, "y": 475.0 },
+    "from_world_02": { "x": 100.0, "y": 475.0 }
+  },
   "platforms": [
     { "x": -200.0, "y": 500.0, "width": 3600.0, "height": 40.0, "r": 80, "g": 80, "b": 80 },
     { "x":  250.0, "y": 380.0, "width":  200.0, "height": 20.0, "r": 120, "g": 80, "b": 40 }
+  ],
+  "transitions": [
+    {
+      "name": "to_world_02",
+      "x": 3200.0, "y": 300.0, "width": 50.0, "height": 240.0,
+      "targetMap": "maps/world_02.json",
+      "targetSpawn": "from_world_01"
+    }
   ]
 }
 ```
 
 ### Top-level fields
 
-| Field        | Type   | Required | Description |
-|--------------|--------|----------|-------------|
-| `name`       | string | No       | Human-readable level name (not used at runtime) |
-| `bounds`     | object | Yes      | World extents — used for camera clamping and the fall-off death zone |
-| `spawnPoint` | object | Yes      | World position the player starts at and respawns to after falling off the map |
-| `platforms`  | array  | Yes      | List of walkable platform rectangles |
+| Field          | Type   | Required | Description |
+|----------------|--------|----------|-------------|
+| `name`         | string | No       | Human-readable level name (not used at runtime) |
+| `bounds`       | object | Yes      | World extents — used for camera clamping and the fall-off death zone |
+| `spawnPoint`   | object | Yes      | World position the player starts at and respawns to after falling off the map |
+| `spawnPoints`  | object | No       | Named spawn points (key → `{x, y}`) used as targets for transitions from other maps |
+| `platforms`    | array  | Yes      | List of walkable platform rectangles |
+| `transitions`  | array  | No       | List of transition zone trigger rectangles |
 
 ### `bounds` and `spawnPoint`
 
@@ -51,6 +65,31 @@ Each platform is an axis-aligned rectangle.
 | `width`       | float | Yes      | —       | Width in world units |
 | `height`      | float | Yes      | —       | Height in world units |
 | `r` `g` `b`   | int   | No       | 100     | RGB fill colour (0–255 each) |
+
+### `spawnPoints` entries (optional)
+
+Named spawn points used as targets when transitioning from another map. Each key is a string name; the value is an `{x, y}` position. If a transition references a name that doesn't exist, the default `spawnPoint` is used.
+
+```json
+"spawnPoints": {
+  "default":       { "x": 150.0, "y": 475.0 },
+  "from_world_02": { "x": 100.0, "y": 475.0 }
+}
+```
+
+### `transitions` entries (optional)
+
+Each transition is an axis-aligned trigger rectangle. When the player overlaps it the game fades to black, loads the target map, and spawns the player at the named spawn point.
+
+| Field         | Type   | Required | Default     | Description |
+|---------------|--------|----------|-------------|-------------|
+| `name`        | string | No       | `""`        | Human-readable identifier |
+| `x`           | float  | Yes      | —           | Left edge of trigger in world space |
+| `y`           | float  | Yes      | —           | Top edge of trigger in world space |
+| `width`       | float  | Yes      | —           | Width of trigger in world units |
+| `height`      | float  | Yes      | —           | Height of trigger in world units |
+| `targetMap`   | string | Yes      | —           | Relative path to the destination map JSON |
+| `targetSpawn` | string | No       | `"default"` | Named spawn point in the destination map |
 
 ---
 

@@ -1,5 +1,7 @@
 #pragma once
 
+#include <string>
+#include <unordered_map>
 #include <vector>
 
 #include <SFML/Graphics/Rect.hpp>
@@ -7,6 +9,7 @@
 
 #include "Platform.h"
 #include "EnemyDefinition.h"
+#include "TransitionZone.h"
 
 namespace sf { class RenderWindow; }
 
@@ -25,14 +28,27 @@ public:
     void addEnemyDefinition(const EnemyDefinition& def) { m_enemyDefinitions.push_back(def); }
     const std::vector<EnemyDefinition>& getEnemyDefinitions() const { return m_enemyDefinitions; }
 
+    // Named spawn points (e.g. "from_world_02").
+    void         addNamedSpawn(const std::string& name, sf::Vector2f pos) { m_namedSpawns[name] = pos; }
+    sf::Vector2f getNamedSpawn(const std::string& name) const;
+
+    // Transition zones.
+    void addTransitionZone(const TransitionZone& zone) { m_transitionZones.push_back(zone); }
+    const std::vector<TransitionZone>& getTransitionZones() const { return m_transitionZones; }
+
+    // Returns pointer to the TransitionZone the rectangle overlaps, or nullptr.
+    const TransitionZone* checkTransition(sf::Vector2f position, sf::Vector2f size) const;
+
     // Register every platform as a PhysX static rigid body.
     void registerPhysXStatics() const;
 
     void render(sf::RenderWindow& window) const;
 
 private:
-    std::vector<Platform>        m_platforms;
-    std::vector<EnemyDefinition> m_enemyDefinitions;
-    sf::Vector2f                 m_spawnPoint { 0.f, 0.f };
-    sf::FloatRect                m_bounds     { 0.f, 0.f, 3200.f, 1200.f };
+    std::vector<Platform>          m_platforms;
+    std::vector<EnemyDefinition>   m_enemyDefinitions;
+    std::vector<TransitionZone>    m_transitionZones;
+    std::unordered_map<std::string, sf::Vector2f> m_namedSpawns;
+    sf::Vector2f                   m_spawnPoint { 0.f, 0.f };
+    sf::FloatRect                  m_bounds     { 0.f, 0.f, 3200.f, 1200.f };
 };
