@@ -41,7 +41,7 @@ Implemented: true
 
 ==============================================================================
 Task: Separate input handling from PhysicsComponent into a dedicated InputComponent. InputComponent should read keyboard state each frame and expose a simple InputState struct (moveLeft, moveRight, jump). PhysicsComponent should consume InputState rather than polling sf::Keyboard directly. This separation is required before multiplayer so that remote player input can be injected as an InputState without touching the keyboard.
-Implemented: false
+Implemented: true
 
 ==============================================================================
 Task: Add a basic multiplayer lobby and networking layer using a client-server model (up to 8 players). Use a simple UDP transport (SFML sockets or a thin wrapper). The server is authoritative: it runs the PhysX simulation, broadcasts player positions and velocities at a fixed tick rate (20 Hz), and accepts InputState packets from clients. Each client renders all players with dead-reckoning interpolation. For now, host the server in-process when the first player starts a game, and have other players join by IP address entered in a simple connect dialog.

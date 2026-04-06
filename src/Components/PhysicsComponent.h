@@ -7,6 +7,7 @@
 namespace physx { class PxRigidDynamic; }
 
 class Map;
+struct InputState;
 
 class PhysicsComponent : public Component
 {
@@ -32,5 +33,5 @@ private:
     Map& m_map;
     physx::PxRigidDynamic* m_actor = nullptr;
     bool m_grounded        = false;
-    bool m_jumpKeyWasDown  = false;
+    bool m_jumpWasDown     = false;
 };

@@ -3,6 +3,7 @@
 #include <SFML/Graphics.hpp>
 
 #include "Core/GameObject.h"
+#include "Components/InputComponent.h"
 #include "Components/PhysicsComponent.h"
 #include "Components/RenderComponent.h"
 #include "Map/MapLoader.h"
@@ -34,6 +35,7 @@ int main()
 
     GameObject player;
     player.position = map.getSpawnPoint();
+    player.addComponent<InputComponent>();
     player.addComponent<RenderComponent>(playerSize, sf::Color::Green);
     player.addComponent<PhysicsComponent>(map, playerSize, 300.f);
 

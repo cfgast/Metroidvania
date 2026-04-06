@@ -1,7 +1,7 @@
 #include "PhysicsComponent.h"
+#include "InputComponent.h"
 
 #include <PxPhysicsAPI.h>
-#include <SFML/Window/Keyboard.hpp>
 
 #include "../Core/GameObject.h"
 #include "../Map/Map.h"
@@ -61,23 +61,27 @@ void PhysicsComponent::update(float dt)
     if (!m_actor)
         return;
 
-    // --- Horizontal input ---
+    // --- Read input from sibling InputComponent ---
+    InputState input;
+    if (auto* ic = getOwner()->getComponent<InputComponent>())
+        input = ic->getInputState();
+
+    // --- Horizontal movement ---
     velocity.x = 0.f;
-    if (sf::Keyboard::isKeyPressed(sf::Keyboard::A) || sf::Keyboard::isKeyPressed(sf::Keyboard::Left))
+    if (input.moveLeft)
         velocity.x -= speed;
-    if (sf::Keyboard::isKeyPressed(sf::Keyboard::D) || sf::Keyboard::isKeyPressed(sf::Keyboard::Right))
+    if (input.moveRight)
         velocity.x += speed;
 
-    // --- Jump (only on the frame Space is first pressed) ---
-    const bool jumpKeyDown = sf::Keyboard::isKeyPressed(sf::Keyboard::Space);
-    if (m_grounded && jumpKeyDown && !m_jumpKeyWasDown)
+    // --- Jump (only on the frame jump is first pressed) ---
+    if (m_grounded && input.jump && !m_jumpWasDown)
         velocity.y = jumpForce;
-    m_jumpKeyWasDown = jumpKeyDown;
+    m_jumpWasDown = input.jump;
 
     // --- Gravity with multipliers for snappy feel ---
     if (velocity.y > 0.f)
         velocity.y += gravity * fallMultiplier * dt;       // descending
-    else if (velocity.y < 0.f && !jumpKeyDown)
+    else if (velocity.y < 0.f && !input.jump)
         velocity.y += gravity * lowJumpMultiplier * dt;    // rising, key released
     else
         velocity.y += gravity * dt;                        // rising, key held
