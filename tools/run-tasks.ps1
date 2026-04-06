@@ -77,7 +77,8 @@ if ($DryRun) {
         Write-Host "Task $($i + 1) : $($allTasks[$i])" -ForegroundColor Yellow
         Write-Host "  [DRY RUN] Would invoke copilot for this task." -ForegroundColor DarkGray
     }
-    Write-Host "`n$($allTasks.Count) task$(if ($allTasks.Count -ne 1) {'s'}) remaining." -ForegroundColor Cyan
+    $n = $allTasks.Count
+    Write-Host ("`n$n tasks remaining.") -ForegroundColor Cyan
     exit 0
 }
 
@@ -118,4 +119,4 @@ while ($true) {
     }
 }
 
-Write-Host "`nFinished. $completed task$(if ($completed -ne 1) {'s'}) processed." -ForegroundColor Cyan
+Write-Host ("`nFinished. $completed tasks processed.") -ForegroundColor Cyan
