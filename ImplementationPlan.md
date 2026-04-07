@@ -161,7 +161,7 @@ Details:
 
 ==============================================================================
 Task: Add transition zone editing to the Map Editor. Users should be able to view, place, select, move, resize, and delete transition zones on the map canvas, and edit their properties including target map and spawn point.
-Implemented: false
+Implemented: true
 
 Details:
 - Files: tools/MapEditor/MainForm.cs, tools/MapEditor/MapCanvas.cs

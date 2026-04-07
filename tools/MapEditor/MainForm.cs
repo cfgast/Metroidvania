@@ -42,8 +42,14 @@ public sealed class MainForm : Form
     private TextBox _txtWaypointBX = null!, _txtWaypointBY = null!;
     private TextBox _txtEnemySpeed = null!, _txtEnemyDamage = null!, _txtEnemyHP = null!;
 
+    // ── Transition property controls ──────────────────────────────────────────
+    private Panel   _pnlTransition = null!;
+    private TextBox _txtTransName = null!, _txtTransX = null!, _txtTransY = null!;
+    private TextBox _txtTransW = null!, _txtTransH = null!;
+    private TextBox _txtTransTargetMap = null!, _txtTransTargetSpawn = null!;
+
     // ── Toolbar buttons ───────────────────────────────────────────────────────
-    private ToolStripButton _btnSelect = null!, _btnDraw = null!, _btnDrawEnemy = null!, _btnSnap = null!;
+    private ToolStripButton _btnSelect = null!, _btnDraw = null!, _btnDrawEnemy = null!, _btnDrawTransition = null!, _btnSnap = null!;
 
     // ── Status bar labels ─────────────────────────────────────────────────────
     private ToolStripStatusLabel _lblInfo  = null!;
@@ -128,15 +134,17 @@ public sealed class MainForm : Form
     {
         var bar = new ToolStrip { GripStyle = ToolStripGripStyle.Hidden };
 
-        _btnSelect    = Tbtn("Select",     "Select / Move / Resize  [S]", true);
-        _btnDraw      = Tbtn("Draw",       "Draw new platform  [D]",      false);
-        _btnDrawEnemy = Tbtn("Draw Enemy", "Draw new enemy  [E]",         false);
-        _btnSnap      = Tbtn("Snap: ON",   "Toggle grid snapping  [G]",   true);
+        _btnSelect         = Tbtn("Select",          "Select / Move / Resize  [S]", true);
+        _btnDraw           = Tbtn("Draw",            "Draw new platform  [D]",      false);
+        _btnDrawEnemy      = Tbtn("Draw Enemy",      "Draw new enemy  [E]",         false);
+        _btnDrawTransition = Tbtn("Draw Transition", "Draw new transition  [T]",    false);
+        _btnSnap           = Tbtn("Snap: ON",        "Toggle grid snapping  [G]",   true);
 
-        _btnSelect.Click    += (_, _) => SetTool(EditorTool.Select);
-        _btnDraw.Click      += (_, _) => SetTool(EditorTool.Draw);
-        _btnDrawEnemy.Click += (_, _) => SetTool(EditorTool.DrawEnemy);
-        _btnSnap.Click      += (_, _) => ToggleSnap();
+        _btnSelect.Click         += (_, _) => SetTool(EditorTool.Select);
+        _btnDraw.Click           += (_, _) => SetTool(EditorTool.Draw);
+        _btnDrawEnemy.Click      += (_, _) => SetTool(EditorTool.DrawEnemy);
+        _btnDrawTransition.Click += (_, _) => SetTool(EditorTool.DrawTransition);
+        _btnSnap.Click           += (_, _) => ToggleSnap();
 
         var btnDel = new ToolStripButton("Delete") { ToolTipText = "Delete selected  [Del]" };
         btnDel.Click += (_, _) => _canvas.DeleteSelected();
@@ -149,7 +157,7 @@ public sealed class MainForm : Form
 
         bar.Items.AddRange(new ToolStripItem[]
         {
-            _btnSelect, _btnDraw, _btnDrawEnemy,
+            _btnSelect, _btnDraw, _btnDrawEnemy, _btnDrawTransition,
             new ToolStripSeparator(),
             btnDel,
             new ToolStripSeparator(),
@@ -303,6 +311,48 @@ public sealed class MainForm : Form
         _pnlEnemy.Controls.AddRange(new Control[] { btnEnemyApply, btnEnemyDel });
         _pnlEnemy.Height  = ey;
         _pnlEnemy.Enabled = false;
+
+        y += ey;
+        y += 8;
+        panel.Controls.Add(new Label { Height = 1, Location = new(4, y), Width = pw, BackColor = Color.FromArgb(70, 70, 80) });
+        y += 8;
+
+        // ── Selected Transition ───────────────────────────────────────────────
+        panel.Controls.Add(SectionLabel("SELECTED TRANSITION", 4, y, pw)); y += 22;
+
+        _pnlTransition = new Panel { Location = new(0, y), Width = panel.Width, AutoSize = false };
+        panel.Controls.Add(_pnlTransition);
+
+        int ty = 0;
+        (_, _txtTransName, ty) = SingleField(_pnlTransition, "Name", ty, pw);
+        (_txtTransX, _txtTransY, ty) = TwoFields(_pnlTransition, "X", "Y", ty, pw, "Position");
+        (_txtTransW, _txtTransH, ty) = TwoFields(_pnlTransition, "Width", "Height", ty, pw, "Size");
+
+        _pnlTransition.Controls.Add(new Label
+        {
+            Text = "Target Map:", ForeColor = Color.Silver,
+            Font = new Font("Segoe UI", 7.5f),
+            Location = new(4, ty), Size = new(pw, 15), AutoSize = false
+        });
+        ty += 15;
+        _txtTransTargetMap = DarkTxt(4, ty, pw - 70);
+        var btnBrowseMap = DarkBtn("Browse…", 4 + pw - 66, ty, 66);
+        btnBrowseMap.Click += BrowseTargetMap;
+        _pnlTransition.Controls.AddRange(new Control[] { _txtTransTargetMap, btnBrowseMap });
+        ty += 26;
+
+        (_, _txtTransTargetSpawn, ty) = SingleField(_pnlTransition, "Target Spawn", ty, pw);
+
+        int thalf = (pw - 4) / 2;
+        var btnTransApply = DarkBtn("Apply",  4,              ty, thalf);
+        var btnTransDel   = DarkBtn("Delete", 4 + thalf + 4,  ty, thalf, Color.FromArgb(130, 55, 55));
+        ty += 30;
+
+        btnTransApply.Click += ApplyTransitionSettings;
+        btnTransDel.Click   += (_, _) => _canvas.DeleteSelected();
+        _pnlTransition.Controls.AddRange(new Control[] { btnTransApply, btnTransDel });
+        _pnlTransition.Height  = ty;
+        _pnlTransition.Enabled = false;
 
         return panel;
     }
@@ -601,6 +651,38 @@ public sealed class MainForm : Form
         catch { Warn("Invalid values in enemy settings. Use numeric values."); }
     }
 
+    private void ApplyTransitionSettings(object? sender, EventArgs e)
+    {
+        var tr = _canvas.SelectedTransition;
+        if (tr == null) return;
+        try
+        {
+            tr.Name        = _txtTransName.Text.Trim();
+            tr.X           = ParseF(_txtTransX);
+            tr.Y           = ParseF(_txtTransY);
+            tr.Width       = MathF.Max(1f, ParseF(_txtTransW));
+            tr.Height      = MathF.Max(1f, ParseF(_txtTransH));
+            tr.TargetMap   = _txtTransTargetMap.Text.Trim();
+            tr.TargetSpawn = _txtTransTargetSpawn.Text.Trim();
+            MarkDirty();
+            _canvas.Invalidate();
+            SetStatus("Transition updated.");
+        }
+        catch { Warn("Invalid values in transition settings. Use numeric values for position/size."); }
+    }
+
+    private void BrowseTargetMap(object? sender, EventArgs e)
+    {
+        using var dlg = new OpenFileDialog
+        {
+            Title            = "Select Target Map",
+            Filter           = "JSON map files (*.json)|*.json|All files (*.*)|*.*",
+            InitialDirectory = MapsDir()
+        };
+        if (dlg.ShowDialog(this) != DialogResult.OK) return;
+        _txtTransTargetMap.Text = Path.GetFileName(dlg.FileName);
+    }
+
     // ── Spawn point handlers ──────────────────────────────────────────────────
     private void OnSpawnPointSelected(object? sender, EventArgs e)
     {
@@ -703,9 +785,11 @@ public sealed class MainForm : Form
     {
         var p  = _canvas.SelectedPlatform;
         var en = _canvas.SelectedEnemy;
+        var tr = _canvas.SelectedTransition;
 
-        _pnlPlatform.Enabled = p != null;
-        _pnlEnemy.Enabled    = en != null;
+        _pnlPlatform.Enabled   = p != null;
+        _pnlEnemy.Enabled      = en != null;
+        _pnlTransition.Enabled = tr != null;
 
         if (p != null)
         {
@@ -735,6 +819,19 @@ public sealed class MainForm : Form
             _txtEnemySpeed.Text   = en.Speed.ToString("F1");
             _txtEnemyDamage.Text  = en.Damage.ToString("F1");
             _txtEnemyHP.Text      = en.Hp.ToString("F1");
+            _syncingUI = false;
+        }
+
+        if (tr != null)
+        {
+            _syncingUI = true;
+            _txtTransName.Text        = tr.Name;
+            _txtTransX.Text           = tr.X.ToString("F1");
+            _txtTransY.Text           = tr.Y.ToString("F1");
+            _txtTransW.Text           = tr.Width.ToString("F1");
+            _txtTransH.Text           = tr.Height.ToString("F1");
+            _txtTransTargetMap.Text   = tr.TargetMap;
+            _txtTransTargetSpawn.Text = tr.TargetSpawn;
             _syncingUI = false;
         }
 
@@ -768,6 +865,16 @@ public sealed class MainForm : Form
             _txtWaypointBY.Text   = en.WaypointB.Y.ToString("F1");
             _syncingUI = false;
         }
+        var tr = _canvas.SelectedTransition;
+        if (tr != null && !_syncingUI)
+        {
+            _syncingUI = true;
+            _txtTransX.Text = tr.X.ToString("F1");
+            _txtTransY.Text = tr.Y.ToString("F1");
+            _txtTransW.Text = tr.Width.ToString("F1");
+            _txtTransH.Text = tr.Height.ToString("F1");
+            _syncingUI = false;
+        }
         MarkDirty();
     }
 
@@ -779,10 +886,11 @@ public sealed class MainForm : Form
     // ── Tool helpers ──────────────────────────────────────────────────────────
     private void SetTool(EditorTool t)
     {
-        _canvas.Tool          = t;
-        _btnSelect.Checked    = t == EditorTool.Select;
-        _btnDraw.Checked      = t == EditorTool.Draw;
-        _btnDrawEnemy.Checked = t == EditorTool.DrawEnemy;
+        _canvas.Tool               = t;
+        _btnSelect.Checked         = t == EditorTool.Select;
+        _btnDraw.Checked           = t == EditorTool.Draw;
+        _btnDrawEnemy.Checked      = t == EditorTool.DrawEnemy;
+        _btnDrawTransition.Checked = t == EditorTool.DrawTransition;
         UpdateStatus();
     }
 
@@ -799,15 +907,18 @@ public sealed class MainForm : Form
     {
         int    platCount  = _canvas.Map?.Platforms.Count ?? 0;
         int    enemyCount = _canvas.Map?.Enemies?.Count ?? 0;
+        int    transCount = _canvas.Map?.Transitions?.Count ?? 0;
         string tool       = _canvas.Tool switch
         {
-            EditorTool.Draw      => "Draw Platform",
-            EditorTool.DrawEnemy => "Draw Enemy",
-            _                    => "Select"
+            EditorTool.Draw           => "Draw Platform",
+            EditorTool.DrawEnemy      => "Draw Enemy",
+            EditorTool.DrawTransition => "Draw Transition",
+            _                         => "Select"
         };
-        string sel = _canvas.SelectedPlatform != null ? " | Platform selected" :
-                     _canvas.SelectedEnemy    != null ? " | Enemy selected"    : "";
-        _lblInfo.Text = $"{platCount} platforms, {enemyCount} enemies{sel} | {tool} mode";
+        string sel = _canvas.SelectedPlatform   != null ? " | Platform selected"   :
+                     _canvas.SelectedEnemy      != null ? " | Enemy selected"      :
+                     _canvas.SelectedTransition != null ? " | Transition selected" : "";
+        _lblInfo.Text = $"{platCount} platforms, {enemyCount} enemies, {transCount} transitions{sel} | {tool} mode";
     }
 
     private void SetStatus(string msg) => _lblInfo.Text = msg;
@@ -868,9 +979,10 @@ public sealed class MainForm : Form
         }
         switch (e.KeyCode)
         {
-            case Keys.S: SetTool(EditorTool.Select);    e.Handled = true; break;
-            case Keys.D: SetTool(EditorTool.Draw);      e.Handled = true; break;
-            case Keys.E: SetTool(EditorTool.DrawEnemy);  e.Handled = true; break;
+            case Keys.S: SetTool(EditorTool.Select);         e.Handled = true; break;
+            case Keys.D: SetTool(EditorTool.Draw);           e.Handled = true; break;
+            case Keys.E: SetTool(EditorTool.DrawEnemy);      e.Handled = true; break;
+            case Keys.T: SetTool(EditorTool.DrawTransition); e.Handled = true; break;
             case Keys.F: _canvas.FitToView();         e.Handled = true; break;
             case Keys.G: ToggleSnap();                e.Handled = true; break;
             case Keys.D1: _canvas.SetZoom(1f);        e.Handled = true; break;

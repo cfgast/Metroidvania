@@ -6,8 +6,8 @@ using System.Windows.Forms;
 
 namespace MapEditor;
 
-public enum EditorTool { Select, Draw, DrawEnemy }
-public enum SelectableType { None, Platform, Enemy }
+public enum EditorTool { Select, Draw, DrawEnemy, DrawTransition }
+public enum SelectableType { None, Platform, Enemy, Transition }
 internal enum ResizeHandle { None, Move, N, NE, E, SE, S, SW, W, NW }
 
 public sealed class MapCanvas : Control
@@ -27,9 +27,13 @@ public sealed class MapCanvas : Control
     private EnemyData? _selectedEnemy;
     public  EnemyData? SelectedEnemy => _selectedEnemy;
 
+    private TransitionData? _selectedTransition;
+    public  TransitionData? SelectedTransition => _selectedTransition;
+
     public  SelectableType SelectedType =>
         _selected != null ? SelectableType.Platform :
         _selectedEnemy != null ? SelectableType.Enemy :
+        _selectedTransition != null ? SelectableType.Transition :
         SelectableType.None;
 
     // ── Tool ──────────────────────────────────────────────────────────────────
@@ -83,6 +87,7 @@ public sealed class MapCanvas : Control
         Map            = map;
         _selected      = null;
         _selectedEnemy = null;
+        _selectedTransition = null;
         SelectionChanged?.Invoke(this, EventArgs.Empty);
         FitToView();
     }
@@ -135,9 +140,11 @@ public sealed class MapCanvas : Control
         DrawGrid(g);
         DrawPlatforms(g);
         DrawEnemies(g);
+        DrawTransitions(g);
         if (_isDrawing)       DrawGhost(g);
         if (_selected != null) { DrawSelectionOutline(g, _selected.X, _selected.Y, _selected.Width, _selected.Height); DrawSelectionHandles(g, _selected.X, _selected.Y, _selected.Width, _selected.Height); }
         if (_selectedEnemy != null) { DrawSelectionOutline(g, _selectedEnemy.X, _selectedEnemy.Y, _selectedEnemy.Width, _selectedEnemy.Height); DrawSelectionHandles(g, _selectedEnemy.X, _selectedEnemy.Y, _selectedEnemy.Width, _selectedEnemy.Height); }
+        if (_selectedTransition != null) { DrawSelectionOutline(g, _selectedTransition.X, _selectedTransition.Y, _selectedTransition.Width, _selectedTransition.Height); DrawSelectionHandles(g, _selectedTransition.X, _selectedTransition.Y, _selectedTransition.Width, _selectedTransition.Height); }
         DrawSpawnPoint(g);
         DrawNamedSpawnPoints(g);
     }
@@ -350,6 +357,31 @@ public sealed class MapCanvas : Control
         }
     }
 
+    private void DrawTransitions(Graphics g)
+    {
+        if (Map!.Transitions == null || Map.Transitions.Count == 0) return;
+
+        using var fillBrush = new SolidBrush(Color.FromArgb(80, 100, 100, 220));
+        using var borderPen = new Pen(Color.FromArgb(180, 100, 100, 220), 1.5f) { DashStyle = DashStyle.Dash };
+
+        for (int i = 0; i < Map.Transitions.Count; i++)
+        {
+            var tr = Map.Transitions[i];
+            var sr = WR2S(tr.X, tr.Y, tr.Width, tr.Height);
+            g.FillRectangle(fillBrush, sr);
+            g.DrawRectangle(borderPen, sr.X, sr.Y, sr.Width, sr.Height);
+
+            if (_zoom > 0.3f)
+            {
+                using var f = new Font("Segoe UI", 7f, FontStyle.Bold);
+                string label = string.IsNullOrEmpty(tr.Name) ? $"TRANSITION {i}" : tr.Name;
+                if (!string.IsNullOrEmpty(tr.TargetMap))
+                    label += $" → {System.IO.Path.GetFileName(tr.TargetMap)}";
+                g.DrawString(label, f, Brushes.CornflowerBlue, sr.X + 2, sr.Y - 14);
+            }
+        }
+    }
+
     // ── Handle geometry ───────────────────────────────────────────────────────
     private Dictionary<ResizeHandle, RectangleF> GetHandleRects(float wx, float wy, float ww, float wh)
     {
@@ -383,6 +415,10 @@ public sealed class MapCanvas : Control
         {
             wx = _selectedEnemy.X; wy = _selectedEnemy.Y; ww = _selectedEnemy.Width; wh = _selectedEnemy.Height;
         }
+        else if (_selectedTransition != null)
+        {
+            wx = _selectedTransition.X; wy = _selectedTransition.Y; ww = _selectedTransition.Width; wh = _selectedTransition.Height;
+        }
         else return ResizeHandle.None;
 
         foreach (var (handle, rect) in GetHandleRects(wx, wy, ww, wh))
@@ -411,6 +447,19 @@ public sealed class MapCanvas : Control
             if (world.X >= en.X && world.X <= en.X + en.Width &&
                 world.Y >= en.Y && world.Y <= en.Y + en.Height)
                 return en;
+        }
+        return null;
+    }
+
+    private TransitionData? HitTransition(PointF world)
+    {
+        if (Map!.Transitions == null) return null;
+        for (int i = Map.Transitions.Count - 1; i >= 0; i--)
+        {
+            var tr = Map.Transitions[i];
+            if (world.X >= tr.X && world.X <= tr.X + tr.Width &&
+                world.Y >= tr.Y && world.Y <= tr.Y + tr.Height)
+                return tr;
         }
         return null;
     }
@@ -464,6 +513,12 @@ public sealed class MapCanvas : Control
             MapChanged?.Invoke(this, EventArgs.Empty);
             Invalidate();
         }
+        else if (_tool == EditorTool.DrawTransition)
+        {
+            _isDrawing      = true;
+            _dragStartWorld = new(Snap(world.X), Snap(world.Y));
+            _drawRect       = new(_dragStartWorld.X, _dragStartWorld.Y, 0, 0);
+        }
         else
         {
             var handle = HitHandle(e.Location);
@@ -480,6 +535,10 @@ public sealed class MapCanvas : Control
                     _origRect       = new(_selectedEnemy.X, _selectedEnemy.Y, _selectedEnemy.Width, _selectedEnemy.Height);
                     _origWaypointA  = new(_selectedEnemy.WaypointA.X, _selectedEnemy.WaypointA.Y);
                     _origWaypointB  = new(_selectedEnemy.WaypointB.X, _selectedEnemy.WaypointB.Y);
+                }
+                else if (_selectedTransition != null)
+                {
+                    _origRect = new(_selectedTransition.X, _selectedTransition.Y, _selectedTransition.Width, _selectedTransition.Height);
                 }
                 _dragStartWorld = world;
             }
@@ -513,7 +572,21 @@ public sealed class MapCanvas : Control
                     }
                     else
                     {
-                        ClearSelection();
+                        var hitTrans = HitTransition(world);
+                        if (hitTrans != null)
+                        {
+                            SelectTransition(hitTrans);
+                            _isDragging     = true;
+                            _activeHandle   = ResizeHandle.Move;
+                            _moveOffX       = world.X - hitTrans.X;
+                            _moveOffY       = world.Y - hitTrans.Y;
+                            _origRect       = new(hitTrans.X, hitTrans.Y, hitTrans.Width, hitTrans.Height);
+                            _dragStartWorld = world;
+                        }
+                        else
+                        {
+                            ClearSelection();
+                        }
                     }
                 }
             }
@@ -543,7 +616,7 @@ public sealed class MapCanvas : Control
             return;
         }
 
-        if (_isDragging && (_selected != null || _selectedEnemy != null))
+        if (_isDragging && (_selected != null || _selectedEnemy != null || _selectedTransition != null))
         {
             if (_selected != null)
             {
@@ -577,6 +650,18 @@ public sealed class MapCanvas : Control
                     ApplyResizeEnemy(world);
                 }
             }
+            else if (_selectedTransition != null)
+            {
+                if (_activeHandle == ResizeHandle.Move)
+                {
+                    _selectedTransition.X = Snap(world.X - _moveOffX);
+                    _selectedTransition.Y = Snap(world.Y - _moveOffY);
+                }
+                else
+                {
+                    ApplyResizeTransition(world);
+                }
+            }
             MapChanged?.Invoke(this, EventArgs.Empty);
             Invalidate();
             return;
@@ -596,13 +681,27 @@ public sealed class MapCanvas : Control
             var norm   = Normalize(_drawRect);
             if (norm.Width >= 4f && norm.Height >= 4f && Map != null)
             {
-                var plat = new PlatformData
+                if (_tool == EditorTool.DrawTransition)
                 {
-                    X = norm.X, Y = norm.Y, Width = norm.Width, Height = norm.Height,
-                    R = 120, G = 80, B = 40
-                };
-                Map.Platforms.Add(plat);
-                SelectPlatform(plat);
+                    var tr = new TransitionData
+                    {
+                        Name = "new_transition",
+                        X = norm.X, Y = norm.Y, Width = norm.Width, Height = norm.Height,
+                        TargetMap = "", TargetSpawn = "default"
+                    };
+                    Map.Transitions.Add(tr);
+                    SelectTransition(tr);
+                }
+                else
+                {
+                    var plat = new PlatformData
+                    {
+                        X = norm.X, Y = norm.Y, Width = norm.Width, Height = norm.Height,
+                        R = 120, G = 80, B = 40
+                    };
+                    Map.Platforms.Add(plat);
+                    SelectPlatform(plat);
+                }
                 MapChanged?.Invoke(this, EventArgs.Empty);
             }
             Invalidate();
@@ -651,16 +750,23 @@ public sealed class MapCanvas : Control
         _selectedEnemy!.X = x; _selectedEnemy.Y = y; _selectedEnemy.Width = w; _selectedEnemy.Height = h;
     }
 
+    private void ApplyResizeTransition(PointF world)
+    {
+        var (x, y, w, h) = ComputeResize(world);
+        _selectedTransition!.X = x; _selectedTransition.Y = y; _selectedTransition.Width = w; _selectedTransition.Height = h;
+    }
+
     // ── Cursor ────────────────────────────────────────────────────────────────
-    private void UpdateCursorForTool() => Cursor = (_tool == EditorTool.Draw || _tool == EditorTool.DrawEnemy) ? Cursors.Cross : Cursors.Default;
+    private void UpdateCursorForTool() => Cursor = (_tool == EditorTool.Draw || _tool == EditorTool.DrawEnemy || _tool == EditorTool.DrawTransition) ? Cursors.Cross : Cursors.Default;
 
     private void UpdateCursor(Point screen, PointF world)
     {
-        if (_tool == EditorTool.Draw || _tool == EditorTool.DrawEnemy) { Cursor = Cursors.Cross; return; }
+        if (_tool == EditorTool.Draw || _tool == EditorTool.DrawEnemy || _tool == EditorTool.DrawTransition) { Cursor = Cursors.Cross; return; }
         var h = HitHandle(screen);
         if (h != ResizeHandle.None) { Cursor = GetResizeCursor(h); return; }
         if (Map != null && HitPlatform(world) != null) { Cursor = Cursors.SizeAll; return; }
         if (Map != null && HitEnemy(world) != null) { Cursor = Cursors.SizeAll; return; }
+        if (Map != null && HitTransition(world) != null) { Cursor = Cursors.SizeAll; return; }
         Cursor = Cursors.Default;
     }
 
@@ -702,28 +808,47 @@ public sealed class MapCanvas : Control
             MapChanged?.Invoke(this, EventArgs.Empty);
             Invalidate();
         }
+        else if (_selectedTransition != null)
+        {
+            Map.Transitions.Remove(_selectedTransition);
+            ClearSelection();
+            MapChanged?.Invoke(this, EventArgs.Empty);
+            Invalidate();
+        }
     }
 
     private void SelectPlatform(PlatformData plat)
     {
-        _selected      = plat;
-        _selectedEnemy = null;
+        _selected           = plat;
+        _selectedEnemy      = null;
+        _selectedTransition = null;
         SelectionChanged?.Invoke(this, EventArgs.Empty);
         Invalidate();
     }
 
     private void SelectEnemy(EnemyData enemy)
     {
-        _selected      = null;
-        _selectedEnemy = enemy;
+        _selected           = null;
+        _selectedEnemy      = enemy;
+        _selectedTransition = null;
+        SelectionChanged?.Invoke(this, EventArgs.Empty);
+        Invalidate();
+    }
+
+    private void SelectTransition(TransitionData transition)
+    {
+        _selected           = null;
+        _selectedEnemy      = null;
+        _selectedTransition = transition;
         SelectionChanged?.Invoke(this, EventArgs.Empty);
         Invalidate();
     }
 
     private void ClearSelection()
     {
-        _selected      = null;
-        _selectedEnemy = null;
+        _selected           = null;
+        _selectedEnemy      = null;
+        _selectedTransition = null;
         SelectionChanged?.Invoke(this, EventArgs.Empty);
         Invalidate();
     }
