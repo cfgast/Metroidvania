@@ -22,8 +22,12 @@ PhysicsComponent::~PhysicsComponent()
     {
         PxScene* scene = PhysXWorld::instance().getScene();
         if (scene)
+        {
             scene->removeActor(*m_actor);
-        m_actor->release();
+            m_actor->release();
+        }
+        // If the scene is already null, PhysXWorld::shutdown() released
+        // it (and all actors still in it), so we must not release again.
         m_actor = nullptr;
     }
 }

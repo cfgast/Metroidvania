@@ -240,3 +240,11 @@ Details:
 ==============================================================================
 Task: There are some problems with Map Transitions at the moment. When I transition between maps, you see popping because it looks like it updates the position of the player after the fade in has occured. Also when you transition from map 2 back to map 1 it takes you to the incorrect location. It goes back to the spawn inside of the from map 2 point.
 Implemented: true
+
+==============================================================================
+Task: When the application closes and it tries to call m_actor->release() the game crashes, we should fix that, I think the remote actor might clean it up
+Implemented: true
+
+==============================================================================
+Task: Change the sprite art of the charater too look like a small man running, not just a box with dots
+Implemented: false
