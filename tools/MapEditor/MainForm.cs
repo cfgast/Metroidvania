@@ -23,6 +23,10 @@ public sealed class MainForm : Form
     private TextBox _txtBoundsW = null!, _txtBoundsH = null!;
     private TextBox _txtSpawnX  = null!, _txtSpawnY  = null!;
 
+    // ── Spawn point controls ─────────────────────────────────────────────────
+    private ListBox _lstSpawnPoints = null!;
+    private TextBox _txtSpawnName   = null!, _txtSpawnPtX = null!, _txtSpawnPtY = null!;
+
     // ── Platform property controls ────────────────────────────────────────────
     private Panel   _pnlPlatform = null!;
     private TextBox _txtPlatX = null!, _txtPlatY = null!;
@@ -184,6 +188,40 @@ public sealed class MainForm : Form
         var btnMap = DarkBtn("Apply Map Settings", 4, y, pw); y += 30;
         btnMap.Click += ApplyMapSettings;
         panel.Controls.Add(btnMap);
+
+        y += 8;
+        panel.Controls.Add(new Label { Height = 1, Location = new(4, y), Width = pw, BackColor = Color.FromArgb(70, 70, 80) });
+        y += 8;
+
+        // ── Spawn Points ──────────────────────────────────────────────────────
+        panel.Controls.Add(SectionLabel("SPAWN POINTS", 4, y, pw)); y += 22;
+
+        _lstSpawnPoints = new ListBox
+        {
+            Location    = new(4, y),
+            Size        = new(pw, 80),
+            BackColor   = Color.FromArgb(58, 58, 65),
+            ForeColor   = Color.WhiteSmoke,
+            BorderStyle = BorderStyle.FixedSingle,
+            Font        = new Font("Consolas", 8.5f)
+        };
+        _lstSpawnPoints.SelectedIndexChanged += OnSpawnPointSelected;
+        panel.Controls.Add(_lstSpawnPoints);
+        y += 84;
+
+        (_, _txtSpawnName, y) = SingleField(panel, "Name", y, pw);
+        (_txtSpawnPtX, _txtSpawnPtY, y) = TwoFields(panel, "X", "Y", y, pw, "Position");
+
+        int spThird = (pw - 8) / 3;
+        var btnSpawnAdd    = DarkBtn("Add",    4,                      y, spThird);
+        var btnSpawnUpdate = DarkBtn("Update", 4 + spThird + 4,       y, spThird);
+        var btnSpawnDel    = DarkBtn("Delete", 4 + (spThird + 4) * 2, y, spThird, Color.FromArgb(130, 55, 55));
+        y += 30;
+
+        btnSpawnAdd.Click    += AddSpawnPoint;
+        btnSpawnUpdate.Click += UpdateSpawnPoint;
+        btnSpawnDel.Click    += DeleteSpawnPoint;
+        panel.Controls.AddRange(new Control[] { btnSpawnAdd, btnSpawnUpdate, btnSpawnDel });
 
         y += 8;
         panel.Controls.Add(new Label { Height = 1, Location = new(4, y), Width = pw, BackColor = Color.FromArgb(70, 70, 80) });
@@ -499,6 +537,103 @@ public sealed class MainForm : Form
         catch { Warn("Invalid values in platform settings. Use numeric values."); }
     }
 
+    // ── Spawn point handlers ──────────────────────────────────────────────────
+    private void OnSpawnPointSelected(object? sender, EventArgs e)
+    {
+        if (_lstSpawnPoints.SelectedItem is not string key) return;
+        var map = _canvas.Map;
+        if (map == null || !map.SpawnPoints.ContainsKey(key)) return;
+        var pt = map.SpawnPoints[key];
+        _syncingUI = true;
+        _txtSpawnName.Text = key;
+        _txtSpawnPtX.Text  = pt.X.ToString("F1");
+        _txtSpawnPtY.Text  = pt.Y.ToString("F1");
+        _syncingUI = false;
+    }
+
+    private void AddSpawnPoint(object? sender, EventArgs e)
+    {
+        var map = _canvas.Map;
+        if (map == null) return;
+        var name = _txtSpawnName.Text.Trim();
+        if (string.IsNullOrEmpty(name))
+        {
+            Warn("Spawn point name cannot be empty.");
+            return;
+        }
+        if (map.SpawnPoints.ContainsKey(name))
+        {
+            Warn($"A spawn point named \"{name}\" already exists.");
+            return;
+        }
+        try
+        {
+            var pt = new PointData { X = ParseF(_txtSpawnPtX), Y = ParseF(_txtSpawnPtY) };
+            map.SpawnPoints[name] = pt;
+            MarkDirty();
+            RefreshSpawnPointsList();
+            _lstSpawnPoints.SelectedItem = name;
+            _canvas.Invalidate();
+            SetStatus($"Spawn point \"{name}\" added.");
+        }
+        catch { Warn("Invalid X/Y values. Use numeric values."); }
+    }
+
+    private void UpdateSpawnPoint(object? sender, EventArgs e)
+    {
+        var map = _canvas.Map;
+        if (map == null) return;
+        if (_lstSpawnPoints.SelectedItem is not string oldKey) return;
+
+        var newName = _txtSpawnName.Text.Trim();
+        if (string.IsNullOrEmpty(newName))
+        {
+            Warn("Spawn point name cannot be empty.");
+            return;
+        }
+        if (newName != oldKey && map.SpawnPoints.ContainsKey(newName))
+        {
+            Warn($"A spawn point named \"{newName}\" already exists.");
+            return;
+        }
+        try
+        {
+            var pt = new PointData { X = ParseF(_txtSpawnPtX), Y = ParseF(_txtSpawnPtY) };
+            if (newName != oldKey) map.SpawnPoints.Remove(oldKey);
+            map.SpawnPoints[newName] = pt;
+            MarkDirty();
+            RefreshSpawnPointsList();
+            _lstSpawnPoints.SelectedItem = newName;
+            _canvas.Invalidate();
+            SetStatus($"Spawn point \"{newName}\" updated.");
+        }
+        catch { Warn("Invalid X/Y values. Use numeric values."); }
+    }
+
+    private void DeleteSpawnPoint(object? sender, EventArgs e)
+    {
+        var map = _canvas.Map;
+        if (map == null) return;
+        if (_lstSpawnPoints.SelectedItem is not string key) return;
+        map.SpawnPoints.Remove(key);
+        MarkDirty();
+        RefreshSpawnPointsList();
+        _txtSpawnName.Text = "";
+        _txtSpawnPtX.Text  = "";
+        _txtSpawnPtY.Text  = "";
+        _canvas.Invalidate();
+        SetStatus($"Spawn point \"{key}\" deleted.");
+    }
+
+    private void RefreshSpawnPointsList()
+    {
+        var map = _canvas.Map;
+        _lstSpawnPoints.Items.Clear();
+        if (map == null) return;
+        foreach (var key in map.SpawnPoints.Keys)
+            _lstSpawnPoints.Items.Add(key);
+    }
+
     // ── Canvas event handlers ─────────────────────────────────────────────────
     private void OnSelectionChanged(object? sender, EventArgs e)
     {
@@ -595,6 +730,10 @@ public sealed class MainForm : Form
         _txtSpawnX.Text  = map.SpawnPoint.X.ToString("F1");
         _txtSpawnY.Text  = map.SpawnPoint.Y.ToString("F1");
         _syncingUI = false;
+        RefreshSpawnPointsList();
+        _txtSpawnName.Text = "";
+        _txtSpawnPtX.Text  = "";
+        _txtSpawnPtY.Text  = "";
         UpdateStatus();
     }
 

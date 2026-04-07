@@ -115,7 +115,7 @@ Details:
 
 ==============================================================================
 Task: Add named spawn points editing to the Map Editor. Users should be able to view, add, edit, and delete named spawn points, and see them rendered on the canvas.
-Implemented: false
+Implemented: true
 
 Details:
 - Files: tools/MapEditor/MainForm.cs, tools/MapEditor/MapCanvas.cs
