@@ -300,6 +300,82 @@ SaveSlotResult SaveSlotScreen::handleEvent(const sf::Event& event,
         }
     }
 
+    // Mouse hover – highlight item under cursor
+    if (event.type == sf::Event::MouseMoved)
+    {
+        sf::Vector2f mouse(static_cast<float>(event.mouseMove.x),
+                           static_cast<float>(event.mouseMove.y));
+        for (int i = 0; i < static_cast<int>(m_widgets.size()); ++i)
+        {
+            if (m_widgets[i].box.getGlobalBounds().contains(mouse))
+            {
+                m_selectedIndex = i;
+                break;
+            }
+        }
+        if (m_resWidget.box.getGlobalBounds().contains(mouse))
+            m_selectedIndex = static_cast<int>(m_slots.size());
+        if (m_controlsWidget.box.getGlobalBounds().contains(mouse))
+            m_selectedIndex = static_cast<int>(m_slots.size()) + 1;
+    }
+
+    // Mouse click – activate item
+    if (event.type == sf::Event::MouseButtonPressed &&
+        event.mouseButton.button == sf::Mouse::Left)
+    {
+        sf::Vector2f mouse(static_cast<float>(event.mouseButton.x),
+                           static_cast<float>(event.mouseButton.y));
+
+        // Check slot widgets
+        for (int i = 0; i < static_cast<int>(m_widgets.size()); ++i)
+        {
+            if (m_widgets[i].box.getGlobalBounds().contains(mouse))
+            {
+                m_selectedIndex = i;
+                int slot = m_slots[i].slot;
+                if (m_slots[i].exists)
+                {
+                    result.action = SaveSlotResult::LoadSlot;
+                    result.slot   = slot;
+                }
+                else
+                {
+                    result.action = SaveSlotResult::NewGame;
+                    result.slot   = slot;
+                }
+                return result;
+            }
+        }
+
+        // Check resolution widget – left third decreases, right third increases
+        if (m_resWidget.box.getGlobalBounds().contains(mouse))
+        {
+            m_selectedIndex = static_cast<int>(m_slots.size());
+            sf::FloatRect bounds = m_resWidget.box.getGlobalBounds();
+            float third = bounds.width / 3.f;
+            if (mouse.x < bounds.left + third)
+            {
+                m_resolutionIndex = (m_resolutionIndex - 1 + static_cast<int>(m_resolutions.size()))
+                                    % static_cast<int>(m_resolutions.size());
+                applyResolution(window);
+            }
+            else if (mouse.x > bounds.left + 2.f * third)
+            {
+                m_resolutionIndex = (m_resolutionIndex + 1)
+                                    % static_cast<int>(m_resolutions.size());
+                applyResolution(window);
+            }
+        }
+
+        // Check controls widget
+        if (m_controlsWidget.box.getGlobalBounds().contains(mouse))
+        {
+            m_selectedIndex = static_cast<int>(m_slots.size()) + 1;
+            result.action = SaveSlotResult::Controls;
+            return result;
+        }
+    }
+
     // Controller: A button = confirm, X button = delete slot
     if (event.type == sf::Event::JoystickButtonPressed)
     {

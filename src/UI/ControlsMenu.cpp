@@ -180,6 +180,54 @@ void ControlsMenu::handleEvent(const sf::Event& event)
 
     // --- Normal navigation ---
 
+    // Mouse hover – highlight row under cursor
+    if (event.type == sf::Event::MouseMoved)
+    {
+        sf::Vector2f mouse(static_cast<float>(event.mouseMove.x),
+                           static_cast<float>(event.mouseMove.y));
+        for (int i = 0; i < ROW_COUNT; ++i)
+        {
+            if (m_rows[i].box.getGlobalBounds().contains(mouse))
+            {
+                m_selected = i;
+                break;
+            }
+        }
+    }
+
+    // Mouse click – activate row
+    if (event.type == sf::Event::MouseButtonPressed &&
+        event.mouseButton.button == sf::Mouse::Left)
+    {
+        sf::Vector2f mouse(static_cast<float>(event.mouseButton.x),
+                           static_cast<float>(event.mouseButton.y));
+        for (int i = 0; i < ROW_COUNT; ++i)
+        {
+            if (m_rows[i].box.getGlobalBounds().contains(mouse))
+            {
+                m_selected = i;
+                if (i == Back)
+                {
+                    close();
+                    return;
+                }
+                if (i == ResetDefaults)
+                {
+                    bindings.resetDefaults();
+                    bindings.save();
+                    refreshLabels();
+                    return;
+                }
+                if (isBindingRow(i))
+                {
+                    m_rebinding = true;
+                    refreshLabels();
+                }
+                return;
+            }
+        }
+    }
+
     if (event.type == sf::Event::KeyPressed)
     {
         if (event.key.code == sf::Keyboard::Escape)

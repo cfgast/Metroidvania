@@ -29,6 +29,7 @@ int main()
 
     sf::RenderWindow window(sf::VideoMode(800, 600), "Metroidvania");
     window.setFramerateLimit(60);
+    window.setMouseCursorVisible(false);
 
     // --- Game state ---
     Map map;
@@ -311,6 +312,11 @@ int main()
 
         if (!window.isOpen())
             break;
+
+        // Show the mouse cursor when any menu is open, hide it during gameplay
+        bool anyMenuOpen = saveSlotScreen.isOpen() || pauseMenu.isOpen()
+                         || controlsMenu.isOpen() || debugMenu.isOpen();
+        window.setMouseCursorVisible(anyMenuOpen);
 
         // --- Controls menu rendering ---
         if (controlsMenu.isOpen())

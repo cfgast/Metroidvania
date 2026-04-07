@@ -221,7 +221,7 @@ Implemented: true
 
 ==============================================================================
 Task: When a menu is open, add the ability to click on menu items with the mouse. When your back in game the mouse should get hidden again
-Implemented: false
+Implemented: true
 
 ==============================================================================
 Task: Right now in windowed mode when you resize the window, it changes the zoom. Instead of changing the zoom, it should just make it so you can see more of the map.

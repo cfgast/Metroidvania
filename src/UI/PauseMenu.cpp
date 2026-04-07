@@ -127,6 +127,40 @@ PauseMenu::Action PauseMenu::handleEvent(const sf::Event& event)
         }
     }
 
+    // Mouse hover – update highlighted item
+    if (event.type == sf::Event::MouseMoved)
+    {
+        sf::Vector2f mouse(static_cast<float>(event.mouseMove.x),
+                           static_cast<float>(event.mouseMove.y));
+        for (int i = 0; i < ITEM_COUNT; ++i)
+        {
+            if (m_items[i].box.getGlobalBounds().contains(mouse))
+            {
+                m_selectedIndex = i;
+                break;
+            }
+        }
+    }
+
+    // Mouse click – activate item
+    if (event.type == sf::Event::MouseButtonPressed &&
+        event.mouseButton.button == sf::Mouse::Left)
+    {
+        sf::Vector2f mouse(static_cast<float>(event.mouseButton.x),
+                           static_cast<float>(event.mouseButton.y));
+        for (int i = 0; i < ITEM_COUNT; ++i)
+        {
+            if (m_items[i].box.getGlobalBounds().contains(mouse))
+            {
+                m_selectedIndex = i;
+                Action a = ACTIONS[m_selectedIndex];
+                if (a == Resume)
+                    m_open = false;
+                return a;
+            }
+        }
+    }
+
     // Controller: D-pad / left stick vertical for menu navigation
     if (event.type == sf::Event::JoystickMoved)
     {
