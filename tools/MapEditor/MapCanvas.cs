@@ -9,6 +9,7 @@ namespace MapEditor;
 public enum EditorTool { Select, Draw, DrawEnemy, DrawTransition, DrawPickup, DrawSpawnPoint }
 public enum SelectableType { None, Platform, Enemy, Transition, Pickup, DefaultSpawn, NamedSpawn }
 internal enum ResizeHandle { None, Move, N, NE, E, SE, S, SW, W, NW }
+internal enum WaypointDrag { None, A, B }
 
 public sealed class MapCanvas : Control
 {
@@ -75,6 +76,7 @@ public sealed class MapCanvas : Control
     private RectangleF   _origRect;       // platform rect at drag start
     private float        _moveOffX, _moveOffY;
     private PointF       _origWaypointA, _origWaypointB;
+    private WaypointDrag _draggingWaypoint;
 
     // ── Appearance ────────────────────────────────────────────────────────────
     private const int HandlePx = 8;
@@ -347,6 +349,7 @@ public sealed class MapCanvas : Control
         for (int i = 0; i < Map.Enemies.Count; i++)
         {
             var en = Map.Enemies[i];
+            bool isSel = en == _selectedEnemy;
 
             // Patrol path (dashed line between waypoints)
             var sA = W2S(en.WaypointA.X, en.WaypointA.Y);
@@ -354,10 +357,22 @@ public sealed class MapCanvas : Control
             g.SmoothingMode = SmoothingMode.AntiAlias;
             g.DrawLine(patrolPen, sA, sB);
 
-            // Waypoint markers
-            float wr = Math.Max(3f, 5f * _zoom);
+            // Waypoint markers (larger + outlined when selected for dragging)
+            float wr = isSel ? Math.Max(5f, 8f * _zoom) : Math.Max(3f, 5f * _zoom);
             g.FillEllipse(waypointBrush, sA.X - wr, sA.Y - wr, wr * 2, wr * 2);
             g.FillEllipse(waypointBrush, sB.X - wr, sB.Y - wr, wr * 2, wr * 2);
+            if (isSel)
+            {
+                using var wpOutline = new Pen(Color.Cyan, 1.5f);
+                g.DrawEllipse(wpOutline, sA.X - wr, sA.Y - wr, wr * 2, wr * 2);
+                g.DrawEllipse(wpOutline, sB.X - wr, sB.Y - wr, wr * 2, wr * 2);
+                if (_zoom > 0.3f)
+                {
+                    using var f = new Font("Segoe UI", 6.5f);
+                    g.DrawString("A", f, Brushes.Orange, sA.X + wr + 1, sA.Y - 6);
+                    g.DrawString("B", f, Brushes.Orange, sB.X + wr + 1, sB.Y - 6);
+                }
+            }
             g.SmoothingMode = SmoothingMode.None;
 
             // Enemy body
@@ -554,6 +569,23 @@ public sealed class MapCanvas : Control
         return bestKey;
     }
 
+    private WaypointDrag HitWaypoint(PointF world)
+    {
+        if (_selectedEnemy == null) return WaypointDrag.None;
+        float radius = Math.Max(12f, 16f / _zoom);
+        float r2 = radius * radius;
+        float dxA = world.X - _selectedEnemy.WaypointA.X;
+        float dyA = world.Y - _selectedEnemy.WaypointA.Y;
+        float dxB = world.X - _selectedEnemy.WaypointB.X;
+        float dyB = world.Y - _selectedEnemy.WaypointB.Y;
+        float distA = dxA * dxA + dyA * dyA;
+        float distB = dxB * dxB + dyB * dyB;
+        // If both are within range, pick the closer one
+        if (distA <= r2 && (distA <= distB || distB > r2)) return WaypointDrag.A;
+        if (distB <= r2) return WaypointDrag.B;
+        return WaypointDrag.None;
+    }
+
     // ── Mouse ─────────────────────────────────────────────────────────────────
     protected override void OnMouseWheel(MouseEventArgs e)
     {
@@ -668,6 +700,20 @@ public sealed class MapCanvas : Control
             }
             else
             {
+                // Hit-test waypoints of selected enemy
+                var hitWp = HitWaypoint(world);
+                if (hitWp != WaypointDrag.None)
+                {
+                    var wp = hitWp == WaypointDrag.A ? _selectedEnemy!.WaypointA : _selectedEnemy!.WaypointB;
+                    _isDragging       = true;
+                    _draggingWaypoint = hitWp;
+                    _activeHandle     = ResizeHandle.Move;
+                    _moveOffX         = world.X - wp.X;
+                    _moveOffY         = world.Y - wp.Y;
+                    _dragStartWorld   = world;
+                }
+                else
+                {
                 // Hit-test spawns first (drawn on top of other objects)
                 var hitNamedSpawn = HitNamedSpawn(world);
                 if (hitNamedSpawn != null)
@@ -752,6 +798,7 @@ public sealed class MapCanvas : Control
                     }
                 }
                 }
+                }
             }
             Invalidate();
         }
@@ -795,7 +842,17 @@ public sealed class MapCanvas : Control
             }
             else if (_selectedEnemy != null)
             {
-                if (_activeHandle == ResizeHandle.Move)
+                if (_draggingWaypoint == WaypointDrag.A)
+                {
+                    _selectedEnemy.WaypointA.X = Snap(world.X - _moveOffX);
+                    _selectedEnemy.WaypointA.Y = Snap(world.Y - _moveOffY);
+                }
+                else if (_draggingWaypoint == WaypointDrag.B)
+                {
+                    _selectedEnemy.WaypointB.X = Snap(world.X - _moveOffX);
+                    _selectedEnemy.WaypointB.Y = Snap(world.Y - _moveOffY);
+                }
+                else if (_activeHandle == ResizeHandle.Move)
                 {
                     float newX = Snap(world.X - _moveOffX);
                     float newY = Snap(world.Y - _moveOffY);
@@ -893,7 +950,7 @@ public sealed class MapCanvas : Control
             return;
         }
 
-        if (_isDragging) { _isDragging = false; _activeHandle = ResizeHandle.None; }
+        if (_isDragging) { _isDragging = false; _activeHandle = ResizeHandle.None; _draggingWaypoint = WaypointDrag.None; }
     }
 
     // ── Resize ────────────────────────────────────────────────────────────────
@@ -955,6 +1012,7 @@ public sealed class MapCanvas : Control
         if (_tool == EditorTool.Draw || _tool == EditorTool.DrawEnemy || _tool == EditorTool.DrawTransition || _tool == EditorTool.DrawPickup || _tool == EditorTool.DrawSpawnPoint) { Cursor = Cursors.Cross; return; }
         var h = HitHandle(screen);
         if (h != ResizeHandle.None) { Cursor = GetResizeCursor(h); return; }
+        if (Map != null && HitWaypoint(world) != WaypointDrag.None) { Cursor = Cursors.SizeAll; return; }
         if (Map != null && HitNamedSpawn(world) != null) { Cursor = Cursors.SizeAll; return; }
         if (Map != null && HitDefaultSpawn(world)) { Cursor = Cursors.SizeAll; return; }
         if (Map != null && HitPlatform(world) != null) { Cursor = Cursors.SizeAll; return; }
