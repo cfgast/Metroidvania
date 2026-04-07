@@ -76,9 +76,10 @@ int main()
             physics->setPlayerState(&playerState);
         auto* health = player.addComponent<HealthComponent>(100.f);
         health->onDeath = [&player, &map]() {
-            player.position = map.getSpawnPoint();
             if (auto* physics = player.getComponent<PhysicsComponent>())
-                physics->velocity = { 0.f, 0.f };
+                physics->teleport(map.getSpawnPoint());
+            else
+                player.position = map.getSpawnPoint();
             if (auto* hp = player.getComponent<HealthComponent>())
                 hp->heal(hp->getMaxHp());
         };
@@ -126,9 +127,10 @@ int main()
         map = MapLoader::loadFromFile(mapFile);
         map.registerPhysXStatics();
         pruneConsumedPickups(map);
-        player.position = spawnPos;
         if (auto* physics = player.getComponent<PhysicsComponent>())
-            physics->velocity = { 0.f, 0.f };
+            physics->teleport(spawnPos);
+        else
+            player.position = spawnPos;
         enemies = spawnEnemies(map, player);
     };
 
@@ -151,9 +153,10 @@ int main()
                 pruneConsumedPickups(map);
 
                 sf::Vector2f spawn = map.getNamedSpawn(targetSpawn);
-                player.position = spawn;
                 if (auto* physics = player.getComponent<PhysicsComponent>())
-                    physics->velocity = { 0.f, 0.f };
+                    physics->teleport(spawn);
+                else
+                    player.position = spawn;
 
                 enemies = spawnEnemies(map, player);
 

@@ -236,3 +236,7 @@ Details:
 - Created src/UI/UIStyle.h — centralized color palette and drawing helpers (drawMenuItem, drawMenuRow, drawGlow, drawAccentBar) so all menus share the same modern dark theme.
 - Updated PauseMenu, SaveSlotScreen, ControlsMenu, and DebugMenu to use rounded-rectangle shapes for panels and buttons, a refined dark color scheme, a subtle glow behind selected items, and a left-side accent bar on the selected row.
 - All menus remain fully functional with keyboard, mouse, and controller input.
+
+==============================================================================
+Task: There are some problems with Map Transitions at the moment. When I transition between maps, you see popping because it looks like it updates the position of the player after the fade in has occured. Also when you transition from map 2 back to map 1 it takes you to the incorrect location. It goes back to the spawn inside of the from map 2 point.
+Implemented: true

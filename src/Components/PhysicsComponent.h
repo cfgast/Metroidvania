@@ -18,6 +18,11 @@ public:
 
     void update(float dt) override;
 
+    // Instantly move the owning GameObject and its PhysX actor to the given
+    // position, resetting velocity and air-jump state.  Use this for map
+    // transitions and respawns so the PhysX actor stays in sync.
+    void teleport(sf::Vector2f position);
+
     bool isGrounded() const { return m_grounded; }
 
     void setPlayerState(PlayerState* state) { m_playerState = state; }

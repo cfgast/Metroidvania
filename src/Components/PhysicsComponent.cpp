@@ -130,15 +130,24 @@ void PhysicsComponent::update(float dt)
             velocity.y = 0.f;
     }
 
-    // --- Fall-off / death zone: teleport to spawn ---
+    // --- Fall-off / death zone: respawn ---
     const sf::FloatRect& bounds = m_map.getBounds();
     if (getOwner()->position.y > bounds.top + bounds.height)
     {
-        getOwner()->position = m_map.getSpawnPoint();
-        velocity             = { 0.f, 0.f };
-        m_grounded           = false;
-        m_actor->setGlobalPose(PxTransform(
-            PxVec3(getOwner()->position.x, getOwner()->position.y, 0.f)));
-        m_actor->setLinearVelocity(PxVec3(0.f));
+        teleport(m_map.getSpawnPoint());
+    }
+}
+
+void PhysicsComponent::teleport(sf::Vector2f position)
+{
+    if (getOwner())
+        getOwner()->position = position;
+    velocity       = { 0.f, 0.f };
+    m_grounded     = false;
+    m_airJumpsUsed = 0;
+    if (m_actor)
+    {
+        m_actor->setGlobalPose(PxTransform(PxVec3(position.x, position.y, 0.f)));
+        m_actor->setLinearVelocity(PxVec3(0.f, 0.f, 0.f));
     }
 }
