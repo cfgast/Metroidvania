@@ -6,8 +6,8 @@ using System.Windows.Forms;
 
 namespace MapEditor;
 
-public enum EditorTool { Select, Draw, DrawEnemy, DrawTransition, DrawPickup }
-public enum SelectableType { None, Platform, Enemy, Transition, Pickup }
+public enum EditorTool { Select, Draw, DrawEnemy, DrawTransition, DrawPickup, DrawSpawnPoint }
+public enum SelectableType { None, Platform, Enemy, Transition, Pickup, DefaultSpawn, NamedSpawn }
 internal enum ResizeHandle { None, Move, N, NE, E, SE, S, SW, W, NW }
 
 public sealed class MapCanvas : Control
@@ -33,11 +33,19 @@ public sealed class MapCanvas : Control
     private AbilityPickupData? _selectedPickup;
     public  AbilityPickupData? SelectedPickup => _selectedPickup;
 
+    private bool _selectedDefaultSpawn;
+    public  bool SelectedDefaultSpawn => _selectedDefaultSpawn;
+
+    private string? _selectedSpawnKey;
+    public  string? SelectedSpawnKey => _selectedSpawnKey;
+
     public  SelectableType SelectedType =>
         _selected != null ? SelectableType.Platform :
         _selectedEnemy != null ? SelectableType.Enemy :
         _selectedTransition != null ? SelectableType.Transition :
         _selectedPickup != null ? SelectableType.Pickup :
+        _selectedDefaultSpawn ? SelectableType.DefaultSpawn :
+        _selectedSpawnKey != null ? SelectableType.NamedSpawn :
         SelectableType.None;
 
     // ── Tool ──────────────────────────────────────────────────────────────────
@@ -93,6 +101,8 @@ public sealed class MapCanvas : Control
         _selectedEnemy = null;
         _selectedTransition = null;
         _selectedPickup = null;
+        _selectedDefaultSpawn = false;
+        _selectedSpawnKey = null;
         SelectionChanged?.Invoke(this, EventArgs.Empty);
         FitToView();
     }
@@ -281,8 +291,9 @@ public sealed class MapCanvas : Control
             new(s.X,           s.Y + r),
             new(s.X - r * 0.6f, s.Y)
         };
+        bool isSel = _selectedDefaultSpawn;
         using var br  = new SolidBrush(Color.LimeGreen);
-        using var pen = new Pen(Color.White, 1f);
+        using var pen = new Pen(isSel ? Color.Cyan : Color.White, isSel ? 2.5f : 1f);
         g.SmoothingMode = SmoothingMode.AntiAlias;
         g.FillPolygon(br, pts);
         g.DrawPolygon(pen, pts);
@@ -310,8 +321,9 @@ public sealed class MapCanvas : Control
                 new(s.X,           s.Y + r),
                 new(s.X - r * 0.6f, s.Y)
             };
+            bool isSel = _selectedSpawnKey == kvp.Key;
             using var br  = new SolidBrush(Color.Gold);
-            using var pen = new Pen(Color.White, 1f);
+            using var pen = new Pen(isSel ? Color.Cyan : Color.White, isSel ? 2.5f : 1f);
             g.SmoothingMode = SmoothingMode.AntiAlias;
             g.FillPolygon(br, pts);
             g.DrawPolygon(pen, pts);
@@ -511,6 +523,37 @@ public sealed class MapCanvas : Control
         return null;
     }
 
+    private bool HitDefaultSpawn(PointF world)
+    {
+        if (Map == null) return false;
+        var sp = Map.SpawnPoint;
+        float radius = Math.Max(12f, 16f / _zoom);
+        float dx = world.X - sp.X;
+        float dy = world.Y - sp.Y;
+        return dx * dx + dy * dy <= radius * radius;
+    }
+
+    private string? HitNamedSpawn(PointF world)
+    {
+        if (Map?.SpawnPoints == null || Map.SpawnPoints.Count == 0) return null;
+        float bestDist = float.MaxValue;
+        string? bestKey = null;
+        float radius = Math.Max(12f, 16f / _zoom);
+        float r2 = radius * radius;
+        foreach (var kvp in Map.SpawnPoints)
+        {
+            float dx = world.X - kvp.Value.X;
+            float dy = world.Y - kvp.Value.Y;
+            float dist = dx * dx + dy * dy;
+            if (dist <= r2 && dist < bestDist)
+            {
+                bestDist = dist;
+                bestKey = kvp.Key;
+            }
+        }
+        return bestKey;
+    }
+
     // ── Mouse ─────────────────────────────────────────────────────────────────
     protected override void OnMouseWheel(MouseEventArgs e)
     {
@@ -581,6 +624,21 @@ public sealed class MapCanvas : Control
             MapChanged?.Invoke(this, EventArgs.Empty);
             Invalidate();
         }
+        else if (_tool == EditorTool.DrawSpawnPoint)
+        {
+            int nextId = (Map.SpawnPoints?.Count ?? 0) + 1;
+            string name = $"spawn_{nextId}";
+            while (Map.SpawnPoints!.ContainsKey(name))
+            {
+                nextId++;
+                name = $"spawn_{nextId}";
+            }
+            var pt = new PointData { X = Snap(world.X), Y = Snap(world.Y) };
+            Map.SpawnPoints[name] = pt;
+            SelectNamedSpawn(name);
+            MapChanged?.Invoke(this, EventArgs.Empty);
+            Invalidate();
+        }
         else
         {
             var handle = HitHandle(e.Location);
@@ -610,6 +668,30 @@ public sealed class MapCanvas : Control
             }
             else
             {
+                // Hit-test spawns first (drawn on top of other objects)
+                var hitNamedSpawn = HitNamedSpawn(world);
+                if (hitNamedSpawn != null)
+                {
+                    var sp = Map.SpawnPoints[hitNamedSpawn];
+                    SelectNamedSpawn(hitNamedSpawn);
+                    _isDragging     = true;
+                    _activeHandle   = ResizeHandle.Move;
+                    _moveOffX       = world.X - sp.X;
+                    _moveOffY       = world.Y - sp.Y;
+                    _dragStartWorld = world;
+                }
+                else if (HitDefaultSpawn(world))
+                {
+                    var sp = Map.SpawnPoint;
+                    SelectDefaultSpawn();
+                    _isDragging     = true;
+                    _activeHandle   = ResizeHandle.Move;
+                    _moveOffX       = world.X - sp.X;
+                    _moveOffY       = world.Y - sp.Y;
+                    _dragStartWorld = world;
+                }
+                else
+                {
                 var hit = HitPlatform(world);
                 if (hit != null)
                 {
@@ -669,6 +751,7 @@ public sealed class MapCanvas : Control
                         }
                     }
                 }
+                }
             }
             Invalidate();
         }
@@ -696,7 +779,7 @@ public sealed class MapCanvas : Control
             return;
         }
 
-        if (_isDragging && (_selected != null || _selectedEnemy != null || _selectedTransition != null || _selectedPickup != null))
+        if (_isDragging && (_selected != null || _selectedEnemy != null || _selectedTransition != null || _selectedPickup != null || _selectedDefaultSpawn || _selectedSpawnKey != null))
         {
             if (_selected != null)
             {
@@ -753,6 +836,16 @@ public sealed class MapCanvas : Control
                 {
                     ApplyResizePickup(world);
                 }
+            }
+            else if (_selectedDefaultSpawn)
+            {
+                Map!.SpawnPoint.X = Snap(world.X - _moveOffX);
+                Map.SpawnPoint.Y  = Snap(world.Y - _moveOffY);
+            }
+            else if (_selectedSpawnKey != null && Map!.SpawnPoints.TryGetValue(_selectedSpawnKey, out var sp))
+            {
+                sp.X = Snap(world.X - _moveOffX);
+                sp.Y = Snap(world.Y - _moveOffY);
             }
             MapChanged?.Invoke(this, EventArgs.Empty);
             Invalidate();
@@ -855,13 +948,15 @@ public sealed class MapCanvas : Control
     }
 
     // ── Cursor ────────────────────────────────────────────────────────────────
-    private void UpdateCursorForTool() => Cursor = (_tool == EditorTool.Draw || _tool == EditorTool.DrawEnemy || _tool == EditorTool.DrawTransition || _tool == EditorTool.DrawPickup) ? Cursors.Cross : Cursors.Default;
+    private void UpdateCursorForTool() => Cursor = (_tool == EditorTool.Draw || _tool == EditorTool.DrawEnemy || _tool == EditorTool.DrawTransition || _tool == EditorTool.DrawPickup || _tool == EditorTool.DrawSpawnPoint) ? Cursors.Cross : Cursors.Default;
 
     private void UpdateCursor(Point screen, PointF world)
     {
-        if (_tool == EditorTool.Draw || _tool == EditorTool.DrawEnemy || _tool == EditorTool.DrawTransition || _tool == EditorTool.DrawPickup) { Cursor = Cursors.Cross; return; }
+        if (_tool == EditorTool.Draw || _tool == EditorTool.DrawEnemy || _tool == EditorTool.DrawTransition || _tool == EditorTool.DrawPickup || _tool == EditorTool.DrawSpawnPoint) { Cursor = Cursors.Cross; return; }
         var h = HitHandle(screen);
         if (h != ResizeHandle.None) { Cursor = GetResizeCursor(h); return; }
+        if (Map != null && HitNamedSpawn(world) != null) { Cursor = Cursors.SizeAll; return; }
+        if (Map != null && HitDefaultSpawn(world)) { Cursor = Cursors.SizeAll; return; }
         if (Map != null && HitPlatform(world) != null) { Cursor = Cursors.SizeAll; return; }
         if (Map != null && HitEnemy(world) != null) { Cursor = Cursors.SizeAll; return; }
         if (Map != null && HitTransition(world) != null) { Cursor = Cursors.SizeAll; return; }
@@ -921,6 +1016,13 @@ public sealed class MapCanvas : Control
             MapChanged?.Invoke(this, EventArgs.Empty);
             Invalidate();
         }
+        else if (_selectedSpawnKey != null)
+        {
+            Map.SpawnPoints.Remove(_selectedSpawnKey);
+            ClearSelection();
+            MapChanged?.Invoke(this, EventArgs.Empty);
+            Invalidate();
+        }
     }
 
     private void SelectPlatform(PlatformData plat)
@@ -929,6 +1031,8 @@ public sealed class MapCanvas : Control
         _selectedEnemy      = null;
         _selectedTransition = null;
         _selectedPickup     = null;
+        _selectedDefaultSpawn = false;
+        _selectedSpawnKey   = null;
         SelectionChanged?.Invoke(this, EventArgs.Empty);
         Invalidate();
     }
@@ -939,6 +1043,8 @@ public sealed class MapCanvas : Control
         _selectedEnemy      = enemy;
         _selectedTransition = null;
         _selectedPickup     = null;
+        _selectedDefaultSpawn = false;
+        _selectedSpawnKey   = null;
         SelectionChanged?.Invoke(this, EventArgs.Empty);
         Invalidate();
     }
@@ -949,6 +1055,8 @@ public sealed class MapCanvas : Control
         _selectedEnemy      = null;
         _selectedTransition = transition;
         _selectedPickup     = null;
+        _selectedDefaultSpawn = false;
+        _selectedSpawnKey   = null;
         SelectionChanged?.Invoke(this, EventArgs.Empty);
         Invalidate();
     }
@@ -959,8 +1067,41 @@ public sealed class MapCanvas : Control
         _selectedEnemy      = null;
         _selectedTransition = null;
         _selectedPickup     = pickup;
+        _selectedDefaultSpawn = false;
+        _selectedSpawnKey   = null;
         SelectionChanged?.Invoke(this, EventArgs.Empty);
         Invalidate();
+    }
+
+    private void SelectDefaultSpawn()
+    {
+        _selected           = null;
+        _selectedEnemy      = null;
+        _selectedTransition = null;
+        _selectedPickup     = null;
+        _selectedDefaultSpawn = true;
+        _selectedSpawnKey   = null;
+        SelectionChanged?.Invoke(this, EventArgs.Empty);
+        Invalidate();
+    }
+
+    private void SelectNamedSpawn(string key)
+    {
+        _selected           = null;
+        _selectedEnemy      = null;
+        _selectedTransition = null;
+        _selectedPickup     = null;
+        _selectedDefaultSpawn = false;
+        _selectedSpawnKey   = key;
+        SelectionChanged?.Invoke(this, EventArgs.Empty);
+        Invalidate();
+    }
+
+    public void SelectSpawnByKey(string? key)
+    {
+        if (key == null) ClearSelection();
+        else if (key == "") SelectDefaultSpawn();
+        else SelectNamedSpawn(key);
     }
 
     private void ClearSelection()
@@ -969,6 +1110,8 @@ public sealed class MapCanvas : Control
         _selectedEnemy      = null;
         _selectedTransition = null;
         _selectedPickup     = null;
+        _selectedDefaultSpawn = false;
+        _selectedSpawnKey   = null;
         SelectionChanged?.Invoke(this, EventArgs.Empty);
         Invalidate();
     }

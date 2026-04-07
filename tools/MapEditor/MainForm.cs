@@ -21,11 +21,13 @@ public sealed class MainForm : Form
     private TextBox _txtName    = null!;
     private TextBox _txtBoundsX = null!, _txtBoundsY = null!;
     private TextBox _txtBoundsW = null!, _txtBoundsH = null!;
-    private TextBox _txtSpawnX  = null!, _txtSpawnY  = null!;
 
     // ── Spawn point controls ─────────────────────────────────────────────────
+    private Panel   _pnlSpawn = null!;
     private ListBox _lstSpawnPoints = null!;
     private TextBox _txtSpawnName   = null!, _txtSpawnPtX = null!, _txtSpawnPtY = null!;
+    private Label   _lblSpawnTitle  = null!;
+    private Button  _btnSpawnDel    = null!;
 
     // ── Platform property controls ────────────────────────────────────────────
     private Panel   _pnlPlatform = null!;
@@ -55,7 +57,7 @@ public sealed class MainForm : Form
     private ComboBox _cboPickupAbility = null!;
 
     // ── Toolbar buttons ───────────────────────────────────────────────────────
-    private ToolStripButton _btnSelect = null!, _btnDraw = null!, _btnDrawEnemy = null!, _btnDrawTransition = null!, _btnDrawPickup = null!, _btnSnap = null!;
+    private ToolStripButton _btnSelect = null!, _btnDraw = null!, _btnDrawEnemy = null!, _btnDrawTransition = null!, _btnDrawPickup = null!, _btnDrawSpawn = null!, _btnSnap = null!;
 
     // ── Status bar labels ─────────────────────────────────────────────────────
     private ToolStripStatusLabel _lblInfo  = null!;
@@ -145,6 +147,7 @@ public sealed class MainForm : Form
         _btnDrawEnemy      = Tbtn("Draw Enemy",      "Draw new enemy  [E]",         false);
         _btnDrawTransition = Tbtn("Draw Transition", "Draw new transition  [T]",    false);
         _btnDrawPickup     = Tbtn("Draw Pickup",     "Draw new ability pickup  [P]", false);
+        _btnDrawSpawn      = Tbtn("Draw Spawn",      "Draw new spawn point  [W]",   false);
         _btnSnap           = Tbtn("Snap: ON",        "Toggle grid snapping  [G]",   true);
 
         _btnSelect.Click         += (_, _) => SetTool(EditorTool.Select);
@@ -152,6 +155,7 @@ public sealed class MainForm : Form
         _btnDrawEnemy.Click      += (_, _) => SetTool(EditorTool.DrawEnemy);
         _btnDrawTransition.Click += (_, _) => SetTool(EditorTool.DrawTransition);
         _btnDrawPickup.Click     += (_, _) => SetTool(EditorTool.DrawPickup);
+        _btnDrawSpawn.Click      += (_, _) => SetTool(EditorTool.DrawSpawnPoint);
         _btnSnap.Click           += (_, _) => ToggleSnap();
 
         var btnDel = new ToolStripButton("Delete") { ToolTipText = "Delete selected  [Del]" };
@@ -165,7 +169,7 @@ public sealed class MainForm : Form
 
         bar.Items.AddRange(new ToolStripItem[]
         {
-            _btnSelect, _btnDraw, _btnDrawEnemy, _btnDrawTransition, _btnDrawPickup,
+            _btnSelect, _btnDraw, _btnDrawEnemy, _btnDrawTransition, _btnDrawPickup, _btnDrawSpawn,
             new ToolStripSeparator(),
             btnDel,
             new ToolStripSeparator(),
@@ -203,13 +207,12 @@ public sealed class MainForm : Form
         int y = 8;
         const int pw = 214;   // usable pixel width inside padding
 
-        // ── Map Settings ──────────────────────────────────────────────────────
+        // ── Map Settings (always visible) ─────────────────────────────────────
         panel.Controls.Add(SectionLabel("MAP SETTINGS", 4, y, pw)); y += 22;
 
         (_, _txtName,    y) = SingleField(panel, "Name",     y, pw);
         (_txtBoundsX, _txtBoundsY, y) = TwoFields(panel, "X", "Y", y, pw, "Bounds origin");
         (_txtBoundsW, _txtBoundsH, y) = TwoFields(panel, "Width", "Height", y, pw, "Bounds size");
-        (_txtSpawnX,  _txtSpawnY,  y) = TwoFields(panel, "X", "Y", y, pw, "Spawn point");
 
         var btnMap = DarkBtn("Apply Map Settings", 4, y, pw); y += 30;
         btnMap.Click += ApplyMapSettings;
@@ -219,47 +222,49 @@ public sealed class MainForm : Form
         panel.Controls.Add(new Label { Height = 1, Location = new(4, y), Width = pw, BackColor = Color.FromArgb(70, 70, 80) });
         y += 8;
 
-        // ── Spawn Points ──────────────────────────────────────────────────────
-        panel.Controls.Add(SectionLabel("SPAWN POINTS", 4, y, pw)); y += 22;
+        // ── Dynamic panels (only one visible at a time) ──────────────────────
+        int dynamicY = y;
+
+        // ── Spawn Point panel ─────────────────────────────────────────────────
+        _pnlSpawn = new Panel { Location = new(0, dynamicY), Width = panel.Width, AutoSize = false, Visible = false };
+        panel.Controls.Add(_pnlSpawn);
+
+        int sy = 0;
+        _lblSpawnTitle = SectionLabel("SPAWN POINT", 4, sy, pw);
+        _pnlSpawn.Controls.Add(_lblSpawnTitle); sy += 22;
 
         _lstSpawnPoints = new ListBox
         {
-            Location    = new(4, y),
+            Location    = new(4, sy),
             Size        = new(pw, 80),
             BackColor   = Color.FromArgb(58, 58, 65),
             ForeColor   = Color.WhiteSmoke,
             BorderStyle = BorderStyle.FixedSingle,
             Font        = new Font("Consolas", 8.5f)
         };
-        _lstSpawnPoints.SelectedIndexChanged += OnSpawnPointSelected;
-        panel.Controls.Add(_lstSpawnPoints);
-        y += 84;
+        _lstSpawnPoints.SelectedIndexChanged += OnSpawnListSelected;
+        _pnlSpawn.Controls.Add(_lstSpawnPoints);
+        sy += 84;
 
-        (_, _txtSpawnName, y) = SingleField(panel, "Name", y, pw);
-        (_txtSpawnPtX, _txtSpawnPtY, y) = TwoFields(panel, "X", "Y", y, pw, "Position");
+        (_, _txtSpawnName, sy) = SingleField(_pnlSpawn, "Name", sy, pw);
+        (_txtSpawnPtX, _txtSpawnPtY, sy) = TwoFields(_pnlSpawn, "X", "Y", sy, pw, "Position");
 
-        int spThird = (pw - 8) / 3;
-        var btnSpawnAdd    = DarkBtn("Add",    4,                      y, spThird);
-        var btnSpawnUpdate = DarkBtn("Update", 4 + spThird + 4,       y, spThird);
-        var btnSpawnDel    = DarkBtn("Delete", 4 + (spThird + 4) * 2, y, spThird, Color.FromArgb(130, 55, 55));
-        y += 30;
+        int spHalf = (pw - 4) / 2;
+        var btnSpawnApply = DarkBtn("Apply",  4,              sy, spHalf);
+        _btnSpawnDel      = DarkBtn("Delete", 4 + spHalf + 4, sy, spHalf, Color.FromArgb(130, 55, 55));
+        sy += 30;
 
-        btnSpawnAdd.Click    += AddSpawnPoint;
-        btnSpawnUpdate.Click += UpdateSpawnPoint;
-        btnSpawnDel.Click    += DeleteSpawnPoint;
-        panel.Controls.AddRange(new Control[] { btnSpawnAdd, btnSpawnUpdate, btnSpawnDel });
-
-        y += 8;
-        panel.Controls.Add(new Label { Height = 1, Location = new(4, y), Width = pw, BackColor = Color.FromArgb(70, 70, 80) });
-        y += 8;
+        btnSpawnApply.Click  += ApplySpawnSettings;
+        _btnSpawnDel.Click   += (_, _) => _canvas.DeleteSelected();
+        _pnlSpawn.Controls.AddRange(new Control[] { btnSpawnApply, _btnSpawnDel });
+        _pnlSpawn.Height = sy;
 
         // ── Selected Platform ─────────────────────────────────────────────────
-        panel.Controls.Add(SectionLabel("SELECTED PLATFORM", 4, y, pw)); y += 22;
-
-        _pnlPlatform = new Panel { Location = new(0, y), Width = panel.Width, AutoSize = false };
+        _pnlPlatform = new Panel { Location = new(0, dynamicY), Width = panel.Width, AutoSize = false, Visible = false };
         panel.Controls.Add(_pnlPlatform);
 
         int py = 0;
+        _pnlPlatform.Controls.Add(SectionLabel("SELECTED PLATFORM", 4, py, pw)); py += 22;
         (_txtPlatX, _txtPlatY, py) = TwoFields(_pnlPlatform, "X", "Y",           py, pw, "Position");
         (_txtPlatW, _txtPlatH, py) = TwoFields(_pnlPlatform, "Width", "Height",   py, pw, "Size");
         (_txtPlatR, _txtPlatG, _txtPlatB, py) = ThreeFields(_pnlPlatform, "R", "G", "B", py, pw, "Color (R G B, 0–255)");
@@ -289,20 +294,12 @@ public sealed class MainForm : Form
         _txtPlatG.TextChanged += (_, _) => RefreshSwatch();
         _txtPlatB.TextChanged += (_, _) => RefreshSwatch();
 
-        _pnlPlatform.Enabled = false;
-
-        y += py;
-        y += 8;
-        panel.Controls.Add(new Label { Height = 1, Location = new(4, y), Width = pw, BackColor = Color.FromArgb(70, 70, 80) });
-        y += 8;
-
         // ── Selected Enemy ────────────────────────────────────────────────────
-        panel.Controls.Add(SectionLabel("SELECTED ENEMY", 4, y, pw)); y += 22;
-
-        _pnlEnemy = new Panel { Location = new(0, y), Width = panel.Width, AutoSize = false };
+        _pnlEnemy = new Panel { Location = new(0, dynamicY), Width = panel.Width, AutoSize = false, Visible = false };
         panel.Controls.Add(_pnlEnemy);
 
         int ey = 0;
+        _pnlEnemy.Controls.Add(SectionLabel("SELECTED ENEMY", 4, ey, pw)); ey += 22;
         (_txtEnemyX, _txtEnemyY, ey) = TwoFields(_pnlEnemy, "X", "Y", ey, pw, "Position");
         (_txtEnemyW, _txtEnemyH, ey) = TwoFields(_pnlEnemy, "Width", "Height", ey, pw, "Size");
         (_txtWaypointAX, _txtWaypointAY, ey) = TwoFields(_pnlEnemy, "X", "Y", ey, pw, "Waypoint A");
@@ -318,20 +315,13 @@ public sealed class MainForm : Form
         btnEnemyDel.Click   += (_, _) => _canvas.DeleteSelected();
         _pnlEnemy.Controls.AddRange(new Control[] { btnEnemyApply, btnEnemyDel });
         _pnlEnemy.Height  = ey;
-        _pnlEnemy.Enabled = false;
-
-        y += ey;
-        y += 8;
-        panel.Controls.Add(new Label { Height = 1, Location = new(4, y), Width = pw, BackColor = Color.FromArgb(70, 70, 80) });
-        y += 8;
 
         // ── Selected Transition ───────────────────────────────────────────────
-        panel.Controls.Add(SectionLabel("SELECTED TRANSITION", 4, y, pw)); y += 22;
-
-        _pnlTransition = new Panel { Location = new(0, y), Width = panel.Width, AutoSize = false };
+        _pnlTransition = new Panel { Location = new(0, dynamicY), Width = panel.Width, AutoSize = false, Visible = false };
         panel.Controls.Add(_pnlTransition);
 
         int ty = 0;
+        _pnlTransition.Controls.Add(SectionLabel("SELECTED TRANSITION", 4, ty, pw)); ty += 22;
         (_, _txtTransName, ty) = SingleField(_pnlTransition, "Name", ty, pw);
         (_txtTransX, _txtTransY, ty) = TwoFields(_pnlTransition, "X", "Y", ty, pw, "Position");
         (_txtTransW, _txtTransH, ty) = TwoFields(_pnlTransition, "Width", "Height", ty, pw, "Size");
@@ -360,20 +350,13 @@ public sealed class MainForm : Form
         btnTransDel.Click   += (_, _) => _canvas.DeleteSelected();
         _pnlTransition.Controls.AddRange(new Control[] { btnTransApply, btnTransDel });
         _pnlTransition.Height  = ty;
-        _pnlTransition.Enabled = false;
-
-        y += ty;
-        y += 8;
-        panel.Controls.Add(new Label { Height = 1, Location = new(4, y), Width = pw, BackColor = Color.FromArgb(70, 70, 80) });
-        y += 8;
 
         // ── Selected Ability Pickup ───────────────────────────────────────────
-        panel.Controls.Add(SectionLabel("SELECTED ABILITY PICKUP", 4, y, pw)); y += 22;
-
-        _pnlPickup = new Panel { Location = new(0, y), Width = panel.Width, AutoSize = false };
+        _pnlPickup = new Panel { Location = new(0, dynamicY), Width = panel.Width, AutoSize = false, Visible = false };
         panel.Controls.Add(_pnlPickup);
 
         int pky = 0;
+        _pnlPickup.Controls.Add(SectionLabel("SELECTED ABILITY PICKUP", 4, pky, pw)); pky += 22;
         (_, _txtPickupId, pky) = SingleField(_pnlPickup, "ID", pky, pw);
 
         _pnlPickup.Controls.Add(new Label
@@ -410,7 +393,6 @@ public sealed class MainForm : Form
         btnPickupDel.Click   += (_, _) => _canvas.DeleteSelected();
         _pnlPickup.Controls.AddRange(new Control[] { btnPickupApply, btnPickupDel });
         _pnlPickup.Height  = pky;
-        _pnlPickup.Enabled = false;
 
         return panel;
     }
@@ -655,8 +637,6 @@ public sealed class MainForm : Form
             map.Bounds.Y      = ParseF(_txtBoundsY);
             map.Bounds.Width  = ParseF(_txtBoundsW);
             map.Bounds.Height = ParseF(_txtBoundsH);
-            map.SpawnPoint.X  = ParseF(_txtSpawnX);
-            map.SpawnPoint.Y  = ParseF(_txtSpawnY);
             MarkDirty();
             _canvas.Invalidate();
             SetStatus("Map settings applied.");
@@ -761,91 +741,64 @@ public sealed class MainForm : Form
     }
 
     // ── Spawn point handlers ──────────────────────────────────────────────────
-    private void OnSpawnPointSelected(object? sender, EventArgs e)
+    private void OnSpawnListSelected(object? sender, EventArgs e)
     {
+        if (_syncingUI) return;
         if (_lstSpawnPoints.SelectedItem is not string key) return;
-        var map = _canvas.Map;
-        if (map == null || !map.SpawnPoints.ContainsKey(key)) return;
-        var pt = map.SpawnPoints[key];
-        _syncingUI = true;
-        _txtSpawnName.Text = key;
-        _txtSpawnPtX.Text  = pt.X.ToString("F1");
-        _txtSpawnPtY.Text  = pt.Y.ToString("F1");
-        _syncingUI = false;
+        // Sync canvas selection with list
+        if (key == "(default)")
+            _canvas.SelectSpawnByKey("");
+        else
+            _canvas.SelectSpawnByKey(key);
     }
 
-    private void AddSpawnPoint(object? sender, EventArgs e)
+    private void ApplySpawnSettings(object? sender, EventArgs e)
     {
         var map = _canvas.Map;
         if (map == null) return;
-        var name = _txtSpawnName.Text.Trim();
-        if (string.IsNullOrEmpty(name))
-        {
-            Warn("Spawn point name cannot be empty.");
-            return;
-        }
-        if (map.SpawnPoints.ContainsKey(name))
-        {
-            Warn($"A spawn point named \"{name}\" already exists.");
-            return;
-        }
-        try
-        {
-            var pt = new PointData { X = ParseF(_txtSpawnPtX), Y = ParseF(_txtSpawnPtY) };
-            map.SpawnPoints[name] = pt;
-            MarkDirty();
-            RefreshSpawnPointsList();
-            _lstSpawnPoints.SelectedItem = name;
-            _canvas.Invalidate();
-            SetStatus($"Spawn point \"{name}\" added.");
-        }
-        catch { Warn("Invalid X/Y values. Use numeric values."); }
-    }
 
-    private void UpdateSpawnPoint(object? sender, EventArgs e)
-    {
-        var map = _canvas.Map;
-        if (map == null) return;
-        if (_lstSpawnPoints.SelectedItem is not string oldKey) return;
-
-        var newName = _txtSpawnName.Text.Trim();
-        if (string.IsNullOrEmpty(newName))
+        if (_canvas.SelectedDefaultSpawn)
         {
-            Warn("Spawn point name cannot be empty.");
-            return;
+            try
+            {
+                map.SpawnPoint.X = ParseF(_txtSpawnPtX);
+                map.SpawnPoint.Y = ParseF(_txtSpawnPtY);
+                MarkDirty();
+                _canvas.Invalidate();
+                SetStatus("Default spawn point updated.");
+            }
+            catch { Warn("Invalid X/Y values. Use numeric values."); }
         }
-        if (newName != oldKey && map.SpawnPoints.ContainsKey(newName))
+        else if (_canvas.SelectedSpawnKey != null)
         {
-            Warn($"A spawn point named \"{newName}\" already exists.");
-            return;
+            var newName = _txtSpawnName.Text.Trim();
+            if (string.IsNullOrEmpty(newName))
+            {
+                Warn("Spawn point name cannot be empty.");
+                return;
+            }
+            var oldKey = _canvas.SelectedSpawnKey;
+            if (newName != oldKey && map.SpawnPoints.ContainsKey(newName))
+            {
+                Warn($"A spawn point named \"{newName}\" already exists.");
+                return;
+            }
+            try
+            {
+                var pt = new PointData { X = ParseF(_txtSpawnPtX), Y = ParseF(_txtSpawnPtY) };
+                if (newName != oldKey) map.SpawnPoints.Remove(oldKey);
+                map.SpawnPoints[newName] = pt;
+                MarkDirty();
+                // Re-select with new name if renamed
+                if (newName != oldKey)
+                    _canvas.SelectSpawnByKey(newName);
+                else
+                    _canvas.Invalidate();
+                RefreshSpawnPointsList();
+                SetStatus($"Spawn point \"{newName}\" updated.");
+            }
+            catch { Warn("Invalid X/Y values. Use numeric values."); }
         }
-        try
-        {
-            var pt = new PointData { X = ParseF(_txtSpawnPtX), Y = ParseF(_txtSpawnPtY) };
-            if (newName != oldKey) map.SpawnPoints.Remove(oldKey);
-            map.SpawnPoints[newName] = pt;
-            MarkDirty();
-            RefreshSpawnPointsList();
-            _lstSpawnPoints.SelectedItem = newName;
-            _canvas.Invalidate();
-            SetStatus($"Spawn point \"{newName}\" updated.");
-        }
-        catch { Warn("Invalid X/Y values. Use numeric values."); }
-    }
-
-    private void DeleteSpawnPoint(object? sender, EventArgs e)
-    {
-        var map = _canvas.Map;
-        if (map == null) return;
-        if (_lstSpawnPoints.SelectedItem is not string key) return;
-        map.SpawnPoints.Remove(key);
-        MarkDirty();
-        RefreshSpawnPointsList();
-        _txtSpawnName.Text = "";
-        _txtSpawnPtX.Text  = "";
-        _txtSpawnPtY.Text  = "";
-        _canvas.Invalidate();
-        SetStatus($"Spawn point \"{key}\" deleted.");
     }
 
     private void RefreshSpawnPointsList()
@@ -853,78 +806,122 @@ public sealed class MainForm : Form
         var map = _canvas.Map;
         _lstSpawnPoints.Items.Clear();
         if (map == null) return;
+        _lstSpawnPoints.Items.Add("(default)");
         foreach (var key in map.SpawnPoints.Keys)
             _lstSpawnPoints.Items.Add(key);
+    }
+
+    private void ShowDynamicPanel(Panel? toShow)
+    {
+        _pnlSpawn.Visible      = toShow == _pnlSpawn;
+        _pnlPlatform.Visible   = toShow == _pnlPlatform;
+        _pnlEnemy.Visible      = toShow == _pnlEnemy;
+        _pnlTransition.Visible = toShow == _pnlTransition;
+        _pnlPickup.Visible     = toShow == _pnlPickup;
     }
 
     // ── Canvas event handlers ─────────────────────────────────────────────────
     private void OnSelectionChanged(object? sender, EventArgs e)
     {
-        var p  = _canvas.SelectedPlatform;
-        var en = _canvas.SelectedEnemy;
-        var tr = _canvas.SelectedTransition;
-        var pk = _canvas.SelectedPickup;
+        var selType = _canvas.SelectedType;
 
-        _pnlPlatform.Enabled   = p != null;
-        _pnlEnemy.Enabled      = en != null;
-        _pnlTransition.Enabled = tr != null;
-        _pnlPickup.Enabled     = pk != null;
-
-        if (p != null)
+        switch (selType)
         {
-            _syncingUI = true;
-            _txtPlatX.Text = p.X.ToString("F1");
-            _txtPlatY.Text = p.Y.ToString("F1");
-            _txtPlatW.Text = p.Width.ToString("F1");
-            _txtPlatH.Text = p.Height.ToString("F1");
-            _txtPlatR.Text = p.R.ToString();
-            _txtPlatG.Text = p.G.ToString();
-            _txtPlatB.Text = p.B.ToString();
-            _syncingUI = false;
-            RefreshSwatch();
-        }
+            case SelectableType.Platform:
+                ShowDynamicPanel(_pnlPlatform);
+                var p = _canvas.SelectedPlatform!;
+                _syncingUI = true;
+                _txtPlatX.Text = p.X.ToString("F1");
+                _txtPlatY.Text = p.Y.ToString("F1");
+                _txtPlatW.Text = p.Width.ToString("F1");
+                _txtPlatH.Text = p.Height.ToString("F1");
+                _txtPlatR.Text = p.R.ToString();
+                _txtPlatG.Text = p.G.ToString();
+                _txtPlatB.Text = p.B.ToString();
+                _syncingUI = false;
+                RefreshSwatch();
+                break;
 
-        if (en != null)
-        {
-            _syncingUI = true;
-            _txtEnemyX.Text       = en.X.ToString("F1");
-            _txtEnemyY.Text       = en.Y.ToString("F1");
-            _txtEnemyW.Text       = en.Width.ToString("F1");
-            _txtEnemyH.Text       = en.Height.ToString("F1");
-            _txtWaypointAX.Text   = en.WaypointA.X.ToString("F1");
-            _txtWaypointAY.Text   = en.WaypointA.Y.ToString("F1");
-            _txtWaypointBX.Text   = en.WaypointB.X.ToString("F1");
-            _txtWaypointBY.Text   = en.WaypointB.Y.ToString("F1");
-            _txtEnemySpeed.Text   = en.Speed.ToString("F1");
-            _txtEnemyDamage.Text  = en.Damage.ToString("F1");
-            _txtEnemyHP.Text      = en.Hp.ToString("F1");
-            _syncingUI = false;
-        }
+            case SelectableType.Enemy:
+                ShowDynamicPanel(_pnlEnemy);
+                var en = _canvas.SelectedEnemy!;
+                _syncingUI = true;
+                _txtEnemyX.Text       = en.X.ToString("F1");
+                _txtEnemyY.Text       = en.Y.ToString("F1");
+                _txtEnemyW.Text       = en.Width.ToString("F1");
+                _txtEnemyH.Text       = en.Height.ToString("F1");
+                _txtWaypointAX.Text   = en.WaypointA.X.ToString("F1");
+                _txtWaypointAY.Text   = en.WaypointA.Y.ToString("F1");
+                _txtWaypointBX.Text   = en.WaypointB.X.ToString("F1");
+                _txtWaypointBY.Text   = en.WaypointB.Y.ToString("F1");
+                _txtEnemySpeed.Text   = en.Speed.ToString("F1");
+                _txtEnemyDamage.Text  = en.Damage.ToString("F1");
+                _txtEnemyHP.Text      = en.Hp.ToString("F1");
+                _syncingUI = false;
+                break;
 
-        if (tr != null)
-        {
-            _syncingUI = true;
-            _txtTransName.Text        = tr.Name;
-            _txtTransX.Text           = tr.X.ToString("F1");
-            _txtTransY.Text           = tr.Y.ToString("F1");
-            _txtTransW.Text           = tr.Width.ToString("F1");
-            _txtTransH.Text           = tr.Height.ToString("F1");
-            _txtTransTargetMap.Text   = tr.TargetMap;
-            _txtTransTargetSpawn.Text = tr.TargetSpawn;
-            _syncingUI = false;
-        }
+            case SelectableType.Transition:
+                ShowDynamicPanel(_pnlTransition);
+                var tr = _canvas.SelectedTransition!;
+                _syncingUI = true;
+                _txtTransName.Text        = tr.Name;
+                _txtTransX.Text           = tr.X.ToString("F1");
+                _txtTransY.Text           = tr.Y.ToString("F1");
+                _txtTransW.Text           = tr.Width.ToString("F1");
+                _txtTransH.Text           = tr.Height.ToString("F1");
+                _txtTransTargetMap.Text   = tr.TargetMap;
+                _txtTransTargetSpawn.Text = tr.TargetSpawn;
+                _syncingUI = false;
+                break;
 
-        if (pk != null)
-        {
-            _syncingUI = true;
-            _txtPickupId.Text = pk.Id;
-            int idx = _cboPickupAbility.Items.IndexOf(pk.Ability);
-            _cboPickupAbility.SelectedIndex = idx >= 0 ? idx : 0;
-            _txtPickupX.Text = pk.X.ToString("F1");
-            _txtPickupY.Text = pk.Y.ToString("F1");
-            _txtPickupW.Text = pk.Width.ToString("F1");
-            _txtPickupH.Text = pk.Height.ToString("F1");
-            _syncingUI = false;
+            case SelectableType.Pickup:
+                ShowDynamicPanel(_pnlPickup);
+                var pk = _canvas.SelectedPickup!;
+                _syncingUI = true;
+                _txtPickupId.Text = pk.Id;
+                int idx = _cboPickupAbility.Items.IndexOf(pk.Ability);
+                _cboPickupAbility.SelectedIndex = idx >= 0 ? idx : 0;
+                _txtPickupX.Text = pk.X.ToString("F1");
+                _txtPickupY.Text = pk.Y.ToString("F1");
+                _txtPickupW.Text = pk.Width.ToString("F1");
+                _txtPickupH.Text = pk.Height.ToString("F1");
+                _syncingUI = false;
+                break;
+
+            case SelectableType.DefaultSpawn:
+                ShowDynamicPanel(_pnlSpawn);
+                var dsp = _canvas.Map!.SpawnPoint;
+                _syncingUI = true;
+                _lblSpawnTitle.Text = "DEFAULT SPAWN POINT";
+                _txtSpawnName.Text    = "default";
+                _txtSpawnName.Enabled = false;
+                _btnSpawnDel.Enabled  = false;
+                _txtSpawnPtX.Text     = dsp.X.ToString("F1");
+                _txtSpawnPtY.Text     = dsp.Y.ToString("F1");
+                RefreshSpawnPointsList();
+                _lstSpawnPoints.SelectedItem = "(default)";
+                _syncingUI = false;
+                break;
+
+            case SelectableType.NamedSpawn:
+                ShowDynamicPanel(_pnlSpawn);
+                var spKey = _canvas.SelectedSpawnKey!;
+                var nsp = _canvas.Map!.SpawnPoints[spKey];
+                _syncingUI = true;
+                _lblSpawnTitle.Text = "NAMED SPAWN POINT";
+                _txtSpawnName.Text    = spKey;
+                _txtSpawnName.Enabled = true;
+                _btnSpawnDel.Enabled  = true;
+                _txtSpawnPtX.Text     = nsp.X.ToString("F1");
+                _txtSpawnPtY.Text     = nsp.Y.ToString("F1");
+                RefreshSpawnPointsList();
+                _lstSpawnPoints.SelectedItem = spKey;
+                _syncingUI = false;
+                break;
+
+            default:
+                ShowDynamicPanel(null);
+                break;
         }
 
         UpdateStatus();
@@ -977,6 +974,28 @@ public sealed class MainForm : Form
             _txtPickupH.Text = pk.Height.ToString("F1");
             _syncingUI = false;
         }
+        if (_canvas.SelectedDefaultSpawn && !_syncingUI)
+        {
+            var sp = _canvas.Map!.SpawnPoint;
+            _syncingUI = true;
+            _txtSpawnPtX.Text = sp.X.ToString("F1");
+            _txtSpawnPtY.Text = sp.Y.ToString("F1");
+            _syncingUI = false;
+        }
+        if (_canvas.SelectedSpawnKey != null && !_syncingUI)
+        {
+            if (_canvas.Map!.SpawnPoints.TryGetValue(_canvas.SelectedSpawnKey, out var nsp))
+            {
+                _syncingUI = true;
+                _txtSpawnPtX.Text = nsp.X.ToString("F1");
+                _txtSpawnPtY.Text = nsp.Y.ToString("F1");
+                _syncingUI = false;
+            }
+        }
+        // Refresh spawn list if a spawn was added/removed
+        _syncingUI = true;
+        RefreshSpawnPointsList();
+        _syncingUI = false;
         MarkDirty();
     }
 
@@ -994,6 +1013,7 @@ public sealed class MainForm : Form
         _btnDrawEnemy.Checked      = t == EditorTool.DrawEnemy;
         _btnDrawTransition.Checked = t == EditorTool.DrawTransition;
         _btnDrawPickup.Checked     = t == EditorTool.DrawPickup;
+        _btnDrawSpawn.Checked      = t == EditorTool.DrawSpawnPoint;
         UpdateStatus();
     }
 
@@ -1012,19 +1032,23 @@ public sealed class MainForm : Form
         int    enemyCount  = _canvas.Map?.Enemies?.Count ?? 0;
         int    transCount  = _canvas.Map?.Transitions?.Count ?? 0;
         int    pickupCount = _canvas.Map?.AbilityPickups?.Count ?? 0;
+        int    spawnCount  = ((_canvas.Map?.SpawnPoints?.Count ?? 0) + 1);
         string tool       = _canvas.Tool switch
         {
             EditorTool.Draw           => "Draw Platform",
             EditorTool.DrawEnemy      => "Draw Enemy",
             EditorTool.DrawTransition => "Draw Transition",
             EditorTool.DrawPickup     => "Draw Pickup",
+            EditorTool.DrawSpawnPoint => "Draw Spawn",
             _                         => "Select"
         };
-        string sel = _canvas.SelectedPlatform   != null ? " | Platform selected"   :
-                     _canvas.SelectedEnemy      != null ? " | Enemy selected"      :
-                     _canvas.SelectedTransition != null ? " | Transition selected" :
-                     _canvas.SelectedPickup     != null ? " | Pickup selected"     : "";
-        _lblInfo.Text = $"{platCount} platforms, {enemyCount} enemies, {transCount} transitions, {pickupCount} pickups{sel} | {tool} mode";
+        string sel = _canvas.SelectedPlatform    != null ? " | Platform selected"     :
+                     _canvas.SelectedEnemy       != null ? " | Enemy selected"        :
+                     _canvas.SelectedTransition  != null ? " | Transition selected"   :
+                     _canvas.SelectedPickup      != null ? " | Pickup selected"       :
+                     _canvas.SelectedDefaultSpawn        ? " | Default spawn selected" :
+                     _canvas.SelectedSpawnKey     != null ? $" | Spawn \"{_canvas.SelectedSpawnKey}\" selected" : "";
+        _lblInfo.Text = $"{platCount} platforms, {enemyCount} enemies, {transCount} transitions, {pickupCount} pickups, {spawnCount} spawns{sel} | {tool} mode";
     }
 
     private void SetStatus(string msg) => _lblInfo.Text = msg;
@@ -1052,13 +1076,9 @@ public sealed class MainForm : Form
         _txtBoundsY.Text = map.Bounds.Y.ToString("F1");
         _txtBoundsW.Text = map.Bounds.Width.ToString("F1");
         _txtBoundsH.Text = map.Bounds.Height.ToString("F1");
-        _txtSpawnX.Text  = map.SpawnPoint.X.ToString("F1");
-        _txtSpawnY.Text  = map.SpawnPoint.Y.ToString("F1");
         _syncingUI = false;
         RefreshSpawnPointsList();
-        _txtSpawnName.Text = "";
-        _txtSpawnPtX.Text  = "";
-        _txtSpawnPtY.Text  = "";
+        ShowDynamicPanel(null);
         UpdateStatus();
     }
 
@@ -1090,6 +1110,7 @@ public sealed class MainForm : Form
             case Keys.E: SetTool(EditorTool.DrawEnemy);      e.Handled = true; break;
             case Keys.T: SetTool(EditorTool.DrawTransition); e.Handled = true; break;
             case Keys.P: SetTool(EditorTool.DrawPickup);     e.Handled = true; break;
+            case Keys.W: SetTool(EditorTool.DrawSpawnPoint); e.Handled = true; break;
             case Keys.F: _canvas.FitToView();         e.Handled = true; break;
             case Keys.G: ToggleSnap();                e.Handled = true; break;
             case Keys.D1: _canvas.SetZoom(1f);        e.Handled = true; break;
