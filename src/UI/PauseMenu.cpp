@@ -35,6 +35,8 @@ void PauseMenu::open()
 {
     m_open = true;
     m_selectedIndex = 0;
+    m_joyUpHeld   = false;
+    m_joyDownHeld = false;
 }
 
 void PauseMenu::layout(const sf::RenderWindow& window)
@@ -104,6 +106,61 @@ PauseMenu::Action PauseMenu::handleEvent(const sf::Event& event)
             if (a == Resume)
                 m_open = false;
             return a;
+        }
+    }
+
+    // Controller: A button = confirm, B/Start = resume
+    if (event.type == sf::Event::JoystickButtonPressed)
+    {
+        unsigned int btn = event.joystickButton.button;
+        if (btn == 0) // A button - confirm
+        {
+            Action a = ACTIONS[m_selectedIndex];
+            if (a == Resume)
+                m_open = false;
+            return a;
+        }
+        if (btn == 1 || btn == 7) // B button or Start - resume
+        {
+            m_open = false;
+            return Resume;
+        }
+    }
+
+    // Controller: D-pad / left stick vertical for menu navigation
+    if (event.type == sf::Event::JoystickMoved)
+    {
+        constexpr float threshold = 50.f;
+        float pos = event.joystickMove.position;
+
+        bool isStickY = (event.joystickMove.axis == sf::Joystick::Y);
+        bool isPovY   = (event.joystickMove.axis == sf::Joystick::PovY);
+
+        if (isStickY || isPovY)
+        {
+            // Stick Y: negative=up, positive=down. PovY: positive=up, negative=down.
+            bool up   = isStickY ? (pos < -threshold) : (pos > threshold);
+            bool down = isStickY ? (pos > threshold)  : (pos < -threshold);
+
+            if (up && !m_joyUpHeld)
+            {
+                m_selectedIndex = (m_selectedIndex - 1 + ITEM_COUNT) % ITEM_COUNT;
+                m_joyUpHeld = true;
+            }
+            else if (!up)
+            {
+                m_joyUpHeld = false;
+            }
+
+            if (down && !m_joyDownHeld)
+            {
+                m_selectedIndex = (m_selectedIndex + 1) % ITEM_COUNT;
+                m_joyDownHeld = true;
+            }
+            else if (!down)
+            {
+                m_joyDownHeld = false;
+            }
         }
     }
 

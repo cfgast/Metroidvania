@@ -33,6 +33,10 @@ private:
     bool m_open = false;
     int  m_selectedIndex = 0;
 
+    // Joystick axis edge-detection to prevent repeated triggers
+    bool m_joyUpHeld   = false;
+    bool m_joyDownHeld = false;
+
     static constexpr int ITEM_COUNT = 3;
     static constexpr const char* LABELS[ITEM_COUNT] = { "Resume", "Save Game", "Quit" };
     static constexpr Action ACTIONS[ITEM_COUNT]      = { Resume, Save, Quit };

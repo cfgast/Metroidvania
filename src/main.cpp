@@ -283,6 +283,14 @@ int main()
                 continue;
             }
 
+            // Controller Start button (7) also opens the pause menu.
+            if (event.type == sf::Event::JoystickButtonPressed
+                && event.joystickButton.button == 7)
+            {
+                pauseMenu.open();
+                continue;
+            }
+
             debugMenu.handleEvent(event, window);
         }
 

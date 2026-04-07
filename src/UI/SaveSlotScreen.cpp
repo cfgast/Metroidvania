@@ -106,6 +106,10 @@ void SaveSlotScreen::open()
 {
     m_open = true;
     m_selectedIndex = 0;
+    m_joyUpHeld    = false;
+    m_joyDownHeld  = false;
+    m_joyLeftHeld  = false;
+    m_joyRightHeld = false;
     refreshSlots();
 }
 
@@ -256,6 +260,102 @@ SaveSlotResult SaveSlotScreen::handleEvent(const sf::Event& event,
             int slot = m_slots[m_selectedIndex].slot;
             SaveSystem::deleteSlot(slot);
             refreshSlots();
+        }
+    }
+
+    // Controller: A button = confirm, X button = delete slot
+    if (event.type == sf::Event::JoystickButtonPressed)
+    {
+        unsigned int btn = event.joystickButton.button;
+        if (btn == 0 && !isOnResolutionRow()) // A button - select/load
+        {
+            int slot = m_slots[m_selectedIndex].slot;
+            if (m_slots[m_selectedIndex].exists)
+            {
+                result.action = SaveSlotResult::LoadSlot;
+                result.slot   = slot;
+            }
+            else
+            {
+                result.action = SaveSlotResult::NewGame;
+                result.slot   = slot;
+            }
+        }
+        else if (btn == 2 && !isOnResolutionRow()) // X button - delete
+        {
+            int slot = m_slots[m_selectedIndex].slot;
+            SaveSystem::deleteSlot(slot);
+            refreshSlots();
+        }
+    }
+
+    // Controller: D-pad / left stick for navigation
+    if (event.type == sf::Event::JoystickMoved)
+    {
+        constexpr float threshold = 50.f;
+        float pos = event.joystickMove.position;
+        const int total = totalItemCount();
+
+        bool isStickY = (event.joystickMove.axis == sf::Joystick::Y);
+        bool isPovY   = (event.joystickMove.axis == sf::Joystick::PovY);
+        bool isStickX = (event.joystickMove.axis == sf::Joystick::X);
+        bool isPovX   = (event.joystickMove.axis == sf::Joystick::PovX);
+
+        if (isStickY || isPovY)
+        {
+            // Stick Y: negative=up, positive=down. PovY: positive=up, negative=down.
+            bool up   = isStickY ? (pos < -threshold) : (pos > threshold);
+            bool down = isStickY ? (pos > threshold)  : (pos < -threshold);
+
+            if (up && !m_joyUpHeld)
+            {
+                m_selectedIndex = (m_selectedIndex - 1 + total) % total;
+                m_joyUpHeld = true;
+            }
+            else if (!up)
+            {
+                m_joyUpHeld = false;
+            }
+
+            if (down && !m_joyDownHeld)
+            {
+                m_selectedIndex = (m_selectedIndex + 1) % total;
+                m_joyDownHeld = true;
+            }
+            else if (!down)
+            {
+                m_joyDownHeld = false;
+            }
+        }
+
+        if ((isStickX || isPovX) && isOnResolutionRow())
+        {
+            bool left  = (pos < -threshold);
+            bool right = (pos > threshold);
+
+            if (left && !m_joyLeftHeld)
+            {
+                m_resolutionIndex = (m_resolutionIndex - 1 + static_cast<int>(m_resolutions.size()))
+                                    % static_cast<int>(m_resolutions.size());
+                applyResolution(window);
+                m_joyLeftHeld = true;
+            }
+            else if (!left)
+            {
+                m_joyLeftHeld = false;
+            }
+
+            if (right && !m_joyRightHeld)
+            {
+                m_resolutionIndex = (m_resolutionIndex + 1)
+                                    % static_cast<int>(m_resolutions.size());
+                applyResolution(window);
+                m_joyRightHeld = true;
+            }
+            else if (!right)
+            {
+                m_joyRightHeld = false;
+            }
         }
     }
 

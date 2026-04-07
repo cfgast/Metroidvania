@@ -57,6 +57,12 @@ private:
     std::vector<Resolution> m_resolutions;
     int m_resolutionIndex = 0;
 
+    // Joystick axis edge-detection to prevent repeated triggers
+    bool m_joyUpHeld    = false;
+    bool m_joyDownHeld  = false;
+    bool m_joyLeftHeld  = false;
+    bool m_joyRightHeld = false;
+
     sf::Font           m_font;
     bool               m_fontLoaded = false;
     sf::Text           m_titleText;

@@ -213,7 +213,7 @@ Implemented: true
 
 ==============================================================================
 Task: Add Controller support, so if a controller connects to the game you can use it to control the player.
-Implemented: false
+Implemented: true
 
 ==============================================================================
 Task: To the main menu add an option to rebind controls to different buttons. It should show the keyboard and controller bindings and allow both to be changed.
