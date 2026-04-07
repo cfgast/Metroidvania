@@ -186,7 +186,9 @@ int main()
                 break;
             }
 
-            // Handle window resize (e.g. from resolution change)
+            // Handle window resize: keep 1:1 pixel-to-world-unit mapping so
+            // that resizing the window shows more (or less) of the map without
+            // changing the zoom level.
             if (event.type == sf::Event::Resized)
             {
                 float w = static_cast<float>(event.size.width);
@@ -368,10 +370,22 @@ int main()
             const sf::FloatRect& mapBounds = map.getBounds();
             float cx = player.position.x;
             float cy = player.position.y;
-            cx = std::max(cx, mapBounds.left  + halfW);
-            cx = std::min(cx, mapBounds.left  + mapBounds.width  - halfW);
-            cy = std::max(cy, mapBounds.top   + halfH);
-            cy = std::min(cy, mapBounds.top   + mapBounds.height - halfH);
+            // When the view is wider/taller than the map, center on the map;
+            // otherwise clamp so the camera stays within map edges.
+            if (mapBounds.width <= halfW * 2.f)
+                cx = mapBounds.left + mapBounds.width / 2.f;
+            else
+            {
+                cx = std::max(cx, mapBounds.left  + halfW);
+                cx = std::min(cx, mapBounds.left  + mapBounds.width  - halfW);
+            }
+            if (mapBounds.height <= halfH * 2.f)
+                cy = mapBounds.top + mapBounds.height / 2.f;
+            else
+            {
+                cy = std::max(cy, mapBounds.top   + halfH);
+                cy = std::min(cy, mapBounds.top   + mapBounds.height - halfH);
+            }
             gameView.setCenter(cx, cy);
 
             window.setView(gameView);
@@ -436,10 +450,22 @@ int main()
         const sf::FloatRect& mapBounds = map.getBounds();
         float cx = player.position.x;
         float cy = player.position.y;
-        cx = std::max(cx, mapBounds.left  + halfW);
-        cx = std::min(cx, mapBounds.left  + mapBounds.width  - halfW);
-        cy = std::max(cy, mapBounds.top   + halfH);
-        cy = std::min(cy, mapBounds.top   + mapBounds.height - halfH);
+        // When the view is wider/taller than the map, center on the map;
+        // otherwise clamp so the camera stays within map edges.
+        if (mapBounds.width <= halfW * 2.f)
+            cx = mapBounds.left + mapBounds.width / 2.f;
+        else
+        {
+            cx = std::max(cx, mapBounds.left  + halfW);
+            cx = std::min(cx, mapBounds.left  + mapBounds.width  - halfW);
+        }
+        if (mapBounds.height <= halfH * 2.f)
+            cy = mapBounds.top + mapBounds.height / 2.f;
+        else
+        {
+            cy = std::max(cy, mapBounds.top   + halfH);
+            cy = std::min(cy, mapBounds.top   + mapBounds.height - halfH);
+        }
         gameView.setCenter(cx, cy);
 
         window.setView(gameView);

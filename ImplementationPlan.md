@@ -225,7 +225,7 @@ Implemented: true
 
 ==============================================================================
 Task: Right now in windowed mode when you resize the window, it changes the zoom. Instead of changing the zoom, it should just make it so you can see more of the map.
-Implemented: false
+Implemented: true
 
 ==============================================================================
 Task: I'd like the menu items to look more modern, right now the rendering of them is very basic and ugly.
