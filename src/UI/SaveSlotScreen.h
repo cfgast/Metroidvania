@@ -16,7 +16,7 @@ namespace sf { class RenderWindow; }
 // Result produced by the save-slot selection screen each frame.
 struct SaveSlotResult
 {
-    enum Action { None, NewGame, LoadSlot };
+    enum Action { None, NewGame, LoadSlot, Controls };
     Action action  = None;
     int    slot    = 0;      // 1-based slot chosen
 };
@@ -46,6 +46,7 @@ private:
 
     int  totalItemCount() const;
     bool isOnResolutionRow() const;
+    bool isOnControlsRow() const;
 
     bool m_open = false;
     int  m_selectedIndex = 0;   // 0..slots+resolution
@@ -78,4 +79,7 @@ private:
 
     // Resolution combo box widget
     SlotWidget m_resWidget;
+
+    // Controls button widget
+    SlotWidget m_controlsWidget;
 };

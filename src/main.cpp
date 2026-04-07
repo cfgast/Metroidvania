@@ -7,6 +7,7 @@
 #include "Core/GameObject.h"
 #include "Core/PlayerState.h"
 #include "Core/SaveSystem.h"
+#include "Core/InputBindings.h"
 #include "Components/InputComponent.h"
 #include "Components/PhysicsComponent.h"
 #include "Components/RenderComponent.h"
@@ -19,10 +20,12 @@
 #include "Physics/PhysXWorld.h"
 #include "UI/SaveSlotScreen.h"
 #include "UI/PauseMenu.h"
+#include "UI/ControlsMenu.h"
 
 int main()
 {
     PhysXWorld::instance().init();
+    InputBindings::instance().load();
 
     sf::RenderWindow window(sf::VideoMode(800, 600), "Metroidvania");
     window.setFramerateLimit(60);
@@ -169,6 +172,7 @@ int main()
     sf::Clock clock;
     DebugMenu  debugMenu;
     PauseMenu  pauseMenu;
+    ControlsMenu controlsMenu;
 
     while (window.isOpen())
     {
@@ -189,6 +193,13 @@ int main()
                 gameView.setSize(w, h);
                 halfW = w / 2.f;
                 halfH = h / 2.f;
+            }
+
+            // --- Controls menu has highest priority when open ---
+            if (controlsMenu.isOpen())
+            {
+                controlsMenu.handleEvent(event);
+                continue;
             }
 
             // --- Save-slot screen has priority ---
@@ -256,6 +267,10 @@ int main()
                         clock.restart();
                     }
                 }
+                else if (slotResult.action == SaveSlotResult::Controls)
+                {
+                    controlsMenu.open();
+                }
                 continue;
             }
 
@@ -296,6 +311,15 @@ int main()
 
         if (!window.isOpen())
             break;
+
+        // --- Controls menu rendering ---
+        if (controlsMenu.isOpen())
+        {
+            window.clear(sf::Color(15, 15, 30));
+            controlsMenu.render(window);
+            window.display();
+            continue;
+        }
 
         // --- Save-slot screen rendering ---
         if (saveSlotScreen.isOpen())

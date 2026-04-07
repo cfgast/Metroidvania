@@ -17,7 +17,7 @@ SaveSlotScreen::SaveSlotScreen()
         m_titleText.setFillColor(sf::Color(220, 220, 255));
 
         m_instructionText.setFont(m_font);
-        m_instructionText.setString("Up/Down select  |  Enter load/start  |  Del erase  |  Left/Right change resolution");
+        m_instructionText.setString("Up/Down select  |  Enter load/start  |  Del erase  |  Left/Right change resolution  |  Controls: rebind keys");
         m_instructionText.setCharacterSize(14);
         m_instructionText.setFillColor(sf::Color(160, 160, 180));
 
@@ -25,6 +25,12 @@ SaveSlotScreen::SaveSlotScreen()
         m_resWidget.box.setOutlineThickness(2.f);
         m_resWidget.label.setFont(m_font);
         m_resWidget.label.setCharacterSize(18);
+
+        m_controlsWidget.box.setSize({ 400.f, 50.f });
+        m_controlsWidget.box.setOutlineThickness(2.f);
+        m_controlsWidget.label.setFont(m_font);
+        m_controlsWidget.label.setString("Controls");
+        m_controlsWidget.label.setCharacterSize(18);
     }
 
     m_background.setFillColor(sf::Color(20, 20, 35, 240));
@@ -94,12 +100,17 @@ void SaveSlotScreen::applyResolution(sf::RenderWindow& window)
 
 int SaveSlotScreen::totalItemCount() const
 {
-    return static_cast<int>(m_slots.size()) + 1; // +1 for resolution row
+    return static_cast<int>(m_slots.size()) + 2; // +1 resolution, +1 controls
 }
 
 bool SaveSlotScreen::isOnResolutionRow() const
 {
     return m_selectedIndex == static_cast<int>(m_slots.size());
+}
+
+bool SaveSlotScreen::isOnControlsRow() const
+{
+    return m_selectedIndex == static_cast<int>(m_slots.size()) + 1;
 }
 
 void SaveSlotScreen::open()
@@ -162,8 +173,9 @@ void SaveSlotScreen::layout(const sf::RenderWindow& window)
     const float slotW   = 400.f;
     const float slotH   = 60.f;
     const float resH    = 50.f;
+    const float ctrlH   = 50.f;
     const float gap     = 16.f;
-    const float totalH  = static_cast<float>(m_widgets.size()) * (slotH + gap) + resH;
+    const float totalH  = static_cast<float>(m_widgets.size()) * (slotH + gap) + resH + gap + ctrlH;
     float startY        = (winH - totalH) * 0.5f + 20.f;
 
     for (size_t i = 0; i < m_widgets.size(); ++i)
@@ -200,6 +212,24 @@ void SaveSlotScreen::layout(const sf::RenderWindow& window)
             m_resWidget.label.setFillColor(selected ? sf::Color::White : sf::Color(180, 180, 200));
             const sf::FloatRect lb = m_resWidget.label.getLocalBounds();
             m_resWidget.label.setPosition(x + 20.f, y + (resH - lb.height) * 0.5f - 4.f);
+        }
+    }
+
+    // Controls button
+    {
+        float x = (winW - slotW) * 0.5f;
+        float y = startY + static_cast<float>(m_widgets.size()) * (slotH + gap) + resH + gap;
+        m_controlsWidget.box.setPosition(x, y);
+
+        bool selected = isOnControlsRow();
+        m_controlsWidget.box.setFillColor(selected ? sf::Color(50, 70, 120) : sf::Color(35, 35, 55));
+        m_controlsWidget.box.setOutlineColor(selected ? sf::Color(120, 180, 255) : sf::Color(80, 80, 100));
+
+        if (m_fontLoaded)
+        {
+            m_controlsWidget.label.setFillColor(selected ? sf::Color::White : sf::Color(180, 180, 200));
+            const sf::FloatRect lb = m_controlsWidget.label.getLocalBounds();
+            m_controlsWidget.label.setPosition(x + (slotW - lb.width) * 0.5f, y + (ctrlH - lb.height) * 0.5f - 4.f);
         }
     }
 
@@ -243,19 +273,26 @@ SaveSlotResult SaveSlotScreen::handleEvent(const sf::Event& event,
         }
         else if (event.key.code == sf::Keyboard::Return && !isOnResolutionRow())
         {
-            int slot = m_slots[m_selectedIndex].slot;
-            if (m_slots[m_selectedIndex].exists)
+            if (isOnControlsRow())
             {
-                result.action = SaveSlotResult::LoadSlot;
-                result.slot   = slot;
+                result.action = SaveSlotResult::Controls;
             }
             else
             {
-                result.action = SaveSlotResult::NewGame;
-                result.slot   = slot;
+                int slot = m_slots[m_selectedIndex].slot;
+                if (m_slots[m_selectedIndex].exists)
+                {
+                    result.action = SaveSlotResult::LoadSlot;
+                    result.slot   = slot;
+                }
+                else
+                {
+                    result.action = SaveSlotResult::NewGame;
+                    result.slot   = slot;
+                }
             }
         }
-        else if (event.key.code == sf::Keyboard::Delete && !isOnResolutionRow())
+        else if (event.key.code == sf::Keyboard::Delete && !isOnResolutionRow() && !isOnControlsRow())
         {
             int slot = m_slots[m_selectedIndex].slot;
             SaveSystem::deleteSlot(slot);
@@ -269,19 +306,26 @@ SaveSlotResult SaveSlotScreen::handleEvent(const sf::Event& event,
         unsigned int btn = event.joystickButton.button;
         if (btn == 0 && !isOnResolutionRow()) // A button - select/load
         {
-            int slot = m_slots[m_selectedIndex].slot;
-            if (m_slots[m_selectedIndex].exists)
+            if (isOnControlsRow())
             {
-                result.action = SaveSlotResult::LoadSlot;
-                result.slot   = slot;
+                result.action = SaveSlotResult::Controls;
             }
             else
             {
-                result.action = SaveSlotResult::NewGame;
-                result.slot   = slot;
+                int slot = m_slots[m_selectedIndex].slot;
+                if (m_slots[m_selectedIndex].exists)
+                {
+                    result.action = SaveSlotResult::LoadSlot;
+                    result.slot   = slot;
+                }
+                else
+                {
+                    result.action = SaveSlotResult::NewGame;
+                    result.slot   = slot;
+                }
             }
         }
-        else if (btn == 2 && !isOnResolutionRow()) // X button - delete
+        else if (btn == 2 && !isOnResolutionRow() && !isOnControlsRow()) // X button - delete
         {
             int slot = m_slots[m_selectedIndex].slot;
             SaveSystem::deleteSlot(slot);
@@ -391,6 +435,11 @@ void SaveSlotScreen::render(sf::RenderWindow& window)
     window.draw(m_resWidget.box);
     if (m_fontLoaded)
         window.draw(m_resWidget.label);
+
+    // Draw controls button
+    window.draw(m_controlsWidget.box);
+    if (m_fontLoaded)
+        window.draw(m_controlsWidget.label);
 
     if (m_fontLoaded)
         window.draw(m_instructionText);

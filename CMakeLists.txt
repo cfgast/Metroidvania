@@ -32,6 +32,7 @@ add_executable(Metroidvania
     src/main.cpp
     src/Core/GameObject.cpp
     src/Core/SaveSystem.cpp
+    src/Core/InputBindings.cpp
     src/Components/MovementComponent.cpp
     src/Components/RenderComponent.cpp
     src/Components/InputComponent.cpp
@@ -46,6 +47,7 @@ add_executable(Metroidvania
     src/Physics/PhysXWorld.cpp
     src/UI/SaveSlotScreen.cpp
     src/UI/PauseMenu.cpp
+    src/UI/ControlsMenu.cpp
 )
 
 target_include_directories(Metroidvania PRIVATE

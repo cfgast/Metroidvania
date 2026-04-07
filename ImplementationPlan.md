@@ -217,7 +217,7 @@ Implemented: true
 
 ==============================================================================
 Task: To the main menu add an option to rebind controls to different buttons. It should show the keyboard and controller bindings and allow both to be changed.
-Implemented: false
+Implemented: true
 
 ==============================================================================
 Task: When a menu is open, add the ability to click on menu items with the mouse. When your back in game the mouse should get hidden again

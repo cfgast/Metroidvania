@@ -3,6 +3,8 @@
 #include <SFML/Window/Keyboard.hpp>
 #include <SFML/Window/Joystick.hpp>
 
+#include "../Core/InputBindings.h"
+
 #include <cmath>
 
 void InputComponent::update(float /*dt*/)
@@ -10,12 +12,14 @@ void InputComponent::update(float /*dt*/)
     if (m_useExternal)
         return; // external code already set the state
 
-    // Keyboard input
-    m_state.moveLeft  = sf::Keyboard::isKeyPressed(sf::Keyboard::A)
-                     || sf::Keyboard::isKeyPressed(sf::Keyboard::Left);
-    m_state.moveRight = sf::Keyboard::isKeyPressed(sf::Keyboard::D)
-                     || sf::Keyboard::isKeyPressed(sf::Keyboard::Right);
-    m_state.jump      = sf::Keyboard::isKeyPressed(sf::Keyboard::Space);
+    const auto& bindings = InputBindings::instance();
+
+    // Keyboard input (uses configurable bindings)
+    m_state.moveLeft  = sf::Keyboard::isKeyPressed(bindings.moveLeftKey)
+                     || sf::Keyboard::isKeyPressed(bindings.moveLeftAlt);
+    m_state.moveRight = sf::Keyboard::isKeyPressed(bindings.moveRightKey)
+                     || sf::Keyboard::isKeyPressed(bindings.moveRightAlt);
+    m_state.jump      = sf::Keyboard::isKeyPressed(bindings.jumpKey);
 
     // Controller / gamepad input (first connected joystick)
     if (sf::Joystick::isConnected(0))
@@ -35,8 +39,8 @@ void InputComponent::update(float /*dt*/)
             if (povX >  deadZone) m_state.moveRight = true;
         }
 
-        // A button (button 0) for jump
-        if (sf::Joystick::isButtonPressed(0, 0))
+        // Controller jump button (configurable)
+        if (sf::Joystick::isButtonPressed(0, bindings.controllerJumpButton))
             m_state.jump = true;
     }
 }
