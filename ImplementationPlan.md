@@ -247,4 +247,4 @@ Implemented: true
 
 ==============================================================================
 Task: Change the sprite art of the charater too look like a small man running, not just a box with dots
-Implemented: false
+Implemented: true
