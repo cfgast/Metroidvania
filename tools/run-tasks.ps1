@@ -28,7 +28,7 @@ function Get-NextTask {
     $blocks = $content -split '(?m)^={2,}\s*$'
     for ($i = 0; $i -lt $blocks.Count; $i++) {
         $block = $blocks[$i].Trim()
-        if ($block -match '(?s)^Task:\s*(.+?)(?:\r?\n)Implemented:\s*false\s*$') {
+        if ($block -match '(?s)^Task:\s*(.+?)(?:\r?\n)Implemented:\s*false') {
             return $Matches[1].Trim()
         }
     }
@@ -42,7 +42,7 @@ function Get-AllPendingTasks {
     $tasks = @()
     for ($i = 0; $i -lt $blocks.Count; $i++) {
         $block = $blocks[$i].Trim()
-        if ($block -match '(?s)^Task:\s*(.+?)(?:\r?\n)Implemented:\s*false\s*$') {
+        if ($block -match '(?s)^Task:\s*(.+?)(?:\r?\n)Implemented:\s*false') {
             $tasks += $Matches[1].Trim()
         }
     }
@@ -91,7 +91,7 @@ while ($true) {
 
     $prompt = "Read the ReadMe.md and ImplementationPlan.md. Implement the next uncompleted task. The task is: $task -- After implementing, build the project to verify it compiles, mark the task as Implemented: true in ImplementationPlan.md, and commit and push the changes."
     Write-Host "  Launching copilot agent..." -ForegroundColor DarkGray
-    copilot -p $prompt --yolo --autopilot
+    copilot -p $prompt --yolo --autopilot --no-ask-user --max-autopilot-continues 50
     $exitCode = $LASTEXITCODE
 
     if ($exitCode -ne 0) {
