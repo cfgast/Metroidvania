@@ -7,6 +7,7 @@
 #include <SFML/Graphics/RectangleShape.hpp>
 #include <SFML/Graphics/Text.hpp>
 #include <SFML/Window/Event.hpp>
+#include <SFML/Window/VideoMode.hpp>
 
 #include "../Core/SaveSystem.h"
 
@@ -31,18 +32,30 @@ public:
     bool isOpen() const        { return m_open; }
 
     // Handle input.  Returns an action when the player makes a choice.
-    SaveSlotResult handleEvent(const sf::Event& event, const sf::RenderWindow& window);
+    // Window is non-const so the resolution selector can resize it.
+    SaveSlotResult handleEvent(const sf::Event& event, sf::RenderWindow& window);
 
     void render(sf::RenderWindow& window);
 
 private:
     void refreshSlots();
+    void populateResolutions();
+    void updateResolutionLabel();
+    void applyResolution(sf::RenderWindow& window);
     void layout(const sf::RenderWindow& window);
 
+    int  totalItemCount() const;
+    bool isOnResolutionRow() const;
+
     bool m_open = false;
-    int  m_selectedIndex = 0;   // 0..MAX_SLOTS-1
+    int  m_selectedIndex = 0;   // 0..slots+resolution
 
     std::vector<SaveSlotInfo> m_slots;
+
+    // --- Resolution selector ---
+    struct Resolution { unsigned width; unsigned height; };
+    std::vector<Resolution> m_resolutions;
+    int m_resolutionIndex = 0;
 
     sf::Font           m_font;
     bool               m_fontLoaded = false;
@@ -56,4 +69,7 @@ private:
         sf::Text           label;
     };
     std::vector<SlotWidget> m_widgets;
+
+    // Resolution combo box widget
+    SlotWidget m_resWidget;
 };

@@ -163,8 +163,8 @@ int main()
         });
 
     sf::View gameView(sf::FloatRect(0.f, 0.f, 800.f, 600.f));
-    const float halfW = 400.f;
-    const float halfH = 300.f;
+    float halfW = 400.f;
+    float halfH = 300.f;
 
     sf::Clock clock;
     DebugMenu  debugMenu;
@@ -179,6 +179,16 @@ int main()
             {
                 window.close();
                 break;
+            }
+
+            // Handle window resize (e.g. from resolution change)
+            if (event.type == sf::Event::Resized)
+            {
+                float w = static_cast<float>(event.size.width);
+                float h = static_cast<float>(event.size.height);
+                gameView.setSize(w, h);
+                halfW = w / 2.f;
+                halfH = h / 2.f;
             }
 
             // --- Save-slot screen has priority ---
@@ -333,7 +343,9 @@ int main()
 
             transitionMgr.render(window);
 
-            window.setView(window.getDefaultView());
+            window.setView(sf::View(sf::FloatRect(0.f, 0.f,
+                static_cast<float>(window.getSize().x),
+                static_cast<float>(window.getSize().y))));
             debugMenu.render(window);
             window.display();
             continue;
@@ -408,7 +420,9 @@ int main()
 
         transitionMgr.render(window);
 
-        window.setView(window.getDefaultView());
+        window.setView(sf::View(sf::FloatRect(0.f, 0.f,
+            static_cast<float>(window.getSize().x),
+            static_cast<float>(window.getSize().y))));
         pauseMenu.render(window);
         debugMenu.render(window);
         window.display();

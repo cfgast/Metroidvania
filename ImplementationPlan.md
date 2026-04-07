@@ -207,3 +207,26 @@ Details:
 - Moving/resizing pickups should use the same handle system as platforms.
 - After this task, verify the full workflow end-to-end: open world_02.json (which has an ability pickup and enemies and a transition), verify all entities render correctly, edit some properties, save, and confirm the output JSON matches the expected format.
 
+==============================================================================
+Task: In the main menu, add an option to change the resolution, it should be a combo box that lets you switch between multiple good resolutions based on the monitor of the player
+Implemented: true
+
+==============================================================================
+Task: Add Controller support, so if a controller connects to the game you can use it to control the player.
+Implemented: false
+
+==============================================================================
+Task: To the main menu add an option to rebind controls to different buttons. It should show the keyboard and controller bindings and allow both to be changed.
+Implemented: false
+
+==============================================================================
+Task: When a menu is open, add the ability to click on menu items with the mouse. When your back in game the mouse should get hidden again
+Implemented: false
+
+==============================================================================
+Task: Right now in windowed mode when you resize the window, it changes the zoom. Instead of changing the zoom, it should just make it so you can see more of the map.
+Implemented: false
+
+==============================================================================
+Task: I'd like the menu items to look more modern, right now the rendering of them is very basic and ugly.
+Implemented: false

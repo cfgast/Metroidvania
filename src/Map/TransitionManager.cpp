@@ -59,7 +59,10 @@ void TransitionManager::render(sf::RenderWindow& window)
 
     // Draw in default (screen-space) view so it covers the whole window.
     sf::View prev = window.getView();
-    window.setView(window.getDefaultView());
+    sf::View uiView(sf::FloatRect(0.f, 0.f,
+                                   static_cast<float>(window.getSize().x),
+                                   static_cast<float>(window.getSize().y)));
+    window.setView(uiView);
     window.draw(m_overlay);
     window.setView(prev);
 }
