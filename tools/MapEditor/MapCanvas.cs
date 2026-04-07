@@ -6,8 +6,8 @@ using System.Windows.Forms;
 
 namespace MapEditor;
 
-public enum EditorTool { Select, Draw, DrawEnemy, DrawTransition }
-public enum SelectableType { None, Platform, Enemy, Transition }
+public enum EditorTool { Select, Draw, DrawEnemy, DrawTransition, DrawPickup }
+public enum SelectableType { None, Platform, Enemy, Transition, Pickup }
 internal enum ResizeHandle { None, Move, N, NE, E, SE, S, SW, W, NW }
 
 public sealed class MapCanvas : Control
@@ -30,10 +30,14 @@ public sealed class MapCanvas : Control
     private TransitionData? _selectedTransition;
     public  TransitionData? SelectedTransition => _selectedTransition;
 
+    private AbilityPickupData? _selectedPickup;
+    public  AbilityPickupData? SelectedPickup => _selectedPickup;
+
     public  SelectableType SelectedType =>
         _selected != null ? SelectableType.Platform :
         _selectedEnemy != null ? SelectableType.Enemy :
         _selectedTransition != null ? SelectableType.Transition :
+        _selectedPickup != null ? SelectableType.Pickup :
         SelectableType.None;
 
     // ── Tool ──────────────────────────────────────────────────────────────────
@@ -88,6 +92,7 @@ public sealed class MapCanvas : Control
         _selected      = null;
         _selectedEnemy = null;
         _selectedTransition = null;
+        _selectedPickup = null;
         SelectionChanged?.Invoke(this, EventArgs.Empty);
         FitToView();
     }
@@ -141,10 +146,12 @@ public sealed class MapCanvas : Control
         DrawPlatforms(g);
         DrawEnemies(g);
         DrawTransitions(g);
+        DrawPickups(g);
         if (_isDrawing)       DrawGhost(g);
         if (_selected != null) { DrawSelectionOutline(g, _selected.X, _selected.Y, _selected.Width, _selected.Height); DrawSelectionHandles(g, _selected.X, _selected.Y, _selected.Width, _selected.Height); }
         if (_selectedEnemy != null) { DrawSelectionOutline(g, _selectedEnemy.X, _selectedEnemy.Y, _selectedEnemy.Width, _selectedEnemy.Height); DrawSelectionHandles(g, _selectedEnemy.X, _selectedEnemy.Y, _selectedEnemy.Width, _selectedEnemy.Height); }
         if (_selectedTransition != null) { DrawSelectionOutline(g, _selectedTransition.X, _selectedTransition.Y, _selectedTransition.Width, _selectedTransition.Height); DrawSelectionHandles(g, _selectedTransition.X, _selectedTransition.Y, _selectedTransition.Width, _selectedTransition.Height); }
+        if (_selectedPickup != null) { DrawSelectionOutline(g, _selectedPickup.X, _selectedPickup.Y, _selectedPickup.Width, _selectedPickup.Height); DrawSelectionHandles(g, _selectedPickup.X, _selectedPickup.Y, _selectedPickup.Width, _selectedPickup.Height); }
         DrawSpawnPoint(g);
         DrawNamedSpawnPoints(g);
     }
@@ -382,6 +389,29 @@ public sealed class MapCanvas : Control
         }
     }
 
+    private void DrawPickups(Graphics g)
+    {
+        if (Map!.AbilityPickups == null || Map.AbilityPickups.Count == 0) return;
+
+        using var fillBrush = new SolidBrush(Color.FromArgb(220, 200, 50));
+        using var borderPen = new Pen(Color.FromArgb(255, 180, 160, 20), 2.5f);
+
+        for (int i = 0; i < Map.AbilityPickups.Count; i++)
+        {
+            var pk = Map.AbilityPickups[i];
+            var sr = WR2S(pk.X, pk.Y, pk.Width, pk.Height);
+            g.FillRectangle(fillBrush, sr);
+            g.DrawRectangle(borderPen, sr.X, sr.Y, sr.Width, sr.Height);
+
+            if (_zoom > 0.3f)
+            {
+                using var f = new Font("Segoe UI", 7f, FontStyle.Bold);
+                string label = string.IsNullOrEmpty(pk.Ability) ? "PICKUP" : pk.Ability;
+                g.DrawString(label, f, Brushes.Gold, sr.X + 2, sr.Y - 14);
+            }
+        }
+    }
+
     // ── Handle geometry ───────────────────────────────────────────────────────
     private Dictionary<ResizeHandle, RectangleF> GetHandleRects(float wx, float wy, float ww, float wh)
     {
@@ -418,6 +448,10 @@ public sealed class MapCanvas : Control
         else if (_selectedTransition != null)
         {
             wx = _selectedTransition.X; wy = _selectedTransition.Y; ww = _selectedTransition.Width; wh = _selectedTransition.Height;
+        }
+        else if (_selectedPickup != null)
+        {
+            wx = _selectedPickup.X; wy = _selectedPickup.Y; ww = _selectedPickup.Width; wh = _selectedPickup.Height;
         }
         else return ResizeHandle.None;
 
@@ -460,6 +494,19 @@ public sealed class MapCanvas : Control
             if (world.X >= tr.X && world.X <= tr.X + tr.Width &&
                 world.Y >= tr.Y && world.Y <= tr.Y + tr.Height)
                 return tr;
+        }
+        return null;
+    }
+
+    private AbilityPickupData? HitPickup(PointF world)
+    {
+        if (Map!.AbilityPickups == null) return null;
+        for (int i = Map.AbilityPickups.Count - 1; i >= 0; i--)
+        {
+            var pk = Map.AbilityPickups[i];
+            if (world.X >= pk.X && world.X <= pk.X + pk.Width &&
+                world.Y >= pk.Y && world.Y <= pk.Y + pk.Height)
+                return pk;
         }
         return null;
     }
@@ -519,6 +566,21 @@ public sealed class MapCanvas : Control
             _dragStartWorld = new(Snap(world.X), Snap(world.Y));
             _drawRect       = new(_dragStartWorld.X, _dragStartWorld.Y, 0, 0);
         }
+        else if (_tool == EditorTool.DrawPickup)
+        {
+            int nextId = (Map.AbilityPickups?.Count ?? 0) + 1;
+            var pk = new AbilityPickupData
+            {
+                Id = $"pickup_{nextId:D2}",
+                Ability = "DoubleJump",
+                X = Snap(world.X), Y = Snap(world.Y),
+                Width = 30, Height = 30
+            };
+            Map.AbilityPickups.Add(pk);
+            SelectPickup(pk);
+            MapChanged?.Invoke(this, EventArgs.Empty);
+            Invalidate();
+        }
         else
         {
             var handle = HitHandle(e.Location);
@@ -539,6 +601,10 @@ public sealed class MapCanvas : Control
                 else if (_selectedTransition != null)
                 {
                     _origRect = new(_selectedTransition.X, _selectedTransition.Y, _selectedTransition.Width, _selectedTransition.Height);
+                }
+                else if (_selectedPickup != null)
+                {
+                    _origRect = new(_selectedPickup.X, _selectedPickup.Y, _selectedPickup.Width, _selectedPickup.Height);
                 }
                 _dragStartWorld = world;
             }
@@ -585,7 +651,21 @@ public sealed class MapCanvas : Control
                         }
                         else
                         {
-                            ClearSelection();
+                            var hitPickup = HitPickup(world);
+                            if (hitPickup != null)
+                            {
+                                SelectPickup(hitPickup);
+                                _isDragging     = true;
+                                _activeHandle   = ResizeHandle.Move;
+                                _moveOffX       = world.X - hitPickup.X;
+                                _moveOffY       = world.Y - hitPickup.Y;
+                                _origRect       = new(hitPickup.X, hitPickup.Y, hitPickup.Width, hitPickup.Height);
+                                _dragStartWorld = world;
+                            }
+                            else
+                            {
+                                ClearSelection();
+                            }
                         }
                     }
                 }
@@ -616,7 +696,7 @@ public sealed class MapCanvas : Control
             return;
         }
 
-        if (_isDragging && (_selected != null || _selectedEnemy != null || _selectedTransition != null))
+        if (_isDragging && (_selected != null || _selectedEnemy != null || _selectedTransition != null || _selectedPickup != null))
         {
             if (_selected != null)
             {
@@ -660,6 +740,18 @@ public sealed class MapCanvas : Control
                 else
                 {
                     ApplyResizeTransition(world);
+                }
+            }
+            else if (_selectedPickup != null)
+            {
+                if (_activeHandle == ResizeHandle.Move)
+                {
+                    _selectedPickup.X = Snap(world.X - _moveOffX);
+                    _selectedPickup.Y = Snap(world.Y - _moveOffY);
+                }
+                else
+                {
+                    ApplyResizePickup(world);
                 }
             }
             MapChanged?.Invoke(this, EventArgs.Empty);
@@ -756,17 +848,24 @@ public sealed class MapCanvas : Control
         _selectedTransition!.X = x; _selectedTransition.Y = y; _selectedTransition.Width = w; _selectedTransition.Height = h;
     }
 
+    private void ApplyResizePickup(PointF world)
+    {
+        var (x, y, w, h) = ComputeResize(world);
+        _selectedPickup!.X = x; _selectedPickup.Y = y; _selectedPickup.Width = w; _selectedPickup.Height = h;
+    }
+
     // ── Cursor ────────────────────────────────────────────────────────────────
-    private void UpdateCursorForTool() => Cursor = (_tool == EditorTool.Draw || _tool == EditorTool.DrawEnemy || _tool == EditorTool.DrawTransition) ? Cursors.Cross : Cursors.Default;
+    private void UpdateCursorForTool() => Cursor = (_tool == EditorTool.Draw || _tool == EditorTool.DrawEnemy || _tool == EditorTool.DrawTransition || _tool == EditorTool.DrawPickup) ? Cursors.Cross : Cursors.Default;
 
     private void UpdateCursor(Point screen, PointF world)
     {
-        if (_tool == EditorTool.Draw || _tool == EditorTool.DrawEnemy || _tool == EditorTool.DrawTransition) { Cursor = Cursors.Cross; return; }
+        if (_tool == EditorTool.Draw || _tool == EditorTool.DrawEnemy || _tool == EditorTool.DrawTransition || _tool == EditorTool.DrawPickup) { Cursor = Cursors.Cross; return; }
         var h = HitHandle(screen);
         if (h != ResizeHandle.None) { Cursor = GetResizeCursor(h); return; }
         if (Map != null && HitPlatform(world) != null) { Cursor = Cursors.SizeAll; return; }
         if (Map != null && HitEnemy(world) != null) { Cursor = Cursors.SizeAll; return; }
         if (Map != null && HitTransition(world) != null) { Cursor = Cursors.SizeAll; return; }
+        if (Map != null && HitPickup(world) != null) { Cursor = Cursors.SizeAll; return; }
         Cursor = Cursors.Default;
     }
 
@@ -815,6 +914,13 @@ public sealed class MapCanvas : Control
             MapChanged?.Invoke(this, EventArgs.Empty);
             Invalidate();
         }
+        else if (_selectedPickup != null)
+        {
+            Map.AbilityPickups.Remove(_selectedPickup);
+            ClearSelection();
+            MapChanged?.Invoke(this, EventArgs.Empty);
+            Invalidate();
+        }
     }
 
     private void SelectPlatform(PlatformData plat)
@@ -822,6 +928,7 @@ public sealed class MapCanvas : Control
         _selected           = plat;
         _selectedEnemy      = null;
         _selectedTransition = null;
+        _selectedPickup     = null;
         SelectionChanged?.Invoke(this, EventArgs.Empty);
         Invalidate();
     }
@@ -831,6 +938,7 @@ public sealed class MapCanvas : Control
         _selected           = null;
         _selectedEnemy      = enemy;
         _selectedTransition = null;
+        _selectedPickup     = null;
         SelectionChanged?.Invoke(this, EventArgs.Empty);
         Invalidate();
     }
@@ -840,6 +948,17 @@ public sealed class MapCanvas : Control
         _selected           = null;
         _selectedEnemy      = null;
         _selectedTransition = transition;
+        _selectedPickup     = null;
+        SelectionChanged?.Invoke(this, EventArgs.Empty);
+        Invalidate();
+    }
+
+    private void SelectPickup(AbilityPickupData pickup)
+    {
+        _selected           = null;
+        _selectedEnemy      = null;
+        _selectedTransition = null;
+        _selectedPickup     = pickup;
         SelectionChanged?.Invoke(this, EventArgs.Empty);
         Invalidate();
     }
@@ -849,6 +968,7 @@ public sealed class MapCanvas : Control
         _selected           = null;
         _selectedEnemy      = null;
         _selectedTransition = null;
+        _selectedPickup     = null;
         SelectionChanged?.Invoke(this, EventArgs.Empty);
         Invalidate();
     }

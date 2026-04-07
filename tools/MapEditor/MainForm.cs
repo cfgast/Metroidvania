@@ -48,8 +48,14 @@ public sealed class MainForm : Form
     private TextBox _txtTransW = null!, _txtTransH = null!;
     private TextBox _txtTransTargetMap = null!, _txtTransTargetSpawn = null!;
 
+    // ── Pickup property controls ──────────────────────────────────────────────
+    private Panel    _pnlPickup = null!;
+    private TextBox  _txtPickupId = null!, _txtPickupX = null!, _txtPickupY = null!;
+    private TextBox  _txtPickupW = null!, _txtPickupH = null!;
+    private ComboBox _cboPickupAbility = null!;
+
     // ── Toolbar buttons ───────────────────────────────────────────────────────
-    private ToolStripButton _btnSelect = null!, _btnDraw = null!, _btnDrawEnemy = null!, _btnDrawTransition = null!, _btnSnap = null!;
+    private ToolStripButton _btnSelect = null!, _btnDraw = null!, _btnDrawEnemy = null!, _btnDrawTransition = null!, _btnDrawPickup = null!, _btnSnap = null!;
 
     // ── Status bar labels ─────────────────────────────────────────────────────
     private ToolStripStatusLabel _lblInfo  = null!;
@@ -138,12 +144,14 @@ public sealed class MainForm : Form
         _btnDraw           = Tbtn("Draw",            "Draw new platform  [D]",      false);
         _btnDrawEnemy      = Tbtn("Draw Enemy",      "Draw new enemy  [E]",         false);
         _btnDrawTransition = Tbtn("Draw Transition", "Draw new transition  [T]",    false);
+        _btnDrawPickup     = Tbtn("Draw Pickup",     "Draw new ability pickup  [P]", false);
         _btnSnap           = Tbtn("Snap: ON",        "Toggle grid snapping  [G]",   true);
 
         _btnSelect.Click         += (_, _) => SetTool(EditorTool.Select);
         _btnDraw.Click           += (_, _) => SetTool(EditorTool.Draw);
         _btnDrawEnemy.Click      += (_, _) => SetTool(EditorTool.DrawEnemy);
         _btnDrawTransition.Click += (_, _) => SetTool(EditorTool.DrawTransition);
+        _btnDrawPickup.Click     += (_, _) => SetTool(EditorTool.DrawPickup);
         _btnSnap.Click           += (_, _) => ToggleSnap();
 
         var btnDel = new ToolStripButton("Delete") { ToolTipText = "Delete selected  [Del]" };
@@ -157,7 +165,7 @@ public sealed class MainForm : Form
 
         bar.Items.AddRange(new ToolStripItem[]
         {
-            _btnSelect, _btnDraw, _btnDrawEnemy, _btnDrawTransition,
+            _btnSelect, _btnDraw, _btnDrawEnemy, _btnDrawTransition, _btnDrawPickup,
             new ToolStripSeparator(),
             btnDel,
             new ToolStripSeparator(),
@@ -353,6 +361,56 @@ public sealed class MainForm : Form
         _pnlTransition.Controls.AddRange(new Control[] { btnTransApply, btnTransDel });
         _pnlTransition.Height  = ty;
         _pnlTransition.Enabled = false;
+
+        y += ty;
+        y += 8;
+        panel.Controls.Add(new Label { Height = 1, Location = new(4, y), Width = pw, BackColor = Color.FromArgb(70, 70, 80) });
+        y += 8;
+
+        // ── Selected Ability Pickup ───────────────────────────────────────────
+        panel.Controls.Add(SectionLabel("SELECTED ABILITY PICKUP", 4, y, pw)); y += 22;
+
+        _pnlPickup = new Panel { Location = new(0, y), Width = panel.Width, AutoSize = false };
+        panel.Controls.Add(_pnlPickup);
+
+        int pky = 0;
+        (_, _txtPickupId, pky) = SingleField(_pnlPickup, "ID", pky, pw);
+
+        _pnlPickup.Controls.Add(new Label
+        {
+            Text = "Ability:", ForeColor = Color.Silver,
+            Font = new Font("Segoe UI", 7.5f),
+            Location = new(4, pky), Size = new(pw, 15), AutoSize = false
+        });
+        pky += 15;
+        _cboPickupAbility = new ComboBox
+        {
+            Location      = new(4, pky),
+            Size          = new(pw, 22),
+            DropDownStyle = ComboBoxStyle.DropDownList,
+            BackColor     = Color.FromArgb(58, 58, 65),
+            ForeColor     = Color.WhiteSmoke,
+            FlatStyle     = FlatStyle.Flat,
+            Font          = new Font("Consolas", 8.5f)
+        };
+        _cboPickupAbility.Items.AddRange(new object[] { "DoubleJump", "WallSlide", "Dash" });
+        _cboPickupAbility.SelectedIndex = 0;
+        _pnlPickup.Controls.Add(_cboPickupAbility);
+        pky += 26;
+
+        (_txtPickupX, _txtPickupY, pky) = TwoFields(_pnlPickup, "X", "Y", pky, pw, "Position");
+        (_txtPickupW, _txtPickupH, pky) = TwoFields(_pnlPickup, "Width", "Height", pky, pw, "Size");
+
+        int pkhalf = (pw - 4) / 2;
+        var btnPickupApply = DarkBtn("Apply",  4,               pky, pkhalf);
+        var btnPickupDel   = DarkBtn("Delete", 4 + pkhalf + 4,  pky, pkhalf, Color.FromArgb(130, 55, 55));
+        pky += 30;
+
+        btnPickupApply.Click += ApplyPickupSettings;
+        btnPickupDel.Click   += (_, _) => _canvas.DeleteSelected();
+        _pnlPickup.Controls.AddRange(new Control[] { btnPickupApply, btnPickupDel });
+        _pnlPickup.Height  = pky;
+        _pnlPickup.Enabled = false;
 
         return panel;
     }
@@ -671,6 +729,25 @@ public sealed class MainForm : Form
         catch { Warn("Invalid values in transition settings. Use numeric values for position/size."); }
     }
 
+    private void ApplyPickupSettings(object? sender, EventArgs e)
+    {
+        var pk = _canvas.SelectedPickup;
+        if (pk == null) return;
+        try
+        {
+            pk.Id      = _txtPickupId.Text.Trim();
+            pk.Ability = _cboPickupAbility.SelectedItem?.ToString() ?? "DoubleJump";
+            pk.X       = ParseF(_txtPickupX);
+            pk.Y       = ParseF(_txtPickupY);
+            pk.Width   = MathF.Max(1f, ParseF(_txtPickupW));
+            pk.Height  = MathF.Max(1f, ParseF(_txtPickupH));
+            MarkDirty();
+            _canvas.Invalidate();
+            SetStatus("Ability pickup updated.");
+        }
+        catch { Warn("Invalid values in pickup settings. Use numeric values for position/size."); }
+    }
+
     private void BrowseTargetMap(object? sender, EventArgs e)
     {
         using var dlg = new OpenFileDialog
@@ -786,10 +863,12 @@ public sealed class MainForm : Form
         var p  = _canvas.SelectedPlatform;
         var en = _canvas.SelectedEnemy;
         var tr = _canvas.SelectedTransition;
+        var pk = _canvas.SelectedPickup;
 
         _pnlPlatform.Enabled   = p != null;
         _pnlEnemy.Enabled      = en != null;
         _pnlTransition.Enabled = tr != null;
+        _pnlPickup.Enabled     = pk != null;
 
         if (p != null)
         {
@@ -835,6 +914,19 @@ public sealed class MainForm : Form
             _syncingUI = false;
         }
 
+        if (pk != null)
+        {
+            _syncingUI = true;
+            _txtPickupId.Text = pk.Id;
+            int idx = _cboPickupAbility.Items.IndexOf(pk.Ability);
+            _cboPickupAbility.SelectedIndex = idx >= 0 ? idx : 0;
+            _txtPickupX.Text = pk.X.ToString("F1");
+            _txtPickupY.Text = pk.Y.ToString("F1");
+            _txtPickupW.Text = pk.Width.ToString("F1");
+            _txtPickupH.Text = pk.Height.ToString("F1");
+            _syncingUI = false;
+        }
+
         UpdateStatus();
     }
 
@@ -875,6 +967,16 @@ public sealed class MainForm : Form
             _txtTransH.Text = tr.Height.ToString("F1");
             _syncingUI = false;
         }
+        var pk = _canvas.SelectedPickup;
+        if (pk != null && !_syncingUI)
+        {
+            _syncingUI = true;
+            _txtPickupX.Text = pk.X.ToString("F1");
+            _txtPickupY.Text = pk.Y.ToString("F1");
+            _txtPickupW.Text = pk.Width.ToString("F1");
+            _txtPickupH.Text = pk.Height.ToString("F1");
+            _syncingUI = false;
+        }
         MarkDirty();
     }
 
@@ -891,6 +993,7 @@ public sealed class MainForm : Form
         _btnDraw.Checked           = t == EditorTool.Draw;
         _btnDrawEnemy.Checked      = t == EditorTool.DrawEnemy;
         _btnDrawTransition.Checked = t == EditorTool.DrawTransition;
+        _btnDrawPickup.Checked     = t == EditorTool.DrawPickup;
         UpdateStatus();
     }
 
@@ -905,20 +1008,23 @@ public sealed class MainForm : Form
     // ── Status / title ────────────────────────────────────────────────────────
     private void UpdateStatus()
     {
-        int    platCount  = _canvas.Map?.Platforms.Count ?? 0;
-        int    enemyCount = _canvas.Map?.Enemies?.Count ?? 0;
-        int    transCount = _canvas.Map?.Transitions?.Count ?? 0;
+        int    platCount   = _canvas.Map?.Platforms.Count ?? 0;
+        int    enemyCount  = _canvas.Map?.Enemies?.Count ?? 0;
+        int    transCount  = _canvas.Map?.Transitions?.Count ?? 0;
+        int    pickupCount = _canvas.Map?.AbilityPickups?.Count ?? 0;
         string tool       = _canvas.Tool switch
         {
             EditorTool.Draw           => "Draw Platform",
             EditorTool.DrawEnemy      => "Draw Enemy",
             EditorTool.DrawTransition => "Draw Transition",
+            EditorTool.DrawPickup     => "Draw Pickup",
             _                         => "Select"
         };
         string sel = _canvas.SelectedPlatform   != null ? " | Platform selected"   :
                      _canvas.SelectedEnemy      != null ? " | Enemy selected"      :
-                     _canvas.SelectedTransition != null ? " | Transition selected" : "";
-        _lblInfo.Text = $"{platCount} platforms, {enemyCount} enemies, {transCount} transitions{sel} | {tool} mode";
+                     _canvas.SelectedTransition != null ? " | Transition selected" :
+                     _canvas.SelectedPickup     != null ? " | Pickup selected"     : "";
+        _lblInfo.Text = $"{platCount} platforms, {enemyCount} enemies, {transCount} transitions, {pickupCount} pickups{sel} | {tool} mode";
     }
 
     private void SetStatus(string msg) => _lblInfo.Text = msg;
@@ -983,6 +1089,7 @@ public sealed class MainForm : Form
             case Keys.D: SetTool(EditorTool.Draw);           e.Handled = true; break;
             case Keys.E: SetTool(EditorTool.DrawEnemy);      e.Handled = true; break;
             case Keys.T: SetTool(EditorTool.DrawTransition); e.Handled = true; break;
+            case Keys.P: SetTool(EditorTool.DrawPickup);     e.Handled = true; break;
             case Keys.F: _canvas.FitToView();         e.Handled = true; break;
             case Keys.G: ToggleSnap();                e.Handled = true; break;
             case Keys.D1: _canvas.SetZoom(1f);        e.Handled = true; break;

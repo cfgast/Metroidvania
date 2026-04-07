@@ -184,7 +184,7 @@ Details:
 
 ==============================================================================
 Task: Add ability pickup editing to the Map Editor. Users should be able to view, place, select, move, resize, and delete ability pickups on the map canvas, and edit their properties including choosing the ability type from a dropdown.
-Implemented: false
+Implemented: true
 
 Details:
 - Files: tools/MapEditor/MainForm.cs, tools/MapEditor/MapCanvas.cs
