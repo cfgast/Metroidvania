@@ -7,6 +7,8 @@
 #include <SFML/Graphics/Text.hpp>
 #include <SFML/Window/Event.hpp>
 
+#include "../UI/RoundedRectangleShape.h"
+
 namespace sf { class RenderWindow; }
 
 class DebugMenu
@@ -32,11 +34,11 @@ private:
     bool        m_open       = false;
     std::string m_pendingMap;
 
-    sf::Font            m_font;
-    bool                m_fontLoaded = false;
+    sf::Font                m_font;
+    bool                    m_fontLoaded = false;
 
-    sf::RectangleShape  m_panel;
-    sf::RectangleShape  m_button;
-    sf::Text            m_titleText;
-    sf::Text            m_buttonText;
+    RoundedRectangleShape   m_panel;
+    RoundedRectangleShape   m_button;
+    sf::Text                m_titleText;
+    sf::Text                m_buttonText;
 };

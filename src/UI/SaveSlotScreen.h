@@ -10,6 +10,7 @@
 #include <SFML/Window/VideoMode.hpp>
 
 #include "../Core/SaveSystem.h"
+#include "RoundedRectangleShape.h"
 
 namespace sf { class RenderWindow; }
 
@@ -72,8 +73,8 @@ private:
 
     struct SlotWidget
     {
-        sf::RectangleShape box;
-        sf::Text           label;
+        RoundedRectangleShape box;
+        sf::Text              label;
     };
     std::vector<SlotWidget> m_widgets;
 

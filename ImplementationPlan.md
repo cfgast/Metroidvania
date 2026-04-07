@@ -229,4 +229,10 @@ Implemented: true
 
 ==============================================================================
 Task: I'd like the menu items to look more modern, right now the rendering of them is very basic and ugly.
-Implemented: false
+Implemented: true
+
+Details:
+- Created src/UI/RoundedRectangleShape.h — custom SFML ConvexShape subclass that draws rectangles with rounded corners, used by all menu panels and buttons.
+- Created src/UI/UIStyle.h — centralized color palette and drawing helpers (drawMenuItem, drawMenuRow, drawGlow, drawAccentBar) so all menus share the same modern dark theme.
+- Updated PauseMenu, SaveSlotScreen, ControlsMenu, and DebugMenu to use rounded-rectangle shapes for panels and buttons, a refined dark color scheme, a subtle glow behind selected items, and a left-side accent bar on the selected row.
+- All menus remain fully functional with keyboard, mouse, and controller input.

@@ -1,4 +1,5 @@
 #include "SaveSlotScreen.h"
+#include "UIStyle.h"
 
 #include <sstream>
 #include <iomanip>
@@ -13,27 +14,27 @@ SaveSlotScreen::SaveSlotScreen()
     {
         m_titleText.setFont(m_font);
         m_titleText.setString("Select Save Slot");
-        m_titleText.setCharacterSize(28);
-        m_titleText.setFillColor(sf::Color(220, 220, 255));
+        m_titleText.setCharacterSize(30);
+        m_titleText.setFillColor(UIStyle::titleColor());
 
         m_instructionText.setFont(m_font);
         m_instructionText.setString("Up/Down select  |  Enter load/start  |  Del erase  |  Left/Right change resolution  |  Controls: rebind keys");
         m_instructionText.setCharacterSize(14);
-        m_instructionText.setFillColor(sf::Color(160, 160, 180));
+        m_instructionText.setFillColor(UIStyle::hintColor());
 
-        m_resWidget.box.setSize({ 400.f, 50.f });
-        m_resWidget.box.setOutlineThickness(2.f);
+        m_resWidget.box.setParameters({ 440.f, 52.f }, UIStyle::CORNER_RADIUS);
+        m_resWidget.box.setOutlineThickness(1.f);
         m_resWidget.label.setFont(m_font);
         m_resWidget.label.setCharacterSize(18);
 
-        m_controlsWidget.box.setSize({ 400.f, 50.f });
-        m_controlsWidget.box.setOutlineThickness(2.f);
+        m_controlsWidget.box.setParameters({ 440.f, 52.f }, UIStyle::CORNER_RADIUS);
+        m_controlsWidget.box.setOutlineThickness(1.f);
         m_controlsWidget.label.setFont(m_font);
         m_controlsWidget.label.setString("Controls");
         m_controlsWidget.label.setCharacterSize(18);
     }
 
-    m_background.setFillColor(sf::Color(20, 20, 35, 240));
+    m_background.setFillColor(UIStyle::panelBg());
 
     populateResolutions();
     updateResolutionLabel();
@@ -132,8 +133,8 @@ void SaveSlotScreen::refreshSlots()
     for (size_t i = 0; i < m_slots.size(); ++i)
     {
         auto& w = m_widgets[i];
-        w.box.setSize({ 400.f, 60.f });
-        w.box.setOutlineThickness(2.f);
+        w.box.setParameters({ 440.f, 62.f }, UIStyle::CORNER_RADIUS);
+        w.box.setOutlineThickness(1.f);
 
         if (m_fontLoaded)
         {
@@ -167,13 +168,13 @@ void SaveSlotScreen::layout(const sf::RenderWindow& window)
     if (m_fontLoaded)
     {
         const sf::FloatRect tb = m_titleText.getLocalBounds();
-        m_titleText.setPosition((winW - tb.width) * 0.5f, 80.f);
+        m_titleText.setPosition((winW - tb.width) * 0.5f, 70.f);
     }
 
-    const float slotW   = 400.f;
-    const float slotH   = 60.f;
-    const float resH    = 50.f;
-    const float ctrlH   = 50.f;
+    const float slotW   = 440.f;
+    const float slotH   = 62.f;
+    const float resH    = 52.f;
+    const float ctrlH   = 52.f;
     const float gap     = 16.f;
     const float totalH  = static_cast<float>(m_widgets.size()) * (slotH + gap) + resH + gap + ctrlH;
     float startY        = (winH - totalH) * 0.5f + 20.f;
@@ -183,54 +184,24 @@ void SaveSlotScreen::layout(const sf::RenderWindow& window)
         auto& w = m_widgets[i];
         float x = (winW - slotW) * 0.5f;
         float y = startY + static_cast<float>(i) * (slotH + gap);
+        w.box.setParameters({ slotW, slotH }, UIStyle::CORNER_RADIUS);
         w.box.setPosition(x, y);
-
-        bool selected = (static_cast<int>(i) == m_selectedIndex);
-        w.box.setFillColor(selected ? sf::Color(50, 70, 120) : sf::Color(35, 35, 55));
-        w.box.setOutlineColor(selected ? sf::Color(120, 180, 255) : sf::Color(80, 80, 100));
-
-        if (m_fontLoaded)
-        {
-            w.label.setFillColor(selected ? sf::Color::White : sf::Color(180, 180, 200));
-            const sf::FloatRect lb = w.label.getLocalBounds();
-            w.label.setPosition(x + 20.f, y + (slotH - lb.height) * 0.5f - 4.f);
-        }
     }
 
     // Resolution combo box
     {
         float x = (winW - slotW) * 0.5f;
         float y = startY + static_cast<float>(m_widgets.size()) * (slotH + gap);
+        m_resWidget.box.setParameters({ slotW, resH }, UIStyle::CORNER_RADIUS);
         m_resWidget.box.setPosition(x, y);
-
-        bool selected = isOnResolutionRow();
-        m_resWidget.box.setFillColor(selected ? sf::Color(50, 70, 120) : sf::Color(35, 35, 55));
-        m_resWidget.box.setOutlineColor(selected ? sf::Color(120, 180, 255) : sf::Color(80, 80, 100));
-
-        if (m_fontLoaded)
-        {
-            m_resWidget.label.setFillColor(selected ? sf::Color::White : sf::Color(180, 180, 200));
-            const sf::FloatRect lb = m_resWidget.label.getLocalBounds();
-            m_resWidget.label.setPosition(x + 20.f, y + (resH - lb.height) * 0.5f - 4.f);
-        }
     }
 
     // Controls button
     {
         float x = (winW - slotW) * 0.5f;
         float y = startY + static_cast<float>(m_widgets.size()) * (slotH + gap) + resH + gap;
+        m_controlsWidget.box.setParameters({ slotW, ctrlH }, UIStyle::CORNER_RADIUS);
         m_controlsWidget.box.setPosition(x, y);
-
-        bool selected = isOnControlsRow();
-        m_controlsWidget.box.setFillColor(selected ? sf::Color(50, 70, 120) : sf::Color(35, 35, 55));
-        m_controlsWidget.box.setOutlineColor(selected ? sf::Color(120, 180, 255) : sf::Color(80, 80, 100));
-
-        if (m_fontLoaded)
-        {
-            m_controlsWidget.label.setFillColor(selected ? sf::Color::White : sf::Color(180, 180, 200));
-            const sf::FloatRect lb = m_controlsWidget.label.getLocalBounds();
-            m_controlsWidget.label.setPosition(x + (slotW - lb.width) * 0.5f, y + (ctrlH - lb.height) * 0.5f - 4.f);
-        }
     }
 
     if (m_fontLoaded)
@@ -500,22 +471,35 @@ void SaveSlotScreen::render(sf::RenderWindow& window)
     if (m_fontLoaded)
         window.draw(m_titleText);
 
-    for (auto& w : m_widgets)
+    const float slotW = 440.f;
+    const float slotH = 62.f;
+    const float resH  = 52.f;
+    const float ctrlH = 52.f;
+
+    for (int i = 0; i < static_cast<int>(m_widgets.size()); ++i)
     {
-        window.draw(w.box);
-        if (m_fontLoaded)
-            window.draw(w.label);
+        auto& w = m_widgets[i];
+        bool selected = (i == m_selectedIndex);
+        sf::Vector2f pos = w.box.getPosition();
+        UIStyle::drawMenuRow(window, w.box, w.label, nullptr,
+                             pos.x, pos.y, slotW, slotH, selected);
     }
 
     // Draw resolution combo box
-    window.draw(m_resWidget.box);
-    if (m_fontLoaded)
-        window.draw(m_resWidget.label);
+    {
+        bool selected = isOnResolutionRow();
+        sf::Vector2f pos = m_resWidget.box.getPosition();
+        UIStyle::drawMenuRow(window, m_resWidget.box, m_resWidget.label, nullptr,
+                             pos.x, pos.y, slotW, resH, selected);
+    }
 
     // Draw controls button
-    window.draw(m_controlsWidget.box);
-    if (m_fontLoaded)
-        window.draw(m_controlsWidget.label);
+    {
+        bool selected = isOnControlsRow();
+        sf::Vector2f pos = m_controlsWidget.box.getPosition();
+        UIStyle::drawMenuItem(window, m_controlsWidget.box, m_controlsWidget.label,
+                              pos.x, pos.y, slotW, ctrlH, selected);
+    }
 
     if (m_fontLoaded)
         window.draw(m_instructionText);

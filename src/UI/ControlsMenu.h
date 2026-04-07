@@ -5,6 +5,8 @@
 #include <SFML/Graphics/Text.hpp>
 #include <SFML/Window/Event.hpp>
 
+#include "RoundedRectangleShape.h"
+
 namespace sf { class RenderWindow; }
 
 // Full-screen controls rebinding menu accessible from the main menu.
@@ -65,9 +67,9 @@ private:
 
     struct RowWidget
     {
-        sf::RectangleShape box;
-        sf::Text           actionLabel;
-        sf::Text           bindingLabel;
+        RoundedRectangleShape box;
+        sf::Text              actionLabel;
+        sf::Text              bindingLabel;
     };
     RowWidget m_rows[ROW_COUNT];
 };

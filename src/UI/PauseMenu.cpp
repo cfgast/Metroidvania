@@ -1,4 +1,5 @@
 #include "PauseMenu.h"
+#include "UIStyle.h"
 
 #include <SFML/Graphics/RenderWindow.hpp>
 
@@ -6,22 +7,23 @@ PauseMenu::PauseMenu()
 {
     m_fontLoaded = m_font.loadFromFile("C:\\Windows\\Fonts\\arial.ttf");
 
-    m_overlay.setFillColor(sf::Color(0, 0, 0, 120));
+    m_overlay.setFillColor(UIStyle::overlayColor());
 
-    m_panel.setFillColor(sf::Color(25, 25, 40, 230));
-    m_panel.setOutlineColor(sf::Color(100, 160, 255));
-    m_panel.setOutlineThickness(2.f);
+    m_panel.setParameters({ 320.f, 260.f }, UIStyle::PANEL_CORNER_RADIUS);
+    m_panel.setFillColor(UIStyle::panelBg());
+    m_panel.setOutlineColor(UIStyle::panelBorder());
+    m_panel.setOutlineThickness(1.5f);
 
     if (m_fontLoaded)
     {
         m_titleText.setFont(m_font);
         m_titleText.setString("Paused");
-        m_titleText.setCharacterSize(26);
-        m_titleText.setFillColor(sf::Color(220, 220, 255));
+        m_titleText.setCharacterSize(28);
+        m_titleText.setFillColor(UIStyle::titleColor());
 
         for (int i = 0; i < ITEM_COUNT; ++i)
         {
-            m_items[i].box.setSize({ 220.f, 44.f });
+            m_items[i].box.setParameters({ 240.f, 48.f }, UIStyle::CORNER_RADIUS);
             m_items[i].box.setOutlineThickness(1.f);
 
             m_items[i].label.setFont(m_font);
@@ -47,11 +49,12 @@ void PauseMenu::layout(const sf::RenderWindow& window)
     m_overlay.setSize({ winW, winH });
     m_overlay.setPosition(0.f, 0.f);
 
-    const float panelW = 280.f;
-    const float itemH  = 44.f;
-    const float gap    = 12.f;
-    const float panelH = 70.f + ITEM_COUNT * (itemH + gap);
-    m_panel.setSize({ panelW, panelH });
+    const float panelW = 320.f;
+    const float itemW  = 240.f;
+    const float itemH  = 48.f;
+    const float gap    = 14.f;
+    const float panelH = 80.f + ITEM_COUNT * (itemH + gap);
+    m_panel.setParameters({ panelW, panelH }, UIStyle::PANEL_CORNER_RADIUS);
     float px = (winW - panelW) * 0.5f;
     float py = (winH - panelH) * 0.5f;
     m_panel.setPosition(px, py);
@@ -59,28 +62,16 @@ void PauseMenu::layout(const sf::RenderWindow& window)
     if (m_fontLoaded)
     {
         const sf::FloatRect tb = m_titleText.getLocalBounds();
-        m_titleText.setPosition(px + (panelW - tb.width) * 0.5f, py + 14.f);
+        m_titleText.setPosition(px + (panelW - tb.width) * 0.5f, py + 18.f);
     }
 
-    float startY = py + 60.f;
+    float startY = py + 70.f;
     for (int i = 0; i < ITEM_COUNT; ++i)
     {
-        float ix = px + (panelW - 220.f) * 0.5f;
+        float ix = px + (panelW - itemW) * 0.5f;
         float iy = startY + static_cast<float>(i) * (itemH + gap);
+        m_items[i].box.setParameters({ itemW, itemH }, UIStyle::CORNER_RADIUS);
         m_items[i].box.setPosition(ix, iy);
-
-        bool sel = (i == m_selectedIndex);
-        m_items[i].box.setFillColor(sel ? sf::Color(50, 70, 120) : sf::Color(40, 40, 60));
-        m_items[i].box.setOutlineColor(sel ? sf::Color(120, 180, 255) : sf::Color(70, 70, 90));
-
-        if (m_fontLoaded)
-        {
-            m_items[i].label.setFillColor(sel ? sf::Color::White : sf::Color(180, 180, 200));
-            const sf::FloatRect lb = m_items[i].label.getLocalBounds();
-            m_items[i].label.setPosition(
-                ix + (220.f - lb.width) * 0.5f,
-                iy + (itemH - lb.height) * 0.5f - 4.f);
-        }
     }
 }
 
@@ -220,10 +211,16 @@ void PauseMenu::render(sf::RenderWindow& window)
     if (m_fontLoaded)
     {
         window.draw(m_titleText);
+
+        const float itemW = 240.f;
+        const float itemH = 48.f;
+
         for (int i = 0; i < ITEM_COUNT; ++i)
         {
-            window.draw(m_items[i].box);
-            window.draw(m_items[i].label);
+            bool sel = (i == m_selectedIndex);
+            sf::Vector2f pos = m_items[i].box.getPosition();
+            UIStyle::drawMenuItem(window, m_items[i].box, m_items[i].label,
+                                  pos.x, pos.y, itemW, itemH, sel);
         }
     }
 

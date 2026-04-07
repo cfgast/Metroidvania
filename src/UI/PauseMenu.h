@@ -7,6 +7,8 @@
 #include <SFML/Graphics/Text.hpp>
 #include <SFML/Window/Event.hpp>
 
+#include "RoundedRectangleShape.h"
+
 namespace sf { class RenderWindow; }
 
 // Simple pause menu shown when the player presses Escape during gameplay.
@@ -41,16 +43,16 @@ private:
     static constexpr const char* LABELS[ITEM_COUNT] = { "Resume", "Save Game", "Quit" };
     static constexpr Action ACTIONS[ITEM_COUNT]      = { Resume, Save, Quit };
 
-    sf::Font           m_font;
-    bool               m_fontLoaded = false;
-    sf::Text           m_titleText;
-    sf::RectangleShape m_overlay;
-    sf::RectangleShape m_panel;
+    sf::Font                m_font;
+    bool                    m_fontLoaded = false;
+    sf::Text                m_titleText;
+    sf::RectangleShape      m_overlay;
+    RoundedRectangleShape   m_panel;
 
     struct MenuItem
     {
-        sf::RectangleShape box;
-        sf::Text           label;
+        RoundedRectangleShape box;
+        sf::Text              label;
     };
     MenuItem m_items[ITEM_COUNT];
 };

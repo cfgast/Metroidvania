@@ -1,4 +1,5 @@
 #include "DebugMenu.h"
+#include "../UI/UIStyle.h"
 
 #include <SFML/Graphics/RenderWindow.hpp>
 
@@ -6,32 +7,31 @@
 #include <windows.h>
 #include <commdlg.h>
 
-static constexpr float k_panelW  = 320.f;
-static constexpr float k_panelH  = 140.f;
-static constexpr float k_btnW    = 200.f;
-static constexpr float k_btnH    =  40.f;
+static constexpr float k_panelW  = 340.f;
+static constexpr float k_panelH  = 150.f;
+static constexpr float k_btnW    = 220.f;
+static constexpr float k_btnH    =  44.f;
 
 DebugMenu::DebugMenu()
 {
-    // Try to load the Windows system Arial font for button labels.
     m_fontLoaded = m_font.loadFromFile("C:\\Windows\\Fonts\\arial.ttf");
 
-    m_panel.setSize({ k_panelW, k_panelH });
-    m_panel.setFillColor(sf::Color(20, 20, 30, 220));
-    m_panel.setOutlineColor(sf::Color(100, 180, 255));
-    m_panel.setOutlineThickness(2.f);
+    m_panel.setParameters({ k_panelW, k_panelH }, UIStyle::PANEL_CORNER_RADIUS);
+    m_panel.setFillColor(UIStyle::panelBg());
+    m_panel.setOutlineColor(UIStyle::panelBorder());
+    m_panel.setOutlineThickness(1.5f);
 
-    m_button.setSize({ k_btnW, k_btnH });
-    m_button.setFillColor(sf::Color(60, 100, 160));
-    m_button.setOutlineColor(sf::Color(120, 180, 255));
+    m_button.setParameters({ k_btnW, k_btnH }, UIStyle::CORNER_RADIUS);
+    m_button.setFillColor(UIStyle::itemBgSelected());
+    m_button.setOutlineColor(UIStyle::itemBorderSel());
     m_button.setOutlineThickness(1.f);
 
     if (m_fontLoaded)
     {
         m_titleText.setFont(m_font);
         m_titleText.setString("Debug Menu");
-        m_titleText.setCharacterSize(18);
-        m_titleText.setFillColor(sf::Color(200, 220, 255));
+        m_titleText.setCharacterSize(20);
+        m_titleText.setFillColor(UIStyle::titleColor());
 
         m_buttonText.setFont(m_font);
         m_buttonText.setString("Open Map...");
@@ -51,17 +51,18 @@ void DebugMenu::layout(const sf::RenderWindow& window)
     m_panel.setPosition(px, py);
 
     const float bx = px + (k_panelW - k_btnW) * 0.5f;
-    const float by = py + k_panelH - k_btnH - 20.f;
+    const float by = py + k_panelH - k_btnH - 24.f;
     m_button.setPosition(bx, by);
 
     if (m_fontLoaded)
     {
-        m_titleText.setPosition(px + 12.f, py + 10.f);
+        const sf::FloatRect tb = m_titleText.getLocalBounds();
+        m_titleText.setPosition(px + (k_panelW - tb.width) * 0.5f, py + 16.f);
 
         // Centre button label inside button
-        const sf::FloatRect tb = m_buttonText.getLocalBounds();
-        m_buttonText.setOrigin(tb.left + tb.width  * 0.5f,
-                               tb.top  + tb.height * 0.5f);
+        const sf::FloatRect bb = m_buttonText.getLocalBounds();
+        m_buttonText.setOrigin(bb.left + bb.width  * 0.5f,
+                               bb.top  + bb.height * 0.5f);
         m_buttonText.setPosition(bx + k_btnW * 0.5f, by + k_btnH * 0.5f);
     }
 }

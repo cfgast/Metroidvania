@@ -1,4 +1,5 @@
 #include "ControlsMenu.h"
+#include "UIStyle.h"
 
 #include <SFML/Graphics/RenderWindow.hpp>
 
@@ -20,32 +21,32 @@ ControlsMenu::ControlsMenu()
 {
     m_fontLoaded = m_font.loadFromFile("C:\\Windows\\Fonts\\arial.ttf");
 
-    m_background.setFillColor(sf::Color(20, 20, 35, 240));
+    m_background.setFillColor(UIStyle::panelBg());
 
     if (m_fontLoaded)
     {
         m_titleText.setFont(m_font);
         m_titleText.setString("Controls");
-        m_titleText.setCharacterSize(28);
-        m_titleText.setFillColor(sf::Color(220, 220, 255));
+        m_titleText.setCharacterSize(30);
+        m_titleText.setFillColor(UIStyle::titleColor());
 
         m_sectionKb.setFont(m_font);
-        m_sectionKb.setString("--- Keyboard ---");
+        m_sectionKb.setString("Keyboard");
         m_sectionKb.setCharacterSize(16);
-        m_sectionKb.setFillColor(sf::Color(140, 170, 220));
+        m_sectionKb.setFillColor(UIStyle::sectionColor());
 
         m_sectionCtrl.setFont(m_font);
-        m_sectionCtrl.setString("--- Controller ---");
+        m_sectionCtrl.setString("Controller");
         m_sectionCtrl.setCharacterSize(16);
-        m_sectionCtrl.setFillColor(sf::Color(140, 170, 220));
+        m_sectionCtrl.setFillColor(UIStyle::sectionColor());
 
         m_instructionText.setFont(m_font);
         m_instructionText.setCharacterSize(14);
-        m_instructionText.setFillColor(sf::Color(160, 160, 180));
+        m_instructionText.setFillColor(UIStyle::hintColor());
 
         for (int i = 0; i < ROW_COUNT; ++i)
         {
-            m_rows[i].box.setSize({ 460.f, 44.f });
+            m_rows[i].box.setParameters({ 500.f, 48.f }, UIStyle::CORNER_RADIUS);
             m_rows[i].box.setOutlineThickness(1.f);
 
             m_rows[i].actionLabel.setFont(m_font);
@@ -337,9 +338,9 @@ void ControlsMenu::layout(const sf::RenderWindow& window)
     m_background.setSize({ winW, winH });
     m_background.setPosition(0.f, 0.f);
 
-    const float rowW   = 460.f;
-    const float rowH   = 44.f;
-    const float gap    = 8.f;
+    const float rowW   = 500.f;
+    const float rowH   = 48.f;
+    const float gap    = 10.f;
     const float sectionGap = 28.f;
 
     // Vertical layout: title, section header, keyboard rows, section header,
@@ -375,34 +376,8 @@ void ControlsMenu::layout(const sf::RenderWindow& window)
     for (int i = MoveLeftKey; i <= JumpKey; ++i)
     {
         auto& rw = m_rows[i];
+        rw.box.setParameters({ rowW, rowH }, UIStyle::CORNER_RADIUS);
         rw.box.setPosition(cx, y);
-
-        bool sel = (i == m_selected);
-        bool rebindThis = (m_rebinding && i == m_selected);
-
-        sf::Color fill    = sel ? sf::Color(50, 70, 120) : sf::Color(35, 35, 55);
-        sf::Color outline = sel ? sf::Color(120, 180, 255) : sf::Color(70, 70, 90);
-        if (rebindThis)
-        {
-            fill    = sf::Color(80, 50, 50);
-            outline = sf::Color(255, 180, 80);
-        }
-        rw.box.setFillColor(fill);
-        rw.box.setOutlineColor(outline);
-
-        if (m_fontLoaded)
-        {
-            sf::Color textCol = sel ? sf::Color::White : sf::Color(180, 180, 200);
-            rw.actionLabel.setFillColor(textCol);
-            rw.bindingLabel.setFillColor(rebindThis ? sf::Color(255, 200, 80) : textCol);
-
-            rw.actionLabel.setPosition(cx + 16.f,
-                y + (rowH - rw.actionLabel.getLocalBounds().height) * 0.5f - 4.f);
-
-            const sf::FloatRect bl = rw.bindingLabel.getLocalBounds();
-            rw.bindingLabel.setPosition(cx + rowW - bl.width - 16.f,
-                y + (rowH - bl.height) * 0.5f - 4.f);
-        }
         y += rowH + gap;
     }
 
@@ -417,36 +392,9 @@ void ControlsMenu::layout(const sf::RenderWindow& window)
 
     // Controller jump row
     {
-        int i = ControllerJump;
-        auto& rw = m_rows[i];
+        auto& rw = m_rows[ControllerJump];
+        rw.box.setParameters({ rowW, rowH }, UIStyle::CORNER_RADIUS);
         rw.box.setPosition(cx, y);
-
-        bool sel = (i == m_selected);
-        bool rebindThis = (m_rebinding && i == m_selected);
-
-        sf::Color fill    = sel ? sf::Color(50, 70, 120) : sf::Color(35, 35, 55);
-        sf::Color outline = sel ? sf::Color(120, 180, 255) : sf::Color(70, 70, 90);
-        if (rebindThis)
-        {
-            fill    = sf::Color(80, 50, 50);
-            outline = sf::Color(255, 180, 80);
-        }
-        rw.box.setFillColor(fill);
-        rw.box.setOutlineColor(outline);
-
-        if (m_fontLoaded)
-        {
-            sf::Color textCol = sel ? sf::Color::White : sf::Color(180, 180, 200);
-            rw.actionLabel.setFillColor(textCol);
-            rw.bindingLabel.setFillColor(rebindThis ? sf::Color(255, 200, 80) : textCol);
-
-            rw.actionLabel.setPosition(cx + 16.f,
-                y + (rowH - rw.actionLabel.getLocalBounds().height) * 0.5f - 4.f);
-
-            const sf::FloatRect bl = rw.bindingLabel.getLocalBounds();
-            rw.bindingLabel.setPosition(cx + rowW - bl.width - 16.f,
-                y + (rowH - bl.height) * 0.5f - 4.f);
-        }
         y += rowH + gap;
     }
 
@@ -457,22 +405,8 @@ void ControlsMenu::layout(const sf::RenderWindow& window)
     for (int i = ResetDefaults; i <= Back; ++i)
     {
         auto& rw = m_rows[i];
+        rw.box.setParameters({ rowW, rowH }, UIStyle::CORNER_RADIUS);
         rw.box.setPosition(cx, y);
-
-        bool sel = (i == m_selected);
-        rw.box.setFillColor(sel ? sf::Color(50, 70, 120) : sf::Color(35, 35, 55));
-        rw.box.setOutlineColor(sel ? sf::Color(120, 180, 255) : sf::Color(70, 70, 90));
-
-        if (m_fontLoaded)
-        {
-            sf::Color textCol = sel ? sf::Color::White : sf::Color(180, 180, 200);
-            rw.actionLabel.setFillColor(textCol);
-
-            // Center text for action buttons
-            const sf::FloatRect al = rw.actionLabel.getLocalBounds();
-            rw.actionLabel.setPosition(cx + (rowW - al.width) * 0.5f,
-                y + (rowH - al.height) * 0.5f - 4.f);
-        }
         y += rowH + gap;
     }
 
@@ -505,12 +439,30 @@ void ControlsMenu::render(sf::RenderWindow& window)
         window.draw(m_sectionKb);
         window.draw(m_sectionCtrl);
 
-        for (int i = 0; i < ROW_COUNT; ++i)
+        const float rowW = 500.f;
+        const float rowH = 48.f;
+
+        // Binding rows (keyboard + controller)
+        for (int i = MoveLeftKey; i <= ControllerJump; ++i)
         {
-            window.draw(m_rows[i].box);
-            window.draw(m_rows[i].actionLabel);
-            if (isBindingRow(i))
-                window.draw(m_rows[i].bindingLabel);
+            bool sel = (i == m_selected);
+            bool rebindThis = (m_rebinding && i == m_selected);
+            sf::Vector2f pos = m_rows[i].box.getPosition();
+            UIStyle::drawMenuRow(window, m_rows[i].box,
+                                 m_rows[i].actionLabel,
+                                 &m_rows[i].bindingLabel,
+                                 pos.x, pos.y, rowW, rowH,
+                                 sel, rebindThis);
+        }
+
+        // Reset Defaults and Back (centered text, no right label)
+        for (int i = ResetDefaults; i <= Back; ++i)
+        {
+            bool sel = (i == m_selected);
+            sf::Vector2f pos = m_rows[i].box.getPosition();
+            UIStyle::drawMenuItem(window, m_rows[i].box,
+                                  m_rows[i].actionLabel,
+                                  pos.x, pos.y, rowW, rowH, sel);
         }
 
         window.draw(m_instructionText);
