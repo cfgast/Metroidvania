@@ -13,6 +13,10 @@ third_party/PhysX-install/
 *.vcxproj.user
 out/
 
+# .NET build output
+tools/MapEditor/bin/
+tools/MapEditor/obj/
+
 # CMake generated
 CMakeFiles/
 CMakeCache.txt
