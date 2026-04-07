@@ -2,6 +2,7 @@ using System;
 using System.Drawing;
 using System.IO;
 using System.Text.Json;
+using System.Text.Json.Serialization;
 using System.Windows.Forms;
 
 namespace MapEditor;
@@ -404,9 +405,32 @@ public sealed class MainForm : Form
         if (_canvas.Map == null) return;
         try
         {
-            var opts = new JsonSerializerOptions { WriteIndented = true };
-            var json = JsonSerializer.Serialize(_canvas.Map, opts);
+            var map = _canvas.Map;
+
+            // Temporarily null-out empty collections so they are omitted from JSON
+            var savedSpawnPts = map.SpawnPoints;
+            var savedEnemies  = map.Enemies;
+            var savedTrans    = map.Transitions;
+            var savedPickups  = map.AbilityPickups;
+            if (savedSpawnPts.Count == 0) map.SpawnPoints    = null!;
+            if (savedEnemies.Count  == 0) map.Enemies        = null!;
+            if (savedTrans.Count    == 0) map.Transitions    = null!;
+            if (savedPickups.Count  == 0) map.AbilityPickups = null!;
+
+            var opts = new JsonSerializerOptions
+            {
+                WriteIndented = true,
+                DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull
+            };
+            var json = JsonSerializer.Serialize(map, opts);
             File.WriteAllText(path, json);
+
+            // Restore collections so in-memory model stays usable
+            map.SpawnPoints    = savedSpawnPts;
+            map.Enemies        = savedEnemies;
+            map.Transitions    = savedTrans;
+            map.AbilityPickups = savedPickups;
+
             _isDirty = false;
             UpdateTitle();
             SetStatus($"Saved: {Path.GetFileName(path)}");

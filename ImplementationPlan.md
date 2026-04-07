@@ -80,7 +80,7 @@ Details:
 
 ==============================================================================
 Task: Extend the Map Editor data models to cover every feature in the map JSON format so that opening and re-saving a map does not silently drop enemies, transitions, ability pickups, or named spawn points.
-Implemented: false
+Implemented: true
 
 Details:
 - File: tools/MapEditor/Models.cs
