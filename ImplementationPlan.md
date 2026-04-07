@@ -135,7 +135,7 @@ Details:
 
 ==============================================================================
 Task: Add enemy editing to the Map Editor. Users should be able to view, place, select, move, resize, and delete enemies on the map canvas, and edit their properties in a side panel.
-Implemented: false
+Implemented: true
 
 Details:
 - Files: tools/MapEditor/MainForm.cs, tools/MapEditor/MapCanvas.cs

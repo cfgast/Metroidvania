@@ -6,7 +6,8 @@ using System.Windows.Forms;
 
 namespace MapEditor;
 
-public enum EditorTool { Select, Draw }
+public enum EditorTool { Select, Draw, DrawEnemy }
+public enum SelectableType { None, Platform, Enemy }
 internal enum ResizeHandle { None, Move, N, NE, E, SE, S, SW, W, NW }
 
 public sealed class MapCanvas : Control
@@ -22,6 +23,14 @@ public sealed class MapCanvas : Control
     // ── Selection ─────────────────────────────────────────────────────────────
     private PlatformData? _selected;
     public  PlatformData? SelectedPlatform => _selected;
+
+    private EnemyData? _selectedEnemy;
+    public  EnemyData? SelectedEnemy => _selectedEnemy;
+
+    public  SelectableType SelectedType =>
+        _selected != null ? SelectableType.Platform :
+        _selectedEnemy != null ? SelectableType.Enemy :
+        SelectableType.None;
 
     // ── Tool ──────────────────────────────────────────────────────────────────
     private EditorTool _tool = EditorTool.Select;
@@ -49,6 +58,7 @@ public sealed class MapCanvas : Control
     private ResizeHandle _activeHandle;
     private RectangleF   _origRect;       // platform rect at drag start
     private float        _moveOffX, _moveOffY;
+    private PointF       _origWaypointA, _origWaypointB;
 
     // ── Appearance ────────────────────────────────────────────────────────────
     private const int HandlePx = 8;
@@ -70,8 +80,9 @@ public sealed class MapCanvas : Control
     // ── Map management ────────────────────────────────────────────────────────
     public void LoadMap(MapData map)
     {
-        Map       = map;
-        _selected = null;
+        Map            = map;
+        _selected      = null;
+        _selectedEnemy = null;
         SelectionChanged?.Invoke(this, EventArgs.Empty);
         FitToView();
     }
@@ -123,8 +134,10 @@ public sealed class MapCanvas : Control
         DrawBounds(g);
         DrawGrid(g);
         DrawPlatforms(g);
+        DrawEnemies(g);
         if (_isDrawing)       DrawGhost(g);
-        if (_selected != null) { DrawOutline(g, _selected); DrawHandles(g, _selected); }
+        if (_selected != null) { DrawSelectionOutline(g, _selected.X, _selected.Y, _selected.Width, _selected.Height); DrawSelectionHandles(g, _selected.X, _selected.Y, _selected.Width, _selected.Height); }
+        if (_selectedEnemy != null) { DrawSelectionOutline(g, _selectedEnemy.X, _selectedEnemy.Y, _selectedEnemy.Width, _selectedEnemy.Height); DrawSelectionHandles(g, _selectedEnemy.X, _selectedEnemy.Y, _selectedEnemy.Width, _selectedEnemy.Height); }
         DrawSpawnPoint(g);
         DrawNamedSpawnPoints(g);
     }
@@ -210,9 +223,9 @@ public sealed class MapCanvas : Control
         g.DrawRectangle(edge, sr.X, sr.Y, sr.Width, sr.Height);
     }
 
-    private void DrawOutline(Graphics g, PlatformData p)
+    private void DrawSelectionOutline(Graphics g, float wx, float wy, float ww, float wh)
     {
-        var sr = WR2S(p.X, p.Y, p.Width, p.Height);
+        var sr = WR2S(wx, wy, ww, wh);
         using var pen = new Pen(Color.Cyan, 2f);
         g.DrawRectangle(pen, sr.X - 1, sr.Y - 1, sr.Width + 2, sr.Height + 2);
     }
@@ -233,9 +246,9 @@ public sealed class MapCanvas : Control
         }
     }
 
-    private void DrawHandles(Graphics g, PlatformData p)
+    private void DrawSelectionHandles(Graphics g, float wx, float wy, float ww, float wh)
     {
-        foreach (var (_, rect) in GetHandleRects(p))
+        foreach (var (_, rect) in GetHandleRects(wx, wy, ww, wh))
         {
             g.FillRectangle(Brushes.White, rect);
             g.DrawRectangle(Pens.SteelBlue, rect.X, rect.Y, rect.Width, rect.Height);
@@ -298,10 +311,49 @@ public sealed class MapCanvas : Control
         }
     }
 
-    // ── Handle geometry ───────────────────────────────────────────────────────
-    private Dictionary<ResizeHandle, RectangleF> GetHandleRects(PlatformData p)
+    private void DrawEnemies(Graphics g)
     {
-        var   s  = WR2S(p.X, p.Y, p.Width, p.Height);
+        if (Map!.Enemies == null || Map.Enemies.Count == 0) return;
+
+        using var patrolPen     = new Pen(Color.FromArgb(150, 200, 100, 60), 1.5f) { DashStyle = DashStyle.Dash };
+        using var waypointBrush = new SolidBrush(Color.FromArgb(200, 220, 140, 60));
+
+        for (int i = 0; i < Map.Enemies.Count; i++)
+        {
+            var en = Map.Enemies[i];
+
+            // Patrol path (dashed line between waypoints)
+            var sA = W2S(en.WaypointA.X, en.WaypointA.Y);
+            var sB = W2S(en.WaypointB.X, en.WaypointB.Y);
+            g.SmoothingMode = SmoothingMode.AntiAlias;
+            g.DrawLine(patrolPen, sA, sB);
+
+            // Waypoint markers
+            float wr = Math.Max(3f, 5f * _zoom);
+            g.FillEllipse(waypointBrush, sA.X - wr, sA.Y - wr, wr * 2, wr * 2);
+            g.FillEllipse(waypointBrush, sB.X - wr, sB.Y - wr, wr * 2, wr * 2);
+            g.SmoothingMode = SmoothingMode.None;
+
+            // Enemy body
+            var sr = WR2S(en.X, en.Y, en.Width, en.Height);
+            using var fill = new SolidBrush(Color.FromArgb(200, 80, 60));
+            using var edge = new Pen(Color.FromArgb(120, 0, 0, 0), 1f);
+            g.FillRectangle(fill, sr);
+            g.DrawRectangle(edge, sr.X, sr.Y, sr.Width, sr.Height);
+
+            // Label
+            if (_zoom > 0.3f)
+            {
+                using var f = new Font("Segoe UI", 7f, FontStyle.Bold);
+                g.DrawString($"ENEMY {i}", f, Brushes.OrangeRed, sr.X + 2, sr.Y - 14);
+            }
+        }
+    }
+
+    // ── Handle geometry ───────────────────────────────────────────────────────
+    private Dictionary<ResizeHandle, RectangleF> GetHandleRects(float wx, float wy, float ww, float wh)
+    {
+        var   s  = WR2S(wx, wy, ww, wh);
         float h  = HandlePx, hh = h / 2f;
         float mx = s.X + s.Width / 2f, my = s.Y + s.Height / 2f;
         float r  = s.Right, b = s.Bottom;
@@ -322,8 +374,18 @@ public sealed class MapCanvas : Control
 
     private ResizeHandle HitHandle(Point screen)
     {
-        if (_selected == null) return ResizeHandle.None;
-        foreach (var (handle, rect) in GetHandleRects(_selected))
+        float wx, wy, ww, wh;
+        if (_selected != null)
+        {
+            wx = _selected.X; wy = _selected.Y; ww = _selected.Width; wh = _selected.Height;
+        }
+        else if (_selectedEnemy != null)
+        {
+            wx = _selectedEnemy.X; wy = _selectedEnemy.Y; ww = _selectedEnemy.Width; wh = _selectedEnemy.Height;
+        }
+        else return ResizeHandle.None;
+
+        foreach (var (handle, rect) in GetHandleRects(wx, wy, ww, wh))
             if (rect.Contains(screen.X, screen.Y)) return handle;
         return ResizeHandle.None;
     }
@@ -336,6 +398,19 @@ public sealed class MapCanvas : Control
             if (world.X >= p.X && world.X <= p.X + p.Width &&
                 world.Y >= p.Y && world.Y <= p.Y + p.Height)
                 return p;
+        }
+        return null;
+    }
+
+    private EnemyData? HitEnemy(PointF world)
+    {
+        if (Map!.Enemies == null) return null;
+        for (int i = Map.Enemies.Count - 1; i >= 0; i--)
+        {
+            var en = Map.Enemies[i];
+            if (world.X >= en.X && world.X <= en.X + en.Width &&
+                world.Y >= en.Y && world.Y <= en.Y + en.Height)
+                return en;
         }
         return null;
     }
@@ -374,6 +449,21 @@ public sealed class MapCanvas : Control
             _dragStartWorld = new(Snap(world.X), Snap(world.Y));
             _drawRect       = new(_dragStartWorld.X, _dragStartWorld.Y, 0, 0);
         }
+        else if (_tool == EditorTool.DrawEnemy)
+        {
+            var en = new EnemyData
+            {
+                X = Snap(world.X), Y = Snap(world.Y),
+                Width = 40, Height = 40,
+                Speed = 100, Damage = 10, Hp = 50,
+                WaypointA = new PointData { X = Snap(world.X) - 100, Y = Snap(world.Y) },
+                WaypointB = new PointData { X = Snap(world.X) + 100, Y = Snap(world.Y) }
+            };
+            Map.Enemies.Add(en);
+            SelectEnemy(en);
+            MapChanged?.Invoke(this, EventArgs.Empty);
+            Invalidate();
+        }
         else
         {
             var handle = HitHandle(e.Location);
@@ -381,7 +471,16 @@ public sealed class MapCanvas : Control
             {
                 _isDragging     = true;
                 _activeHandle   = handle;
-                _origRect       = new(_selected!.X, _selected.Y, _selected.Width, _selected.Height);
+                if (_selected != null)
+                {
+                    _origRect = new(_selected.X, _selected.Y, _selected.Width, _selected.Height);
+                }
+                else if (_selectedEnemy != null)
+                {
+                    _origRect       = new(_selectedEnemy.X, _selectedEnemy.Y, _selectedEnemy.Width, _selectedEnemy.Height);
+                    _origWaypointA  = new(_selectedEnemy.WaypointA.X, _selectedEnemy.WaypointA.Y);
+                    _origWaypointB  = new(_selectedEnemy.WaypointB.X, _selectedEnemy.WaypointB.Y);
+                }
                 _dragStartWorld = world;
             }
             else
@@ -389,7 +488,7 @@ public sealed class MapCanvas : Control
                 var hit = HitPlatform(world);
                 if (hit != null)
                 {
-                    SetSelected(hit);
+                    SelectPlatform(hit);
                     _isDragging     = true;
                     _activeHandle   = ResizeHandle.Move;
                     _moveOffX       = world.X - hit.X;
@@ -399,7 +498,23 @@ public sealed class MapCanvas : Control
                 }
                 else
                 {
-                    SetSelected(null);
+                    var hitEnemy = HitEnemy(world);
+                    if (hitEnemy != null)
+                    {
+                        SelectEnemy(hitEnemy);
+                        _isDragging     = true;
+                        _activeHandle   = ResizeHandle.Move;
+                        _moveOffX       = world.X - hitEnemy.X;
+                        _moveOffY       = world.Y - hitEnemy.Y;
+                        _origRect       = new(hitEnemy.X, hitEnemy.Y, hitEnemy.Width, hitEnemy.Height);
+                        _origWaypointA  = new(hitEnemy.WaypointA.X, hitEnemy.WaypointA.Y);
+                        _origWaypointB  = new(hitEnemy.WaypointB.X, hitEnemy.WaypointB.Y);
+                        _dragStartWorld = world;
+                    }
+                    else
+                    {
+                        ClearSelection();
+                    }
                 }
             }
             Invalidate();
@@ -428,16 +543,39 @@ public sealed class MapCanvas : Control
             return;
         }
 
-        if (_isDragging && _selected != null)
+        if (_isDragging && (_selected != null || _selectedEnemy != null))
         {
-            if (_activeHandle == ResizeHandle.Move)
+            if (_selected != null)
             {
-                _selected.X = Snap(world.X - _moveOffX);
-                _selected.Y = Snap(world.Y - _moveOffY);
+                if (_activeHandle == ResizeHandle.Move)
+                {
+                    _selected.X = Snap(world.X - _moveOffX);
+                    _selected.Y = Snap(world.Y - _moveOffY);
+                }
+                else
+                {
+                    ApplyResize(world);
+                }
             }
-            else
+            else if (_selectedEnemy != null)
             {
-                ApplyResize(world);
+                if (_activeHandle == ResizeHandle.Move)
+                {
+                    float newX = Snap(world.X - _moveOffX);
+                    float newY = Snap(world.Y - _moveOffY);
+                    float dx   = newX - _origRect.X;
+                    float dy   = newY - _origRect.Y;
+                    _selectedEnemy.X = newX;
+                    _selectedEnemy.Y = newY;
+                    _selectedEnemy.WaypointA.X = _origWaypointA.X + dx;
+                    _selectedEnemy.WaypointA.Y = _origWaypointA.Y + dy;
+                    _selectedEnemy.WaypointB.X = _origWaypointB.X + dx;
+                    _selectedEnemy.WaypointB.Y = _origWaypointB.Y + dy;
+                }
+                else
+                {
+                    ApplyResizeEnemy(world);
+                }
             }
             MapChanged?.Invoke(this, EventArgs.Empty);
             Invalidate();
@@ -464,7 +602,7 @@ public sealed class MapCanvas : Control
                     R = 120, G = 80, B = 40
                 };
                 Map.Platforms.Add(plat);
-                SetSelected(plat);
+                SelectPlatform(plat);
                 MapChanged?.Invoke(this, EventArgs.Empty);
             }
             Invalidate();
@@ -475,7 +613,7 @@ public sealed class MapCanvas : Control
     }
 
     // ── Resize ────────────────────────────────────────────────────────────────
-    private void ApplyResize(PointF world)
+    private (float x, float y, float w, float h) ComputeResize(PointF world)
     {
         var   o  = _origRect;
         float dx = Snap(world.X) - Snap(_dragStartWorld.X);
@@ -498,18 +636,31 @@ public sealed class MapCanvas : Control
         if (w < minSize) { if (_activeHandle is ResizeHandle.W or ResizeHandle.NW or ResizeHandle.SW) x = o.X + o.Width - minSize; w = minSize; }
         if (h < minSize) { if (_activeHandle is ResizeHandle.N or ResizeHandle.NW or ResizeHandle.NE) y = o.Y + o.Height - minSize; h = minSize; }
 
+        return (x, y, w, h);
+    }
+
+    private void ApplyResize(PointF world)
+    {
+        var (x, y, w, h) = ComputeResize(world);
         _selected!.X = x; _selected.Y = y; _selected.Width = w; _selected.Height = h;
     }
 
+    private void ApplyResizeEnemy(PointF world)
+    {
+        var (x, y, w, h) = ComputeResize(world);
+        _selectedEnemy!.X = x; _selectedEnemy.Y = y; _selectedEnemy.Width = w; _selectedEnemy.Height = h;
+    }
+
     // ── Cursor ────────────────────────────────────────────────────────────────
-    private void UpdateCursorForTool() => Cursor = _tool == EditorTool.Draw ? Cursors.Cross : Cursors.Default;
+    private void UpdateCursorForTool() => Cursor = (_tool == EditorTool.Draw || _tool == EditorTool.DrawEnemy) ? Cursors.Cross : Cursors.Default;
 
     private void UpdateCursor(Point screen, PointF world)
     {
-        if (_tool == EditorTool.Draw) { Cursor = Cursors.Cross; return; }
+        if (_tool == EditorTool.Draw || _tool == EditorTool.DrawEnemy) { Cursor = Cursors.Cross; return; }
         var h = HitHandle(screen);
         if (h != ResizeHandle.None) { Cursor = GetResizeCursor(h); return; }
         if (Map != null && HitPlatform(world) != null) { Cursor = Cursors.SizeAll; return; }
+        if (Map != null && HitEnemy(world) != null) { Cursor = Cursors.SizeAll; return; }
         Cursor = Cursors.Default;
     }
 
@@ -529,23 +680,50 @@ public sealed class MapCanvas : Control
     protected override void OnKeyDown(KeyEventArgs e)
     {
         if (e.KeyCode == Keys.Delete) DeleteSelected();
-        if (e.KeyCode == Keys.Escape) SetSelected(null);
+        if (e.KeyCode == Keys.Escape) ClearSelection();
         base.OnKeyDown(e);
     }
 
     // ── Public operations ─────────────────────────────────────────────────────
     public void DeleteSelected()
     {
-        if (_selected == null || Map == null) return;
-        Map.Platforms.Remove(_selected);
-        SetSelected(null);
-        MapChanged?.Invoke(this, EventArgs.Empty);
+        if (Map == null) return;
+        if (_selected != null)
+        {
+            Map.Platforms.Remove(_selected);
+            ClearSelection();
+            MapChanged?.Invoke(this, EventArgs.Empty);
+            Invalidate();
+        }
+        else if (_selectedEnemy != null)
+        {
+            Map.Enemies.Remove(_selectedEnemy);
+            ClearSelection();
+            MapChanged?.Invoke(this, EventArgs.Empty);
+            Invalidate();
+        }
+    }
+
+    private void SelectPlatform(PlatformData plat)
+    {
+        _selected      = plat;
+        _selectedEnemy = null;
+        SelectionChanged?.Invoke(this, EventArgs.Empty);
         Invalidate();
     }
 
-    private void SetSelected(PlatformData? plat)
+    private void SelectEnemy(EnemyData enemy)
     {
-        _selected = plat;
+        _selected      = null;
+        _selectedEnemy = enemy;
+        SelectionChanged?.Invoke(this, EventArgs.Empty);
+        Invalidate();
+    }
+
+    private void ClearSelection()
+    {
+        _selected      = null;
+        _selectedEnemy = null;
         SelectionChanged?.Invoke(this, EventArgs.Empty);
         Invalidate();
     }

@@ -34,8 +34,16 @@ public sealed class MainForm : Form
     private TextBox _txtPlatR = null!, _txtPlatG = null!, _txtPlatB = null!;
     private Panel   _colorSwatch = null!;
 
+    // ── Enemy property controls ───────────────────────────────────────────────
+    private Panel   _pnlEnemy = null!;
+    private TextBox _txtEnemyX = null!, _txtEnemyY = null!;
+    private TextBox _txtEnemyW = null!, _txtEnemyH = null!;
+    private TextBox _txtWaypointAX = null!, _txtWaypointAY = null!;
+    private TextBox _txtWaypointBX = null!, _txtWaypointBY = null!;
+    private TextBox _txtEnemySpeed = null!, _txtEnemyDamage = null!, _txtEnemyHP = null!;
+
     // ── Toolbar buttons ───────────────────────────────────────────────────────
-    private ToolStripButton _btnSelect = null!, _btnDraw = null!, _btnSnap = null!;
+    private ToolStripButton _btnSelect = null!, _btnDraw = null!, _btnDrawEnemy = null!, _btnSnap = null!;
 
     // ── Status bar labels ─────────────────────────────────────────────────────
     private ToolStripStatusLabel _lblInfo  = null!;
@@ -103,7 +111,7 @@ public sealed class MainForm : Form
         file.DropDownItems.Add(new ToolStripSeparator());
         file.DropDownItems.Add("E&xit",             null, (_, _) => Close());
 
-        edit.DropDownItems.Add("&Delete Platform\tDel", null, (_, _) => _canvas.DeleteSelected());
+        edit.DropDownItems.Add("&Delete Selected\tDel", null, (_, _) => _canvas.DeleteSelected());
 
         view.DropDownItems.Add("&Fit to View\tF",       null, (_, _) => _canvas.FitToView());
         view.DropDownItems.Add("Zoom 100%\t1",          null, (_, _) => _canvas.SetZoom(1f));
@@ -120,13 +128,15 @@ public sealed class MainForm : Form
     {
         var bar = new ToolStrip { GripStyle = ToolStripGripStyle.Hidden };
 
-        _btnSelect = Tbtn("Select",   "Select / Move / Resize  [S]", true);
-        _btnDraw   = Tbtn("Draw",     "Draw new platform  [D]",      false);
-        _btnSnap   = Tbtn("Snap: ON", "Toggle grid snapping  [G]",   true);
+        _btnSelect    = Tbtn("Select",     "Select / Move / Resize  [S]", true);
+        _btnDraw      = Tbtn("Draw",       "Draw new platform  [D]",      false);
+        _btnDrawEnemy = Tbtn("Draw Enemy", "Draw new enemy  [E]",         false);
+        _btnSnap      = Tbtn("Snap: ON",   "Toggle grid snapping  [G]",   true);
 
-        _btnSelect.Click += (_, _) => SetTool(EditorTool.Select);
-        _btnDraw.Click   += (_, _) => SetTool(EditorTool.Draw);
-        _btnSnap.Click   += (_, _) => ToggleSnap();
+        _btnSelect.Click    += (_, _) => SetTool(EditorTool.Select);
+        _btnDraw.Click      += (_, _) => SetTool(EditorTool.Draw);
+        _btnDrawEnemy.Click += (_, _) => SetTool(EditorTool.DrawEnemy);
+        _btnSnap.Click      += (_, _) => ToggleSnap();
 
         var btnDel = new ToolStripButton("Delete") { ToolTipText = "Delete selected  [Del]" };
         btnDel.Click += (_, _) => _canvas.DeleteSelected();
@@ -139,7 +149,7 @@ public sealed class MainForm : Form
 
         bar.Items.AddRange(new ToolStripItem[]
         {
-            _btnSelect, _btnDraw,
+            _btnSelect, _btnDraw, _btnDrawEnemy,
             new ToolStripSeparator(),
             btnDel,
             new ToolStripSeparator(),
@@ -264,6 +274,36 @@ public sealed class MainForm : Form
         _txtPlatB.TextChanged += (_, _) => RefreshSwatch();
 
         _pnlPlatform.Enabled = false;
+
+        y += py;
+        y += 8;
+        panel.Controls.Add(new Label { Height = 1, Location = new(4, y), Width = pw, BackColor = Color.FromArgb(70, 70, 80) });
+        y += 8;
+
+        // ── Selected Enemy ────────────────────────────────────────────────────
+        panel.Controls.Add(SectionLabel("SELECTED ENEMY", 4, y, pw)); y += 22;
+
+        _pnlEnemy = new Panel { Location = new(0, y), Width = panel.Width, AutoSize = false };
+        panel.Controls.Add(_pnlEnemy);
+
+        int ey = 0;
+        (_txtEnemyX, _txtEnemyY, ey) = TwoFields(_pnlEnemy, "X", "Y", ey, pw, "Position");
+        (_txtEnemyW, _txtEnemyH, ey) = TwoFields(_pnlEnemy, "Width", "Height", ey, pw, "Size");
+        (_txtWaypointAX, _txtWaypointAY, ey) = TwoFields(_pnlEnemy, "X", "Y", ey, pw, "Waypoint A");
+        (_txtWaypointBX, _txtWaypointBY, ey) = TwoFields(_pnlEnemy, "X", "Y", ey, pw, "Waypoint B");
+        (_txtEnemySpeed, _txtEnemyDamage, _txtEnemyHP, ey) = ThreeFields(_pnlEnemy, "Speed", "Dmg", "HP", ey, pw, "Stats");
+
+        int ehalf = (pw - 4) / 2;
+        var btnEnemyApply = DarkBtn("Apply",  4,              ey, ehalf);
+        var btnEnemyDel   = DarkBtn("Delete", 4 + ehalf + 4,  ey, ehalf, Color.FromArgb(130, 55, 55));
+        ey += 30;
+
+        btnEnemyApply.Click += ApplyEnemySettings;
+        btnEnemyDel.Click   += (_, _) => _canvas.DeleteSelected();
+        _pnlEnemy.Controls.AddRange(new Control[] { btnEnemyApply, btnEnemyDel });
+        _pnlEnemy.Height  = ey;
+        _pnlEnemy.Enabled = false;
+
         return panel;
     }
 
@@ -537,6 +577,30 @@ public sealed class MainForm : Form
         catch { Warn("Invalid values in platform settings. Use numeric values."); }
     }
 
+    private void ApplyEnemySettings(object? sender, EventArgs e)
+    {
+        var en = _canvas.SelectedEnemy;
+        if (en == null) return;
+        try
+        {
+            en.X               = ParseF(_txtEnemyX);
+            en.Y               = ParseF(_txtEnemyY);
+            en.Width           = MathF.Max(1f, ParseF(_txtEnemyW));
+            en.Height          = MathF.Max(1f, ParseF(_txtEnemyH));
+            en.WaypointA.X     = ParseF(_txtWaypointAX);
+            en.WaypointA.Y     = ParseF(_txtWaypointAY);
+            en.WaypointB.X     = ParseF(_txtWaypointBX);
+            en.WaypointB.Y     = ParseF(_txtWaypointBY);
+            en.Speed           = ParseF(_txtEnemySpeed);
+            en.Damage          = ParseF(_txtEnemyDamage);
+            en.Hp              = ParseF(_txtEnemyHP);
+            MarkDirty();
+            _canvas.Invalidate();
+            SetStatus("Enemy updated.");
+        }
+        catch { Warn("Invalid values in enemy settings. Use numeric values."); }
+    }
+
     // ── Spawn point handlers ──────────────────────────────────────────────────
     private void OnSpawnPointSelected(object? sender, EventArgs e)
     {
@@ -637,8 +701,12 @@ public sealed class MainForm : Form
     // ── Canvas event handlers ─────────────────────────────────────────────────
     private void OnSelectionChanged(object? sender, EventArgs e)
     {
-        var p = _canvas.SelectedPlatform;
+        var p  = _canvas.SelectedPlatform;
+        var en = _canvas.SelectedEnemy;
+
         _pnlPlatform.Enabled = p != null;
+        _pnlEnemy.Enabled    = en != null;
+
         if (p != null)
         {
             _syncingUI = true;
@@ -652,6 +720,24 @@ public sealed class MainForm : Form
             _syncingUI = false;
             RefreshSwatch();
         }
+
+        if (en != null)
+        {
+            _syncingUI = true;
+            _txtEnemyX.Text       = en.X.ToString("F1");
+            _txtEnemyY.Text       = en.Y.ToString("F1");
+            _txtEnemyW.Text       = en.Width.ToString("F1");
+            _txtEnemyH.Text       = en.Height.ToString("F1");
+            _txtWaypointAX.Text   = en.WaypointA.X.ToString("F1");
+            _txtWaypointAY.Text   = en.WaypointA.Y.ToString("F1");
+            _txtWaypointBX.Text   = en.WaypointB.X.ToString("F1");
+            _txtWaypointBY.Text   = en.WaypointB.Y.ToString("F1");
+            _txtEnemySpeed.Text   = en.Speed.ToString("F1");
+            _txtEnemyDamage.Text  = en.Damage.ToString("F1");
+            _txtEnemyHP.Text      = en.Hp.ToString("F1");
+            _syncingUI = false;
+        }
+
         UpdateStatus();
     }
 
@@ -668,6 +754,20 @@ public sealed class MainForm : Form
             _txtPlatH.Text = p.Height.ToString("F1");
             _syncingUI = false;
         }
+        var en = _canvas.SelectedEnemy;
+        if (en != null && !_syncingUI)
+        {
+            _syncingUI = true;
+            _txtEnemyX.Text       = en.X.ToString("F1");
+            _txtEnemyY.Text       = en.Y.ToString("F1");
+            _txtEnemyW.Text       = en.Width.ToString("F1");
+            _txtEnemyH.Text       = en.Height.ToString("F1");
+            _txtWaypointAX.Text   = en.WaypointA.X.ToString("F1");
+            _txtWaypointAY.Text   = en.WaypointA.Y.ToString("F1");
+            _txtWaypointBX.Text   = en.WaypointB.X.ToString("F1");
+            _txtWaypointBY.Text   = en.WaypointB.Y.ToString("F1");
+            _syncingUI = false;
+        }
         MarkDirty();
     }
 
@@ -679,9 +779,10 @@ public sealed class MainForm : Form
     // ── Tool helpers ──────────────────────────────────────────────────────────
     private void SetTool(EditorTool t)
     {
-        _canvas.Tool       = t;
-        _btnSelect.Checked = t == EditorTool.Select;
-        _btnDraw.Checked   = t == EditorTool.Draw;
+        _canvas.Tool          = t;
+        _btnSelect.Checked    = t == EditorTool.Select;
+        _btnDraw.Checked      = t == EditorTool.Draw;
+        _btnDrawEnemy.Checked = t == EditorTool.DrawEnemy;
         UpdateStatus();
     }
 
@@ -696,10 +797,17 @@ public sealed class MainForm : Form
     // ── Status / title ────────────────────────────────────────────────────────
     private void UpdateStatus()
     {
-        int    count = _canvas.Map?.Platforms.Count ?? 0;
-        string tool  = _canvas.Tool == EditorTool.Draw ? "Draw" : "Select";
-        string sel   = _canvas.SelectedPlatform != null ? " | 1 selected" : "";
-        _lblInfo.Text = $"{count} platform{(count != 1 ? "s" : "")}{sel} | {tool} mode";
+        int    platCount  = _canvas.Map?.Platforms.Count ?? 0;
+        int    enemyCount = _canvas.Map?.Enemies?.Count ?? 0;
+        string tool       = _canvas.Tool switch
+        {
+            EditorTool.Draw      => "Draw Platform",
+            EditorTool.DrawEnemy => "Draw Enemy",
+            _                    => "Select"
+        };
+        string sel = _canvas.SelectedPlatform != null ? " | Platform selected" :
+                     _canvas.SelectedEnemy    != null ? " | Enemy selected"    : "";
+        _lblInfo.Text = $"{platCount} platforms, {enemyCount} enemies{sel} | {tool} mode";
     }
 
     private void SetStatus(string msg) => _lblInfo.Text = msg;
@@ -760,8 +868,9 @@ public sealed class MainForm : Form
         }
         switch (e.KeyCode)
         {
-            case Keys.S: SetTool(EditorTool.Select); e.Handled = true; break;
-            case Keys.D: SetTool(EditorTool.Draw);   e.Handled = true; break;
+            case Keys.S: SetTool(EditorTool.Select);    e.Handled = true; break;
+            case Keys.D: SetTool(EditorTool.Draw);      e.Handled = true; break;
+            case Keys.E: SetTool(EditorTool.DrawEnemy);  e.Handled = true; break;
             case Keys.F: _canvas.FitToView();         e.Handled = true; break;
             case Keys.G: ToggleSnap();                e.Handled = true; break;
             case Keys.D1: _canvas.SetZoom(1f);        e.Handled = true; break;
