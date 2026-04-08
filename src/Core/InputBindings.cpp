@@ -21,7 +21,9 @@ void InputBindings::resetDefaults()
     moveRightKey   = sf::Keyboard::D;
     moveRightAlt   = sf::Keyboard::Right;
     jumpKey        = sf::Keyboard::Space;
+    dashKey        = sf::Keyboard::LShift;
     controllerJumpButton = 0;
+    controllerDashButton = 5;
 }
 
 void InputBindings::save() const
@@ -32,7 +34,9 @@ void InputBindings::save() const
     j["keyboard"]["moveRight"]    = keyToString(moveRightKey);
     j["keyboard"]["moveRightAlt"] = keyToString(moveRightAlt);
     j["keyboard"]["jump"]         = keyToString(jumpKey);
+    j["keyboard"]["dash"]         = keyToString(dashKey);
     j["controller"]["jumpButton"] = controllerJumpButton;
+    j["controller"]["dashButton"] = controllerDashButton;
 
     std::ofstream file(SAVE_PATH);
     if (file.is_open())
@@ -64,11 +68,13 @@ void InputBindings::load()
             if (kb.contains("moveRight"))    moveRightKey   = stringToKey(kb["moveRight"]);
             if (kb.contains("moveRightAlt")) moveRightAlt   = stringToKey(kb["moveRightAlt"]);
             if (kb.contains("jump"))         jumpKey        = stringToKey(kb["jump"]);
+            if (kb.contains("dash"))         dashKey        = stringToKey(kb["dash"]);
         }
         if (j.contains("controller"))
         {
             auto& ct = j["controller"];
             if (ct.contains("jumpButton")) controllerJumpButton = ct["jumpButton"].get<unsigned int>();
+            if (ct.contains("dashButton")) controllerDashButton = ct["dashButton"].get<unsigned int>();
         }
 
         std::cout << "Controls loaded from " << SAVE_PATH << '\n';

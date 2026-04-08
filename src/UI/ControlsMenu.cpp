@@ -12,7 +12,9 @@ static const char* ROW_ACTIONS[] = {
     "Move Right",
     "Move Right (Alt)",
     "Jump",
+    "Dash",
     "Jump",
+    "Dash",
     "Reset Defaults",
     "Back"
 };
@@ -63,7 +65,7 @@ ControlsMenu::ControlsMenu()
 
 bool ControlsMenu::isBindingRow(int row) const
 {
-    return row >= MoveLeftKey && row <= ControllerJump;
+    return row >= MoveLeftKey && row <= ControllerDash;
 }
 
 void ControlsMenu::open()
@@ -98,7 +100,9 @@ void ControlsMenu::refreshLabels()
     setBinding(MoveRightKey,    InputBindings::keyToString(b.moveRightKey));
     setBinding(MoveRightAltKey, InputBindings::keyToString(b.moveRightAlt));
     setBinding(JumpKey,         InputBindings::keyToString(b.jumpKey));
+    setBinding(DashKey,         InputBindings::keyToString(b.dashKey));
     setBinding(ControllerJump,  InputBindings::buttonToString(b.controllerJumpButton));
+    setBinding(ControllerDash,  InputBindings::buttonToString(b.controllerDashButton));
 
     // Non-binding rows have no right-side text
     setBinding(ResetDefaults, "");
@@ -134,7 +138,13 @@ void ControlsMenu::handleEvent(const sf::Event& event)
             // Waiting for a controller button press
             if (event.type == sf::Event::JoystickButtonPressed)
             {
-                bindings.controllerJumpButton = event.joystickButton.button;
+                unsigned int btn = event.joystickButton.button;
+                switch (m_selected)
+                {
+                    case ControllerJump: bindings.controllerJumpButton = btn; break;
+                    case ControllerDash: bindings.controllerDashButton = btn; break;
+                    default: break;
+                }
                 bindings.save();
                 m_rebinding = false;
                 refreshLabels();
@@ -169,6 +179,7 @@ void ControlsMenu::handleEvent(const sf::Event& event)
                     case MoveRightKey:    bindings.moveRightKey   = newKey; break;
                     case MoveRightAltKey: bindings.moveRightAlt   = newKey; break;
                     case JumpKey:         bindings.jumpKey        = newKey; break;
+                    case DashKey:         bindings.dashKey        = newKey; break;
                     default: break;
                 }
                 bindings.save();
@@ -347,10 +358,10 @@ void ControlsMenu::layout(const sf::RenderWindow& window)
     // controller rows, gap, reset, back
     float totalH = 60.f              // title area
                + 24.f                // keyboard section label
-               + 5 * (rowH + gap)    // 5 keyboard rows
+               + 6 * (rowH + gap)    // 6 keyboard rows (including dash)
                + sectionGap
                + 24.f                // controller section label
-               + 1 * (rowH + gap)    // 1 controller row
+               + 2 * (rowH + gap)    // 2 controller rows (jump + dash)
                + sectionGap
                + 2 * (rowH + gap);   // reset + back
     float startY = (winH - totalH) * 0.5f;
@@ -373,7 +384,7 @@ void ControlsMenu::layout(const sf::RenderWindow& window)
     y += 28.f;
 
     // Keyboard rows: MoveLeftKey .. JumpKey (indices 0-4)
-    for (int i = MoveLeftKey; i <= JumpKey; ++i)
+    for (int i = MoveLeftKey; i <= DashKey; ++i)
     {
         auto& rw = m_rows[i];
         rw.box.setParameters({ rowW, rowH }, UIStyle::CORNER_RADIUS);
@@ -390,9 +401,10 @@ void ControlsMenu::layout(const sf::RenderWindow& window)
     }
     y += 28.f;
 
-    // Controller jump row
+    // Controller jump and dash rows
+    for (int i = ControllerJump; i <= ControllerDash; ++i)
     {
-        auto& rw = m_rows[ControllerJump];
+        auto& rw = m_rows[i];
         rw.box.setParameters({ rowW, rowH }, UIStyle::CORNER_RADIUS);
         rw.box.setPosition(cx, y);
         y += rowH + gap;
@@ -443,7 +455,7 @@ void ControlsMenu::render(sf::RenderWindow& window)
         const float rowH = 48.f;
 
         // Binding rows (keyboard + controller)
-        for (int i = MoveLeftKey; i <= ControllerJump; ++i)
+        for (int i = MoveLeftKey; i <= ControllerDash; ++i)
         {
             bool sel = (i == m_selected);
             bool rebindThis = (m_rebinding && i == m_selected);

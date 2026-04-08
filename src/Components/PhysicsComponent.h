@@ -25,8 +25,10 @@ public:
 
     bool isGrounded() const { return m_grounded; }
     bool isWallSliding() const { return m_wallSliding; }
+    bool isDashing() const { return m_dashing; }
     // -1 = touching left wall, +1 = touching right wall, 0 = none
     int  wallDirection() const { return m_wallDirection; }
+    bool facingRight() const { return m_facingRight; }
 
     void setPlayerState(PlayerState* state) { m_playerState = state; }
 
@@ -36,6 +38,9 @@ public:
     float        fallMultiplier    = 2.5f;
     float        lowJumpMultiplier = 2.0f;
     float        wallSlideSpeed    = 60.f;
+    float        dashSpeed         = 1000.f;
+    float        dashDuration      = 0.15f;
+    float        dashCooldown      = 0.5f;
     sf::Vector2f velocity          { 0.f, 0.f };
     sf::Vector2f collisionSize;
 
@@ -52,5 +57,10 @@ private:
     bool m_wasWallSliding  = false;
     int  m_wallDirection   = 0;
     bool m_jumpWasDown     = false;
+    bool m_dashWasDown     = false;
+    bool m_dashing         = false;
+    bool m_facingRight     = true;
+    float m_dashTimer      = 0.f;
+    float m_dashCooldownTimer = 0.f;
     int  m_airJumpsUsed    = 0;
 };

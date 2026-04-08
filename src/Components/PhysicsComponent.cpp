@@ -119,6 +119,53 @@ void PhysicsComponent::update(float dt)
     if (auto* ic = getOwner()->getComponent<InputComponent>())
         input = ic->getInputState();
 
+    // --- Track facing direction ---
+    if (input.moveLeft)  m_facingRight = false;
+    if (input.moveRight) m_facingRight = true;
+
+    // --- Dash cooldown ---
+    if (m_dashCooldownTimer > 0.f)
+        m_dashCooldownTimer -= dt;
+
+    // --- Dash trigger ---
+    bool canDash = m_playerState && m_playerState->hasAbility(Ability::Dash);
+    if (canDash && input.dash && !m_dashWasDown && !m_dashing && m_dashCooldownTimer <= 0.f)
+    {
+        m_dashing = true;
+        m_dashTimer = dashDuration;
+        m_dashCooldownTimer = dashCooldown;
+    }
+    m_dashWasDown = input.dash;
+
+    // --- While dashing: override velocity, skip normal movement/gravity ---
+    if (m_dashing)
+    {
+        m_dashTimer -= dt;
+        if (m_dashTimer <= 0.f)
+        {
+            m_dashing = false;
+            velocity.x = 0.f;
+            velocity.y = 0.f;
+        }
+        else
+        {
+            velocity.x = m_facingRight ? dashSpeed : -dashSpeed;
+            velocity.y = 0.f;
+
+            m_actor->setLinearVelocity(PxVec3(velocity.x, velocity.y, 0.f));
+            PhysXWorld::instance().step(dt);
+
+            const PxTransform t = m_actor->getGlobalPose();
+            getOwner()->position = { t.p.x, t.p.y };
+
+            m_grounded = checkGrounded();
+            if (m_grounded)
+                m_airJumpsUsed = 0;
+
+            return; // skip normal physics while dashing
+        }
+    }
+
     // --- Horizontal movement ---
     velocity.x = 0.f;
     if (input.moveLeft)
@@ -243,6 +290,9 @@ void PhysicsComponent::teleport(sf::Vector2f position)
     m_wasWallSliding = false;
     m_wallDirection = 0;
     m_airJumpsUsed = 0;
+    m_dashing      = false;
+    m_dashTimer    = 0.f;
+    m_dashCooldownTimer = 0.f;
     if (m_actor)
     {
         m_actor->setGlobalPose(PxTransform(PxVec3(position.x, position.y, 0.f)));

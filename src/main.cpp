@@ -1,6 +1,7 @@
 #include <iostream>
 #include <vector>
 #include <memory>
+#include <algorithm>
 
 #include <SFML/Graphics.hpp>
 
@@ -101,6 +102,8 @@ int main()
             anim->addAnimation("fall",      atlas, makeFrames(4, 2), 0.15f, false);
             anim->addAnimation("wall-slide-right", atlas, makeFrames(5, 2), 0.20f);
             anim->addAnimation("wall-slide-left",  atlas, makeFrames(6, 2), 0.20f);
+            anim->addAnimation("dash-right",       atlas, makeFrames(7, 3), 0.05f, false);
+            anim->addAnimation("dash-left",        atlas, makeFrames(8, 3), 0.05f, false);
             anim->play("idle");
         }
     };
@@ -179,6 +182,14 @@ int main()
     DebugMenu  debugMenu;
     PauseMenu  pauseMenu;
     ControlsMenu controlsMenu;
+
+    // Dash trail: ring buffer of recent player positions/alpha for ghost effect
+    struct DashGhost {
+        sf::Vector2f position;
+        float alpha;
+    };
+    std::vector<DashGhost> dashGhosts;
+    float dashGhostSpawnTimer = 0.f;
 
     while (window.isOpen())
     {
@@ -412,6 +423,31 @@ int main()
 
         player.update(dt);
 
+        // --- Dash trail: spawn ghosts and fade existing ones ---
+        {
+            auto* physics = player.getComponent<PhysicsComponent>();
+            if (physics && physics->isDashing())
+            {
+                dashGhostSpawnTimer -= dt;
+                if (dashGhostSpawnTimer <= 0.f)
+                {
+                    dashGhosts.push_back({ player.position, 200.f });
+                    dashGhostSpawnTimer = 0.02f;
+                }
+            }
+            else
+            {
+                dashGhostSpawnTimer = 0.f;
+            }
+            // Fade and remove expired ghosts
+            for (auto& g : dashGhosts)
+                g.alpha -= 600.f * dt;
+            dashGhosts.erase(
+                std::remove_if(dashGhosts.begin(), dashGhosts.end(),
+                               [](const DashGhost& g) { return g.alpha <= 0.f; }),
+                dashGhosts.end());
+        }
+
         for (auto& enemy : enemies)
         {
             auto* hp = enemy->getComponent<HealthComponent>();
@@ -439,7 +475,14 @@ int main()
             if (physics && inputComp)
             {
                 const auto& inp = inputComp->getInputState();
-                if (physics->isWallSliding())
+                if (physics->isDashing())
+                {
+                    if (physics->facingRight())
+                        animComp->play("dash-right");
+                    else
+                        animComp->play("dash-left");
+                }
+                else if (physics->isWallSliding())
                 {
                     if (physics->wallDirection() > 0)
                         animComp->play("wall-slide-right");
@@ -490,6 +533,17 @@ int main()
             if (hp && hp->isDead())
                 continue;
             enemy->render(window);
+        }
+
+        // --- Render dash trail ghosts ---
+        for (const auto& ghost : dashGhosts)
+        {
+            sf::RectangleShape trail(playerSize);
+            trail.setOrigin(playerSize.x * 0.5f, playerSize.y * 0.5f);
+            trail.setPosition(ghost.position);
+            uint8_t a = static_cast<uint8_t>(std::max(0.f, ghost.alpha));
+            trail.setFillColor(sf::Color(100, 200, 255, a));
+            window.draw(trail);
         }
 
         player.render(window);

@@ -17,9 +17,11 @@ public:
     sf::Keyboard::Key moveRightKey   = sf::Keyboard::D;
     sf::Keyboard::Key moveRightAlt   = sf::Keyboard::Right;
     sf::Keyboard::Key jumpKey        = sf::Keyboard::Space;
+    sf::Keyboard::Key dashKey        = sf::Keyboard::LShift;
 
     // Controller bindings
     unsigned int controllerJumpButton = 0;
+    unsigned int controllerDashButton = 5; // RB
 
     void resetDefaults();
     void save() const;

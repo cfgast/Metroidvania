@@ -20,6 +20,7 @@ void InputComponent::update(float /*dt*/)
     m_state.moveRight = sf::Keyboard::isKeyPressed(bindings.moveRightKey)
                      || sf::Keyboard::isKeyPressed(bindings.moveRightAlt);
     m_state.jump      = sf::Keyboard::isKeyPressed(bindings.jumpKey);
+    m_state.dash      = sf::Keyboard::isKeyPressed(bindings.dashKey);
 
     // Controller / gamepad input (first connected joystick)
     if (sf::Joystick::isConnected(0))
@@ -42,5 +43,9 @@ void InputComponent::update(float /*dt*/)
         // Controller jump button (configurable)
         if (sf::Joystick::isButtonPressed(0, bindings.controllerJumpButton))
             m_state.jump = true;
+
+        // Controller dash button (configurable, default RB)
+        if (sf::Joystick::isButtonPressed(0, bindings.controllerDashButton))
+            m_state.dash = true;
     }
 }
