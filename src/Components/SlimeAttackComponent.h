@@ -1,0 +1,57 @@
+#pragma once
+
+#include <vector>
+
+#include <SFML/System/Vector2.hpp>
+#include <SFML/Graphics/CircleShape.hpp>
+
+#include "../Core/Component.h"
+
+class GameObject;
+
+class SlimeAttackComponent : public Component
+{
+public:
+    SlimeAttackComponent(GameObject& player, float damage = 5.f);
+
+    void update(float dt) override;
+    void render(sf::RenderWindow& window) override;
+
+    bool isJittering() const { return m_jittering; }
+
+private:
+    struct Particle
+    {
+        sf::Vector2f position;
+        sf::Vector2f velocity;
+        float        lifetime    = 0.f;
+        float        maxLifetime = 0.f;
+        bool         hitPlayer   = false;
+    };
+
+    void spawnParticles();
+    void updateParticles(float dt);
+    float randomFloat(float lo, float hi) const;
+
+    GameObject& m_player;
+    float       m_damage;
+
+    // Attack timing
+    float m_cooldownTimer = 0.f;
+
+    // Jitter state
+    bool  m_jittering     = false;
+    float m_jitterTimer   = 0.f;
+
+    // Particles
+    std::vector<Particle> m_particles;
+
+    static constexpr float MIN_COOLDOWN       = 4.f;
+    static constexpr float MAX_COOLDOWN       = 8.f;
+    static constexpr float JITTER_DURATION     = 0.4f;
+    static constexpr float JITTER_MAGNITUDE    = 3.f;
+    static constexpr int   PARTICLE_COUNT      = 8;
+    static constexpr float PARTICLE_SPEED      = 180.f;
+    static constexpr float PARTICLE_LIFETIME   = 1.2f;
+    static constexpr float PARTICLE_RADIUS     = 4.f;
+};

@@ -15,6 +15,9 @@ public:
 
     void update(float dt) override;
 
+    void setPaused(bool paused) { m_paused = paused; }
+    bool isPaused() const { return m_paused; }
+
 private:
     bool checkPlayerOverlap() const;
 
@@ -28,6 +31,7 @@ private:
     sf::Vector2f m_prevPosition;
     bool         m_initialized    = false;
     float        m_stuckTimer     = 0.f;
+    bool         m_paused         = false;
 
     static constexpr float STUCK_THRESHOLD = 0.5f;
     static constexpr float STUCK_TIME      = 0.15f;

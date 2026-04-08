@@ -16,6 +16,7 @@
 #include "Components/HealthComponent.h"
 #include "Components/EnemyAIComponent.h"
 #include "Components/CombatComponent.h"
+#include "Components/SlimeAttackComponent.h"
 #include "Map/MapLoader.h"
 #include "Map/TransitionManager.h"
 #include "Debug/DebugMenu.h"
@@ -121,9 +122,27 @@ int main()
             enemy->addComponent<EnemyAIComponent>(p, def.waypointA, def.waypointB,
                                                   def.damage, 0.5f);
             enemy->addComponent<InputComponent>();
-            enemy->addComponent<RenderComponent>(def.size, sf::Color::Red);
+            enemy->addComponent<RenderComponent>(def.size, sf::Color::Green);
             enemy->addComponent<PhysicsComponent>(m, def.size, def.speed);
             enemy->addComponent<HealthComponent>(def.hp);
+            enemy->addComponent<SlimeAttackComponent>(p, 5.f);
+
+            auto* anim = enemy->addComponent<AnimationComponent>();
+            {
+                const std::string atlas = "assets/slime_spritesheet.png";
+                const int fw = 40, fh = 40;
+                auto makeFrames = [&](int row, int count) {
+                    std::vector<sf::IntRect> frames;
+                    for (int i = 0; i < count; ++i)
+                        frames.emplace_back(i * fw, row * fh, fw, fh);
+                    return frames;
+                };
+                anim->addAnimation("idle",       atlas, makeFrames(0, 4), 0.25f);
+                anim->addAnimation("move-right", atlas, makeFrames(1, 4), 0.12f);
+                anim->addAnimation("move-left",  atlas, makeFrames(2, 4), 0.12f);
+                anim->addAnimation("jitter",     atlas, makeFrames(3, 4), 0.05f);
+                anim->play("idle");
+            }
             result.push_back(std::move(enemy));
         }
         return result;

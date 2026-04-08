@@ -263,4 +263,4 @@ Implemented: true
 
 ==============================================================================
 Task: All of the current enemies on the map should get turned into slimes. They should be animated green blobs and have the same behavior they do now. infrequently they should rapidly jitter and shoot out particles that can damage the player.
-Implemented: False
+Implemented: true

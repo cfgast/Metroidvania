@@ -46,6 +46,28 @@ void EnemyAIComponent::update(float dt)
             return;
     }
 
+    // When paused (e.g. during slime jitter attack), stop moving but
+    // still handle contact damage cooldown below.
+    if (m_paused)
+    {
+        if (auto* ic = getOwner()->getComponent<InputComponent>())
+            ic->setInputState(InputState{});
+
+        // Still tick damage cooldown and check contact damage.
+        if (m_damageCooldown > 0.f)
+            m_damageCooldown -= dt;
+
+        if (m_damageCooldown <= 0.f && checkPlayerOverlap())
+        {
+            if (auto* playerHp = m_player.getComponent<HealthComponent>())
+            {
+                playerHp->takeDamage(m_damage);
+                m_damageCooldown = m_damageInterval;
+            }
+        }
+        return;
+    }
+
     // Initialize previous-position tracking on first frame.
     if (!m_initialized)
     {

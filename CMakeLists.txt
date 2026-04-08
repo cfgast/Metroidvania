@@ -41,6 +41,7 @@ add_executable(Metroidvania
     src/Components/HealthComponent.cpp
     src/Components/EnemyAIComponent.cpp
     src/Components/CombatComponent.cpp
+    src/Components/SlimeAttackComponent.cpp
     src/Map/Map.cpp
     src/Map/MapLoader.cpp
     src/Map/TransitionManager.cpp
