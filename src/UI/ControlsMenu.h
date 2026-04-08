@@ -47,15 +47,17 @@ private:
         MoveRightAltKey,
         JumpKey,
         DashKey,
+        AttackKey,
         ControllerJump,
         ControllerDash,
+        ControllerAttack,
         ResetDefaults,
         Back,
         ROW_COUNT
     };
 
     // True if the row is a controller binding (listens for button, not key).
-    bool isControllerRow(int row) const { return row == ControllerJump || row == ControllerDash; }
+    bool isControllerRow(int row) const { return row == ControllerJump || row == ControllerDash || row == ControllerAttack; }
     // True if the row is a rebindable binding (keyboard or controller).
     bool isBindingRow(int row) const;
 

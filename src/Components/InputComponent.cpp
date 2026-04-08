@@ -21,6 +21,7 @@ void InputComponent::update(float /*dt*/)
                      || sf::Keyboard::isKeyPressed(bindings.moveRightAlt);
     m_state.jump      = sf::Keyboard::isKeyPressed(bindings.jumpKey);
     m_state.dash      = sf::Keyboard::isKeyPressed(bindings.dashKey);
+    m_state.attack    = sf::Keyboard::isKeyPressed(bindings.attackKey);
 
     // Controller / gamepad input (first connected joystick)
     if (sf::Joystick::isConnected(0))
@@ -47,5 +48,9 @@ void InputComponent::update(float /*dt*/)
         // Controller dash button (configurable, default RB)
         if (sf::Joystick::isButtonPressed(0, bindings.controllerDashButton))
             m_state.dash = true;
+
+        // Controller attack button (configurable, default X)
+        if (sf::Joystick::isButtonPressed(0, bindings.controllerAttackButton))
+            m_state.attack = true;
     }
 }

@@ -8,6 +8,7 @@ struct InputState
     bool moveRight = false;
     bool jump      = false;
     bool dash      = false;
+    bool attack    = false;
 };
 
 // Reads keyboard state each frame and exposes it as an InputState.

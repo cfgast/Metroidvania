@@ -13,8 +13,10 @@ static const char* ROW_ACTIONS[] = {
     "Move Right (Alt)",
     "Jump",
     "Dash",
+    "Attack",
     "Jump",
     "Dash",
+    "Attack",
     "Reset Defaults",
     "Back"
 };
@@ -65,7 +67,7 @@ ControlsMenu::ControlsMenu()
 
 bool ControlsMenu::isBindingRow(int row) const
 {
-    return row >= MoveLeftKey && row <= ControllerDash;
+    return row >= MoveLeftKey && row <= ControllerAttack;
 }
 
 void ControlsMenu::open()
@@ -101,8 +103,10 @@ void ControlsMenu::refreshLabels()
     setBinding(MoveRightAltKey, InputBindings::keyToString(b.moveRightAlt));
     setBinding(JumpKey,         InputBindings::keyToString(b.jumpKey));
     setBinding(DashKey,         InputBindings::keyToString(b.dashKey));
+    setBinding(AttackKey,       InputBindings::keyToString(b.attackKey));
     setBinding(ControllerJump,  InputBindings::buttonToString(b.controllerJumpButton));
     setBinding(ControllerDash,  InputBindings::buttonToString(b.controllerDashButton));
+    setBinding(ControllerAttack, InputBindings::buttonToString(b.controllerAttackButton));
 
     // Non-binding rows have no right-side text
     setBinding(ResetDefaults, "");
@@ -143,6 +147,7 @@ void ControlsMenu::handleEvent(const sf::Event& event)
                 {
                     case ControllerJump: bindings.controllerJumpButton = btn; break;
                     case ControllerDash: bindings.controllerDashButton = btn; break;
+                    case ControllerAttack: bindings.controllerAttackButton = btn; break;
                     default: break;
                 }
                 bindings.save();
@@ -180,6 +185,7 @@ void ControlsMenu::handleEvent(const sf::Event& event)
                     case MoveRightAltKey: bindings.moveRightAlt   = newKey; break;
                     case JumpKey:         bindings.jumpKey        = newKey; break;
                     case DashKey:         bindings.dashKey        = newKey; break;
+                    case AttackKey:       bindings.attackKey      = newKey; break;
                     default: break;
                 }
                 bindings.save();
@@ -358,10 +364,10 @@ void ControlsMenu::layout(const sf::RenderWindow& window)
     // controller rows, gap, reset, back
     float totalH = 60.f              // title area
                + 24.f                // keyboard section label
-               + 6 * (rowH + gap)    // 6 keyboard rows (including dash)
+               + 7 * (rowH + gap)    // 7 keyboard rows (through attack)
                + sectionGap
                + 24.f                // controller section label
-               + 2 * (rowH + gap)    // 2 controller rows (jump + dash)
+               + 3 * (rowH + gap)    // 3 controller rows (jump + dash + attack)
                + sectionGap
                + 2 * (rowH + gap);   // reset + back
     float startY = (winH - totalH) * 0.5f;
@@ -384,7 +390,7 @@ void ControlsMenu::layout(const sf::RenderWindow& window)
     y += 28.f;
 
     // Keyboard rows: MoveLeftKey .. JumpKey (indices 0-4)
-    for (int i = MoveLeftKey; i <= DashKey; ++i)
+    for (int i = MoveLeftKey; i <= AttackKey; ++i)
     {
         auto& rw = m_rows[i];
         rw.box.setParameters({ rowW, rowH }, UIStyle::CORNER_RADIUS);
@@ -402,7 +408,7 @@ void ControlsMenu::layout(const sf::RenderWindow& window)
     y += 28.f;
 
     // Controller jump and dash rows
-    for (int i = ControllerJump; i <= ControllerDash; ++i)
+    for (int i = ControllerJump; i <= ControllerAttack; ++i)
     {
         auto& rw = m_rows[i];
         rw.box.setParameters({ rowW, rowH }, UIStyle::CORNER_RADIUS);
@@ -455,7 +461,7 @@ void ControlsMenu::render(sf::RenderWindow& window)
         const float rowH = 48.f;
 
         // Binding rows (keyboard + controller)
-        for (int i = MoveLeftKey; i <= ControllerDash; ++i)
+        for (int i = MoveLeftKey; i <= ControllerAttack; ++i)
         {
             bool sel = (i == m_selected);
             bool rebindThis = (m_rebinding && i == m_selected);

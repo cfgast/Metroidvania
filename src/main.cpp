@@ -15,6 +15,7 @@
 #include "Components/AnimationComponent.h"
 #include "Components/HealthComponent.h"
 #include "Components/EnemyAIComponent.h"
+#include "Components/CombatComponent.h"
 #include "Map/MapLoader.h"
 #include "Map/TransitionManager.h"
 #include "Debug/DebugMenu.h"
@@ -86,6 +87,8 @@ int main()
         };
 
         auto* anim = player.addComponent<AnimationComponent>();
+        auto* combat = player.addComponent<CombatComponent>(17.f, 0.3f, 0.2f, 45.f);
+        combat->setEnemies(&enemies);
         {
             const std::string atlas = "assets/player_spritesheet.png";
             const int fw = 50, fh = 50;
