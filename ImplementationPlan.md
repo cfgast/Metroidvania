@@ -248,3 +248,19 @@ Implemented: true
 ==============================================================================
 Task: Change the sprite art of the charater too look like a small man running, not just a box with dots
 Implemented: true
+
+==============================================================================
+Task: Implement the wall slide ability. It should allow you to slowly slide down the side of a wall, and reset your jump when you start sliding. Also add new animations so you look correct when sliding on the wall.
+Implemented: true
+
+==============================================================================
+Task: Implement the dash ability, it should allow you to dash forward a fixed distance. This ability should be attached to the right shoulder button. You can use the ability on the ground or in the air. Add an animation for the dash forward, and allow have a glowing trail as you dash.
+Implemented: False
+
+==============================================================================
+Task: Implement a sword slash ability so the character can attack. It should be attached to the X button. The sword should have an arcing slash that can hit enemies and damage them, for now it should take 3 hits to kill an enemy unit.
+Implemented: False
+
+==============================================================================
+Task: All of the current enemies on the map should get turned into slimes. They should be animated green blobs and have the same behavior they do now. infrequently they should rapidly jitter and shoot out particles that can damage the player.
+Implemented: False

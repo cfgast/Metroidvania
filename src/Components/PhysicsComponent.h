@@ -24,6 +24,9 @@ public:
     void teleport(sf::Vector2f position);
 
     bool isGrounded() const { return m_grounded; }
+    bool isWallSliding() const { return m_wallSliding; }
+    // -1 = touching left wall, +1 = touching right wall, 0 = none
+    int  wallDirection() const { return m_wallDirection; }
 
     void setPlayerState(PlayerState* state) { m_playerState = state; }
 
@@ -32,16 +35,22 @@ public:
     float        jumpForce         = -520.f;
     float        fallMultiplier    = 2.5f;
     float        lowJumpMultiplier = 2.0f;
+    float        wallSlideSpeed    = 60.f;
     sf::Vector2f velocity          { 0.f, 0.f };
     sf::Vector2f collisionSize;
 
 private:
     bool checkGrounded() const;
+    bool checkWallLeft() const;
+    bool checkWallRight() const;
 
     Map& m_map;
     physx::PxRigidDynamic* m_actor = nullptr;
     PlayerState*           m_playerState  = nullptr;
     bool m_grounded        = false;
+    bool m_wallSliding     = false;
+    bool m_wasWallSliding  = false;
+    int  m_wallDirection   = 0;
     bool m_jumpWasDown     = false;
     int  m_airJumpsUsed    = 0;
 };

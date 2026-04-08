@@ -99,6 +99,8 @@ int main()
             anim->addAnimation("run-left",  atlas, makeFrames(2, 4), 0.10f);
             anim->addAnimation("jump",      atlas, makeFrames(3, 2), 0.15f, false);
             anim->addAnimation("fall",      atlas, makeFrames(4, 2), 0.15f, false);
+            anim->addAnimation("wall-slide-right", atlas, makeFrames(5, 2), 0.20f);
+            anim->addAnimation("wall-slide-left",  atlas, makeFrames(6, 2), 0.20f);
             anim->play("idle");
         }
     };
@@ -437,7 +439,14 @@ int main()
             if (physics && inputComp)
             {
                 const auto& inp = inputComp->getInputState();
-                if (!physics->isGrounded() && physics->velocity.y <= 0.f)
+                if (physics->isWallSliding())
+                {
+                    if (physics->wallDirection() > 0)
+                        animComp->play("wall-slide-right");
+                    else
+                        animComp->play("wall-slide-left");
+                }
+                else if (!physics->isGrounded() && physics->velocity.y <= 0.f)
                     animComp->play("jump");
                 else if (!physics->isGrounded() && physics->velocity.y > 0.f)
                     animComp->play("fall");
