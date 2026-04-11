@@ -30,25 +30,6 @@ functions, stb_image loads textures, and FreeType renders text.
 The migration is ordered so the project builds and runs after every task.
 
 ==============================================================================
-Task: Wire up the SFMLRenderer in main.cpp so the game runs through the Renderer abstraction end to end.
-Implemented: false
-
-Details:
-- Files to modify: src/main.cpp
-- Replace `sf::RenderWindow window(...)` with `SFMLRenderer renderer("Metroidvania", 800, 600, 60)`. Include src/Rendering/SFMLRenderer.h.
-- Replace every `window.clear(...)` with `renderer.clear(r, g, b)` using float colors (0-1 range).
-- Replace every `window.display()` with `renderer.display()`.
-- Replace `window.setView(gameView)` / view manipulation with `renderer.setView(cx, cy, w, h)`.
-- Replace the screen-space view resets (`window.setView(sf::View(sf::FloatRect(...)))`) with `renderer.resetView()`.
-- Replace the dash ghost sf::RectangleShape rendering with `renderer.drawRect()`.
-- Pass `renderer` instead of `window` to all render() calls: `player.render(renderer)`, `enemy->render(renderer)`, `map.render(renderer)`, `transitionMgr.render(renderer)`, `pauseMenu.render(renderer)`, `debugMenu.render(renderer)`, etc.
-- For sf::Event handling: the SFMLRenderer should expose `bool pollEvent(sf::Event&)`, `bool isOpen()`, `void close()`, `void setMouseCursorVisible(bool)`, `sf::Vector2u getSize()` (these are window operations the renderer owns). Add these methods to the Renderer base class as needed (or add a getWindow() escape hatch on SFMLRenderer temporarily).
-- For window resize events: the SFMLRenderer should update its internal view size.
-- The sf::Clock usage can remain as-is for now (it comes from sfml-system, not sfml-graphics).
-- After this task, the game should build, run, and be fully playable — but still using SFML under the hood via SFMLRenderer.
-- This is the critical validation checkpoint: verify all rendering works identically (platforms, sprites, HP bars, combat arcs, slime particles, menus, transitions, dash ghosts).
-
-==============================================================================
 Task: Replace all SFML math types (sf::Vector2f, sf::FloatRect, sf::IntRect, sf::Color) with GLM or custom equivalents throughout the entire codebase.
 Implemented: false
 

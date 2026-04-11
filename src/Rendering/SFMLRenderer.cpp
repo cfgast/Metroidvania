@@ -32,6 +32,21 @@ SFMLRenderer::SFMLRenderer(const std::string& title, unsigned int width,
     m_window.setFramerateLimit(fpsCap);
 }
 
+// ── Window operations ─────────────────────────────────────────────────────────
+
+bool SFMLRenderer::isOpen() const { return m_window.isOpen(); }
+void SFMLRenderer::close()       { m_window.close(); }
+
+void SFMLRenderer::setMouseCursorVisible(bool visible)
+{
+    m_window.setMouseCursorVisible(visible);
+}
+
+bool SFMLRenderer::pollEvent(sf::Event& event)
+{
+    return m_window.pollEvent(event);
+}
+
 // ── Lifecycle ─────────────────────────────────────────────────────────────────
 
 void SFMLRenderer::clear(float r, float g, float b, float a)
@@ -57,7 +72,11 @@ void SFMLRenderer::setView(float centerX, float centerY,
 
 void SFMLRenderer::resetView()
 {
-    m_window.setView(m_window.getDefaultView());
+    sf::Vector2u sz = m_window.getSize();
+    sf::View view(sf::FloatRect(0.f, 0.f,
+                                static_cast<float>(sz.x),
+                                static_cast<float>(sz.y)));
+    m_window.setView(view);
 }
 
 void SFMLRenderer::getWindowSize(float& w, float& h) const

@@ -32,8 +32,7 @@ int main()
     InputBindings::instance().load();
 
     SFMLRenderer renderer("Metroidvania", 800, 600, 60);
-    sf::RenderWindow& window = renderer.getWindow();
-    window.setMouseCursorVisible(false);
+    renderer.setMouseCursorVisible(false);
 
     // --- Game state ---
     Map map;
@@ -197,9 +196,10 @@ int main()
             }
         });
 
-    sf::View gameView(sf::FloatRect(0.f, 0.f, 800.f, 600.f));
-    float halfW = 400.f;
-    float halfH = 300.f;
+    float viewW = 800.f;
+    float viewH = 600.f;
+    float halfW = viewW / 2.f;
+    float halfH = viewH / 2.f;
 
     sf::Clock clock;
     DebugMenu  debugMenu;
@@ -214,14 +214,14 @@ int main()
     std::vector<DashGhost> dashGhosts;
     float dashGhostSpawnTimer = 0.f;
 
-    while (window.isOpen())
+    while (renderer.isOpen())
     {
         sf::Event event;
-        while (window.pollEvent(event))
+        while (renderer.pollEvent(event))
         {
             if (event.type == sf::Event::Closed)
             {
-                window.close();
+                renderer.close();
                 break;
             }
 
@@ -230,11 +230,10 @@ int main()
             // changing the zoom level.
             if (event.type == sf::Event::Resized)
             {
-                float w = static_cast<float>(event.size.width);
-                float h = static_cast<float>(event.size.height);
-                gameView.setSize(w, h);
-                halfW = w / 2.f;
-                halfH = h / 2.f;
+                viewW = static_cast<float>(event.size.width);
+                viewH = static_cast<float>(event.size.height);
+                halfW = viewW / 2.f;
+                halfH = viewH / 2.f;
             }
 
             // --- Controls menu has highest priority when open ---
@@ -247,7 +246,7 @@ int main()
             // --- Save-slot screen has priority ---
             if (saveSlotScreen.isOpen())
             {
-                SaveSlotResult slotResult = saveSlotScreen.handleEvent(event, window);
+                SaveSlotResult slotResult = saveSlotScreen.handleEvent(event, renderer.getWindow());
                 if (slotResult.action == SaveSlotResult::NewGame)
                 {
                     activeSaveSlot = slotResult.slot;
@@ -329,7 +328,7 @@ int main()
                     clock.restart();
                 }
                 else if (pa == PauseMenu::Quit)
-                    window.close();
+                    renderer.close();
                 continue;
             }
 
@@ -351,13 +350,13 @@ int main()
             debugMenu.handleEvent(event);
         }
 
-        if (!window.isOpen())
+        if (!renderer.isOpen())
             break;
 
         // Show the mouse cursor when any menu is open, hide it during gameplay
         bool anyMenuOpen = saveSlotScreen.isOpen() || pauseMenu.isOpen()
                          || controlsMenu.isOpen() || debugMenu.isOpen();
-        window.setMouseCursorVisible(anyMenuOpen);
+        renderer.setMouseCursorVisible(anyMenuOpen);
 
         // --- Controls menu rendering ---
         if (controlsMenu.isOpen())
@@ -425,20 +424,17 @@ int main()
                 cy = std::max(cy, mapBounds.top   + halfH);
                 cy = std::min(cy, mapBounds.top   + mapBounds.height - halfH);
             }
-            gameView.setCenter(cx, cy);
 
-            window.setView(gameView);
-            window.clear(sf::Color(30, 30, 50));
+            renderer.setView(cx, cy, viewW, viewH);
+            renderer.clear(30/255.f, 30/255.f, 50/255.f);
             map.render(renderer);
             player.render(renderer);
 
             transitionMgr.render(renderer);
 
-            window.setView(sf::View(sf::FloatRect(0.f, 0.f,
-                static_cast<float>(window.getSize().x),
-                static_cast<float>(window.getSize().y))));
+            renderer.resetView();
             debugMenu.render(renderer);
-            window.display();
+            renderer.display();
             continue;
         }
 
@@ -544,10 +540,8 @@ int main()
             cy = std::max(cy, mapBounds.top   + halfH);
             cy = std::min(cy, mapBounds.top   + mapBounds.height - halfH);
         }
-        gameView.setCenter(cx, cy);
-
-        window.setView(gameView);
-        window.clear(sf::Color(30, 30, 50));
+        renderer.setView(cx, cy, viewW, viewH);
+        renderer.clear(30/255.f, 30/255.f, 50/255.f);
         map.render(renderer);
 
         for (auto& enemy : enemies)
@@ -561,24 +555,21 @@ int main()
         // --- Render dash trail ghosts ---
         for (const auto& ghost : dashGhosts)
         {
-            sf::RectangleShape trail(playerSize);
-            trail.setOrigin(playerSize.x * 0.5f, playerSize.y * 0.5f);
-            trail.setPosition(ghost.position);
-            uint8_t a = static_cast<uint8_t>(std::max(0.f, ghost.alpha));
-            trail.setFillColor(sf::Color(100, 200, 255, a));
-            window.draw(trail);
+            float a = std::max(0.f, ghost.alpha) / 255.f;
+            renderer.drawRect(ghost.position.x - playerSize.x * 0.5f,
+                              ghost.position.y - playerSize.y * 0.5f,
+                              playerSize.x, playerSize.y,
+                              100/255.f, 200/255.f, 1.f, a);
         }
 
         player.render(renderer);
 
         transitionMgr.render(renderer);
 
-        window.setView(sf::View(sf::FloatRect(0.f, 0.f,
-            static_cast<float>(window.getSize().x),
-            static_cast<float>(window.getSize().y))));
+        renderer.resetView();
         pauseMenu.render(renderer);
         debugMenu.render(renderer);
-        window.display();
+        renderer.display();
     }
 
     PhysXWorld::instance().shutdown();

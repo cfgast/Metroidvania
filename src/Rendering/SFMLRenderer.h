@@ -9,6 +9,7 @@
 #include <SFML/Graphics/RenderWindow.hpp>
 #include <SFML/Graphics/Font.hpp>
 #include <SFML/Graphics/Texture.hpp>
+#include <SFML/Window/Event.hpp>
 
 // SFML-backed implementation of the Renderer interface.
 // Owns the sf::RenderWindow and all loaded GPU resources.
@@ -22,6 +23,14 @@ public:
     // systems still use SFML types directly).
     sf::RenderWindow&       getWindow()       { return m_window; }
     const sf::RenderWindow& getWindow() const { return m_window; }
+
+    // ── Window operations ─────────────────────────────────────────────
+    bool isOpen() const override;
+    void close() override;
+    void setMouseCursorVisible(bool visible) override;
+
+    // SFML-specific event polling (will move to input abstraction later)
+    bool pollEvent(sf::Event& event);
 
     // ── Lifecycle ─────────────────────────────────────────────────────
     void clear(float r, float g, float b, float a = 1.f) override;

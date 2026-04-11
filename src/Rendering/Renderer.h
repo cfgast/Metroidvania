@@ -12,6 +12,11 @@ class Renderer
 public:
     virtual ~Renderer() = default;
 
+    // ── Window operations ─────────────────────────────────────────────
+    virtual bool isOpen() const = 0;
+    virtual void close() = 0;
+    virtual void setMouseCursorVisible(bool visible) = 0;
+
     // ── Lifecycle ──────────────────────────────────────────────────────
     virtual void clear(float r, float g, float b, float a = 1.f) = 0;
     virtual void display() = 0;

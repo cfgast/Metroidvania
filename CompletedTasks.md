@@ -333,3 +333,7 @@ Implemented: true
 ==============================================================================
 Task: Migrate the Map rendering, TransitionManager, and all UI classes to use the Renderer interface instead of sf::RenderWindow.
 Implemented: true
+
+==============================================================================
+Task: Wire up the SFMLRenderer in main.cpp so the game runs through the Renderer abstraction end to end.
+Implemented: true

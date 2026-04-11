@@ -119,10 +119,10 @@ A back-end–agnostic rendering abstraction that isolates all draw calls behind 
 
 | File | Role |
 |---|---|
-| `Renderer.h` | Pure-virtual interface. Covers lifecycle (`clear`/`display`), camera/view, primitives (rect, circle, rounded-rect), textured sprites via opaque `TextureHandle`, text via `FontHandle`, and raw vertex-colored geometry (`drawTriangleStrip`/`drawLines`). No SFML types in the public API. |
-| `SFMLRenderer.h/.cpp` | SFML 2.6 implementation. Owns `sf::RenderWindow` and internal `handle → sf::Texture / sf::Font` maps. Constructor takes title, width, height, FPS cap. Exposes `getWindow()` for legacy code that still touches SFML directly during migration. |
+| `Renderer.h` | Pure-virtual interface. Covers window operations (`isOpen`/`close`/`setMouseCursorVisible`), lifecycle (`clear`/`display`), camera/view, primitives (rect, circle, rounded-rect), textured sprites via opaque `TextureHandle`, text via `FontHandle`, and raw vertex-colored geometry (`drawTriangleStrip`/`drawLines`). No SFML types in the public API. |
+| `SFMLRenderer.h/.cpp` | SFML 2.6 implementation. Owns `sf::RenderWindow` and internal `handle → sf::Texture / sf::Font` maps. Constructor takes title, width, height, FPS cap. Adds `pollEvent(sf::Event&)` for SFML-specific event polling. Exposes `getWindow()` for legacy code that still needs direct SFML access (e.g. resolution resize in SaveSlotScreen). |
 
-**Migration status:** All Component subclasses, Map, TransitionManager, UI menus (PauseMenu, SaveSlotScreen, ControlsMenu), and DebugMenu now render exclusively through `Renderer&`. `main.cpp` creates an `SFMLRenderer` and passes it to all `render()` methods. The only remaining SFML graphics usage outside `src/Rendering/` is `main.cpp`'s window loop (`sf::RenderWindow`, `sf::View`, `sf::Color`, `sf::RectangleShape` for dash ghosts) and SFML math types (`sf::Vector2f`, `sf::FloatRect`, `sf::Color`) used as data types in Map/Platform/TransitionZone structs — these will be migrated in subsequent tasks.
+**Migration status:** The entire game loop in `main.cpp` now runs through the `Renderer` abstraction end to end. All `window.clear()`, `window.display()`, `window.setView()`, `window.isOpen()`, `window.close()`, and `window.setMouseCursorVisible()` calls go through `renderer`. Dash ghost rendering uses `renderer.drawRect()` instead of `sf::RectangleShape`. The only remaining SFML usage outside `src/Rendering/` is SFML event types (`sf::Event`, `sf::Keyboard`), `sf::Clock`, math types (`sf::Vector2f`, `sf::FloatRect`) used as data types throughout game code, and `SaveSlotScreen::handleEvent()` which still takes `sf::RenderWindow&` for resolution changes via `renderer.getWindow()` — these will be migrated in subsequent tasks.
 
 ---
 
@@ -154,7 +154,7 @@ A back-end–agnostic rendering abstraction that isolates all draw calls behind 
  └─────────────────────────────────────────────┘
            │
  ┌─ Per Frame ─────────────────────────────────┐
- │  1. Process SFML events (close, F1, Esc)    │
+ │  1. Poll events via renderer.pollEvent()    │
  │  2. Debug menu poll (hot-load map)          │
  │  3. If paused → render pause menu, skip ↓   │
  │  4. If transitioning → render fade, skip ↓  │
@@ -164,9 +164,11 @@ A back-end–agnostic rendering abstraction that isolates all draw calls behind 
  │     • Check transition zones → start fade   │
  │     • Check ability pickups → unlock        │
  │     • Remove dead enemies                   │
- │  6. Render:                                 │
- │     • Camera follows player (clamped)       │
- │     • Map → entities → transition → UI      │
+ │  6. Render (all via renderer.*):            │
+ │     • renderer.setView() for camera         │
+ │     • renderer.clear() + draw calls         │
+ │     • renderer.resetView() for UI overlay   │
+ │     • renderer.display()                    │
  └─────────────────────────────────────────────┘
 ```
 
