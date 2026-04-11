@@ -4,6 +4,7 @@
 #include <algorithm>
 
 #include <SFML/Graphics.hpp>
+#include <glm/vec2.hpp>
 
 #include "Rendering/SFMLRenderer.h"
 #include "Core/GameObject.h"
@@ -25,6 +26,7 @@
 #include "UI/SaveSlotScreen.h"
 #include "UI/PauseMenu.h"
 #include "UI/ControlsMenu.h"
+#include "Math/Types.h"
 
 int main()
 {
@@ -40,7 +42,7 @@ int main()
     std::string currentMapFile = "maps/world_01.json";
     int         activeSaveSlot = 1;
 
-    const sf::Vector2f playerSize{ 50.f, 50.f };
+    const glm::vec2 playerSize{ 50.f, 50.f };
     std::vector<std::unique_ptr<GameObject>> enemies;
     GameObject player;
 
@@ -148,7 +150,7 @@ int main()
         return result;
     };
 
-    auto loadMapAndSetup = [&](const std::string& mapFile, sf::Vector2f spawnPos) {
+    auto loadMapAndSetup = [&](const std::string& mapFile, glm::vec2 spawnPos) {
         currentMapFile = mapFile;
         enemies.clear();
         map = MapLoader::loadFromFile(mapFile);
@@ -179,7 +181,7 @@ int main()
                 map.registerPhysXStatics();
                 pruneConsumedPickups(map);
 
-                sf::Vector2f spawn = map.getNamedSpawn(targetSpawn);
+                glm::vec2 spawn = map.getNamedSpawn(targetSpawn);
                 if (auto* physics = player.getComponent<PhysicsComponent>())
                     physics->teleport(spawn);
                 else
@@ -208,7 +210,7 @@ int main()
 
     // Dash trail: ring buffer of recent player positions/alpha for ghost effect
     struct DashGhost {
-        sf::Vector2f position;
+        glm::vec2 position;
         float alpha;
     };
     std::vector<DashGhost> dashGhosts;
@@ -405,24 +407,24 @@ int main()
         {
             transitionMgr.update(dt);
 
-            const sf::FloatRect& mapBounds = map.getBounds();
+            const Rect mapBounds = map.getBounds();
             float cx = player.position.x;
             float cy = player.position.y;
             // When the view is wider/taller than the map, center on the map;
             // otherwise clamp so the camera stays within map edges.
             if (mapBounds.width <= halfW * 2.f)
-                cx = mapBounds.left + mapBounds.width / 2.f;
+                cx = mapBounds.x + mapBounds.width / 2.f;
             else
             {
-                cx = std::max(cx, mapBounds.left  + halfW);
-                cx = std::min(cx, mapBounds.left  + mapBounds.width  - halfW);
+                cx = std::max(cx, mapBounds.x  + halfW);
+                cx = std::min(cx, mapBounds.x  + mapBounds.width  - halfW);
             }
             if (mapBounds.height <= halfH * 2.f)
-                cy = mapBounds.top + mapBounds.height / 2.f;
+                cy = mapBounds.y + mapBounds.height / 2.f;
             else
             {
-                cy = std::max(cy, mapBounds.top   + halfH);
-                cy = std::min(cy, mapBounds.top   + mapBounds.height - halfH);
+                cy = std::max(cy, mapBounds.y   + halfH);
+                cy = std::min(cy, mapBounds.y   + mapBounds.height - halfH);
             }
 
             renderer.setView(cx, cy, viewW, viewH);
@@ -521,24 +523,24 @@ int main()
             }
         }
 
-        const sf::FloatRect& mapBounds = map.getBounds();
+        const Rect mapBounds = map.getBounds();
         float cx = player.position.x;
         float cy = player.position.y;
         // When the view is wider/taller than the map, center on the map;
         // otherwise clamp so the camera stays within map edges.
         if (mapBounds.width <= halfW * 2.f)
-            cx = mapBounds.left + mapBounds.width / 2.f;
+            cx = mapBounds.x + mapBounds.width / 2.f;
         else
         {
-            cx = std::max(cx, mapBounds.left  + halfW);
-            cx = std::min(cx, mapBounds.left  + mapBounds.width  - halfW);
+            cx = std::max(cx, mapBounds.x  + halfW);
+            cx = std::min(cx, mapBounds.x  + mapBounds.width  - halfW);
         }
         if (mapBounds.height <= halfH * 2.f)
-            cy = mapBounds.top + mapBounds.height / 2.f;
+            cy = mapBounds.y + mapBounds.height / 2.f;
         else
         {
-            cy = std::max(cy, mapBounds.top   + halfH);
-            cy = std::min(cy, mapBounds.top   + mapBounds.height - halfH);
+            cy = std::max(cy, mapBounds.y   + halfH);
+            cy = std::min(cy, mapBounds.y   + mapBounds.height - halfH);
         }
         renderer.setView(cx, cy, viewW, viewH);
         renderer.clear(30/255.f, 30/255.f, 50/255.f);

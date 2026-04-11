@@ -1,6 +1,6 @@
 #pragma once
 
-#include <SFML/System/Vector2.hpp>
+#include <glm/vec2.hpp>
 
 #include "../Core/Component.h"
 
@@ -12,5 +12,5 @@ public:
     void update(float dt) override;
 
     float speed;
-    sf::Vector2f velocity;
+    glm::vec2 velocity { 0.f, 0.f };
 };

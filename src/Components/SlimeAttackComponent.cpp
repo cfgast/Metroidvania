@@ -107,7 +107,7 @@ void SlimeAttackComponent::spawnParticles()
     if (!getOwner())
         return;
 
-    const sf::Vector2f origin = getOwner()->position;
+    const glm::vec2 origin = getOwner()->position;
 
     for (int i = 0; i < PARTICLE_COUNT; ++i)
     {
@@ -133,8 +133,8 @@ void SlimeAttackComponent::updateParticles(float dt)
     if (!playerPhys)
         return;
 
-    const sf::Vector2f& pPos  = m_player.position;
-    const sf::Vector2f& pSize = playerPhys->collisionSize;
+    const glm::vec2& pPos  = m_player.position;
+    const glm::vec2& pSize = playerPhys->collisionSize;
 
     for (auto& p : m_particles)
     {

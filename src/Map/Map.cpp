@@ -11,7 +11,7 @@ void Map::addPlatform(const Platform& platform)
     m_platforms.push_back(platform);
 }
 
-sf::Vector2f Map::getNamedSpawn(const std::string& name) const
+glm::vec2 Map::getNamedSpawn(const std::string& name) const
 {
     auto it = m_namedSpawns.find(name);
     if (it != m_namedSpawns.end())
@@ -19,12 +19,12 @@ sf::Vector2f Map::getNamedSpawn(const std::string& name) const
     return m_spawnPoint;   // fallback to default spawn
 }
 
-const TransitionZone* Map::checkTransition(sf::Vector2f position,
-                                           sf::Vector2f size) const
+const TransitionZone* Map::checkTransition(glm::vec2 position,
+                                           glm::vec2 size) const
 {
-    sf::FloatRect playerRect(position.x - size.x * 0.5f,
-                             position.y - size.y * 0.5f,
-                             size.x, size.y);
+    Rect playerRect(position.x - size.x * 0.5f,
+                    position.y - size.y * 0.5f,
+                    size.x, size.y);
 
     for (const auto& zone : m_transitionZones)
     {
@@ -34,18 +34,18 @@ const TransitionZone* Map::checkTransition(sf::Vector2f position,
     return nullptr;
 }
 
-const AbilityPickupDefinition* Map::checkAbilityPickup(sf::Vector2f position,
-                                                        sf::Vector2f size) const
+const AbilityPickupDefinition* Map::checkAbilityPickup(glm::vec2 position,
+                                                        glm::vec2 size) const
 {
-    sf::FloatRect playerRect(position.x - size.x * 0.5f,
-                             position.y - size.y * 0.5f,
-                             size.x, size.y);
+    Rect playerRect(position.x - size.x * 0.5f,
+                    position.y - size.y * 0.5f,
+                    size.x, size.y);
 
     for (const auto& pickup : m_abilityPickups)
     {
-        sf::FloatRect pickupRect(pickup.position.x - pickup.size.x * 0.5f,
-                                 pickup.position.y - pickup.size.y * 0.5f,
-                                 pickup.size.x, pickup.size.y);
+        Rect pickupRect(pickup.position.x - pickup.size.x * 0.5f,
+                        pickup.position.y - pickup.size.y * 0.5f,
+                        pickup.size.x, pickup.size.y);
         if (playerRect.intersects(pickupRect))
             return &pickup;
     }
@@ -70,9 +70,9 @@ void Map::registerPhysXStatics() const
         const float hw = platform.bounds.width  * 0.5f;
         const float hh = platform.bounds.height * 0.5f;
 
-        sf::Vector2f center{
-            platform.bounds.left + hw,
-            platform.bounds.top  + hh
+        glm::vec2 center{
+            platform.bounds.x + hw,
+            platform.bounds.y + hh
         };
 
         world.createStaticBox(center, { hw, hh });
@@ -83,12 +83,12 @@ void Map::render(Renderer& renderer) const
 {
     for (const auto& platform : m_platforms)
     {
-        renderer.drawRect(platform.bounds.left, platform.bounds.top,
+        renderer.drawRect(platform.bounds.x, platform.bounds.y,
                           platform.bounds.width, platform.bounds.height,
-                          platform.color.r / 255.f,
-                          platform.color.g / 255.f,
-                          platform.color.b / 255.f,
-                          platform.color.a / 255.f);
+                          platform.color.rf(),
+                          platform.color.gf(),
+                          platform.color.bf(),
+                          platform.color.af());
     }
 
     // Render ability pick-ups as bright coloured rectangles.

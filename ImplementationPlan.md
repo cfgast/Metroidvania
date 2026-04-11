@@ -30,42 +30,6 @@ functions, stb_image loads textures, and FreeType renders text.
 The migration is ordered so the project builds and runs after every task.
 
 ==============================================================================
-Task: Replace all SFML math types (sf::Vector2f, sf::FloatRect, sf::IntRect, sf::Color) with GLM or custom equivalents throughout the entire codebase.
-Implemented: false
-
-Details:
-- This task eliminates the dependency on SFML headers in game logic files, preparing for full SFML removal.
-- Use glm::vec2 for sf::Vector2f. Create a small utility header src/Math/Types.h that provides:
-    - A Rect struct: { float x, y, width, height } with an intersects() method and contains(glm::vec2) method to match sf::FloatRect's API.
-    - An IntRect struct: { int x, y, width, height } for sprite frame rectangles.
-    - A Color struct: { uint8_t r, g, b, a } with a constructor and float accessors.
-- Files to update (every file that uses sf::Vector2f, sf::FloatRect, sf::IntRect, or sf::Color):
-    - src/Core/GameObject.h: position becomes glm::vec2
-    - src/Core/SaveSystem.h/.cpp: SaveData::playerPosition becomes glm::vec2
-    - src/Core/InputBindings.h/.cpp: sf::Keyboard::Key stays for now (input, not math)
-    - src/Components/PhysicsComponent.h/.cpp: velocity, collisionSize become glm::vec2
-    - src/Components/MovementComponent.h: velocity becomes glm::vec2
-    - src/Components/EnemyAIComponent.h/.cpp: waypoints become glm::vec2
-    - src/Components/RenderComponent.h/.cpp: size/color become glm::vec2/Color
-    - src/Components/CombatComponent.cpp: position references become glm::vec2
-    - src/Components/SlimeAttackComponent.h/.cpp: particle position/velocity become glm::vec2
-    - src/Map/Platform.h: bounds becomes Rect, color becomes Color
-    - src/Map/Map.h/.cpp: spawn point, bounds, collision checks use glm::vec2 and Rect
-    - src/Map/MapLoader.cpp: construct Rect/Color/glm::vec2 instead of SFML types
-    - src/Map/TransitionZone.h: bounds becomes Rect
-    - src/Map/EnemyDefinition.h: position, waypoints, size become glm::vec2
-    - src/Map/AbilityPickupDefinition.h: position, size become glm::vec2
-    - src/Physics/PhysXWorld.h/.cpp: parameter types become glm::vec2
-    - src/main.cpp: all sf::Vector2f usage becomes glm::vec2
-- Add `#include <glm/vec2.hpp>` where needed. GLM should already be available from CMakeLists.txt (added in a later task, but this task should also add GLM to CMakeLists.txt via FetchContent if not already present).
-- Add GLM to CMakeLists.txt:
-    FetchContent_Declare(glm GIT_REPOSITORY https://github.com/g-truc/glm.git GIT_TAG 1.0.1 GIT_SHALLOW TRUE)
-    FetchContent_MakeAvailable(glm)
-    target_link_libraries(Metroidvania PRIVATE glm::glm)
-- After this task, no file outside src/Rendering/SFMLRenderer.cpp should reference sf::Vector2f, sf::FloatRect, sf::IntRect, or sf::Color. The SFMLRenderer converts between glm::vec2/Rect and SFML types internally.
-- The game should still build and run identically.
-
-==============================================================================
 Task: Replace SFML input and event types with a custom input abstraction, preparing for the GLFW switch.
 Implemented: false
 

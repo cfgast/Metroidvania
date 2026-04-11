@@ -2,7 +2,7 @@
 
 #include <vector>
 
-#include <SFML/System/Vector2.hpp>
+#include <glm/vec2.hpp>
 
 #include "../Core/Component.h"
 
@@ -22,11 +22,11 @@ public:
 private:
     struct Particle
     {
-        sf::Vector2f position;
-        sf::Vector2f velocity;
-        float        lifetime    = 0.f;
-        float        maxLifetime = 0.f;
-        bool         hitPlayer   = false;
+        glm::vec2 position  { 0.f, 0.f };
+        glm::vec2 velocity  { 0.f, 0.f };
+        float     lifetime    = 0.f;
+        float     maxLifetime = 0.f;
+        bool      hitPlayer   = false;
     };
 
     void spawnParticles();

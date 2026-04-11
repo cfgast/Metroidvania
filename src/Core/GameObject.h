@@ -4,7 +4,7 @@
 #include <vector>
 #include <type_traits>
 
-#include <SFML/System/Vector2.hpp>
+#include <glm/vec2.hpp>
 
 #include "Component.h"
 
@@ -13,7 +13,7 @@ class Renderer;
 class GameObject
 {
 public:
-    sf::Vector2f position;
+    glm::vec2 position { 0.f, 0.f };
 
     template<typename T, typename... Args>
     T* addComponent(Args&&... args)

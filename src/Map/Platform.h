@@ -1,10 +1,9 @@
 #pragma once
 
-#include <SFML/Graphics/Color.hpp>
-#include <SFML/Graphics/Rect.hpp>
+#include "../Math/Types.h"
 
 struct Platform
 {
-    sf::FloatRect bounds;
-    sf::Color     color = sf::Color(100, 100, 100);
+    Rect  bounds;
+    Color color { 100, 100, 100 };
 };

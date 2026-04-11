@@ -1,6 +1,6 @@
 # Architecture Overview
 
-A 4–8 player 2D Metroidvania platformer written in C++17. Built with **SFML 2.6** (rendering/input), **Nvidia PhysX** (collision/physics), and **nlohmann/json** (serialization). Uses **CMake ≥ 3.20** with `FetchContent` for SFML and JSON; PhysX is pre-built in `third_party/`.
+A 4–8 player 2D Metroidvania platformer written in C++17. Built with **SFML 2.6** (rendering/input), **GLM 1.0.1** (math types), **Nvidia PhysX** (collision/physics), and **nlohmann/json** (serialization). Uses **CMake ≥ 3.20** with `FetchContent` for SFML, GLM, and JSON; PhysX is pre-built in `third_party/`.
 
 ---
 
@@ -12,6 +12,7 @@ Metroidvania/
 │   ├── main.cpp              # Game loop, entity setup, top-level orchestration
 │   ├── Core/                  # Entity model, abilities, save system, input config
 │   ├── Components/            # All gameplay Component subclasses
+│   ├── Math/                  # GLM-based math types: Rect, IntRect, Color
 │   ├── Map/                   # Level data, JSON loading, room transitions
 │   ├── Physics/               # PhysX singleton wrapper
 │   ├── Rendering/             # Renderer abstraction and back-end implementations
@@ -36,7 +37,7 @@ The game uses a **Component-Based Entity System**.
 | File | Role |
 |---|---|
 | `Component.h` | Abstract base — virtual `update(dt)` and `render(Renderer&)`. Stores owner `GameObject*`. |
-| `GameObject.h/.cpp` | Entity container. Holds `sf::Vector2f position` and a `vector<unique_ptr<Component>>`. Provides `addComponent<T>()` / `getComponent<T>()` templates. |
+| `GameObject.h/.cpp` | Entity container. Holds `glm::vec2 position` and a `vector<unique_ptr<Component>>`. Provides `addComponent<T>()` / `getComponent<T>()` templates. |
 | `Ability.h` | Enum `{DoubleJump, WallSlide, Dash}` with string serialization helpers. |
 | `PlayerState.h` | Persistent progression: `set<Ability> unlockedAbilities`, `set<string> consumedPickups`. Carried across room transitions. |
 | `InputBindings.h/.cpp` | **Singleton.** Configurable keyboard + controller bindings. Persists to `saves/controls.json`. |
@@ -77,7 +78,7 @@ Enemies replace `CombatComponent` with `EnemyAIComponent` (+ optional `SlimeAtta
 
 | File | Role |
 |---|---|
-| `Platform.h` | Data struct: `FloatRect bounds`, `Color color`. |
+| `Platform.h` | Data struct: `Rect bounds`, `Color color`. |
 | `EnemyDefinition.h` | Data struct: position, waypoints, speed, damage, HP, size. |
 | `TransitionZone.h` | Data struct: trigger bounds, target map path, target spawn name. |
 | `AbilityPickupDefinition.h` | Data struct: id, ability enum, position, size. |
@@ -122,7 +123,7 @@ A back-end–agnostic rendering abstraction that isolates all draw calls behind 
 | `Renderer.h` | Pure-virtual interface. Covers window operations (`isOpen`/`close`/`setMouseCursorVisible`), lifecycle (`clear`/`display`), camera/view, primitives (rect, circle, rounded-rect), textured sprites via opaque `TextureHandle`, text via `FontHandle`, and raw vertex-colored geometry (`drawTriangleStrip`/`drawLines`). No SFML types in the public API. |
 | `SFMLRenderer.h/.cpp` | SFML 2.6 implementation. Owns `sf::RenderWindow` and internal `handle → sf::Texture / sf::Font` maps. Constructor takes title, width, height, FPS cap. Adds `pollEvent(sf::Event&)` for SFML-specific event polling. Exposes `getWindow()` for legacy code that still needs direct SFML access (e.g. resolution resize in SaveSlotScreen). |
 
-**Migration status:** The entire game loop in `main.cpp` now runs through the `Renderer` abstraction end to end. All `window.clear()`, `window.display()`, `window.setView()`, `window.isOpen()`, `window.close()`, and `window.setMouseCursorVisible()` calls go through `renderer`. Dash ghost rendering uses `renderer.drawRect()` instead of `sf::RectangleShape`. The only remaining SFML usage outside `src/Rendering/` is SFML event types (`sf::Event`, `sf::Keyboard`), `sf::Clock`, math types (`sf::Vector2f`, `sf::FloatRect`) used as data types throughout game code, and `SaveSlotScreen::handleEvent()` which still takes `sf::RenderWindow&` for resolution changes via `renderer.getWindow()` — these will be migrated in subsequent tasks.
+**Migration status:** The entire game loop in `main.cpp` now runs through the `Renderer` abstraction end to end. All `window.clear()`, `window.display()`, `window.setView()`, `window.isOpen()`, `window.close()`, and `window.setMouseCursorVisible()` calls go through `renderer`. Dash ghost rendering uses `renderer.drawRect()` instead of `sf::RectangleShape`. All SFML math types (`sf::Vector2f`, `sf::FloatRect`, `sf::IntRect`, `sf::Color`) have been replaced with `glm::vec2` and custom structs (`Rect`, `IntRect`, `Color`) from `src/Math/Types.h`. GLM 1.0.1 is fetched via CMake FetchContent. The only remaining SFML usage outside `src/Rendering/` is SFML event types (`sf::Event`, `sf::Keyboard`, `sf::Joystick`), `sf::Clock`, and `SaveSlotScreen::handleEvent()` which still takes `sf::RenderWindow&` for resolution changes via `renderer.getWindow()` — these will be migrated in subsequent tasks.
 
 ---
 
@@ -184,6 +185,7 @@ A back-end–agnostic rendering abstraction that isolates all draw calls behind 
 | Dependency | Source | Purpose |
 |---|---|---|
 | SFML 2.6.1 | FetchContent (Git) | Graphics, windowing, input, audio |
+| GLM 1.0.1 | FetchContent (Git) | Vector/matrix math types |
 | nlohmann/json 3.11.3 | FetchContent (Git) | JSON parse/serialize |
 | Nvidia PhysX | Pre-built in `third_party/` | Collision detection, rigid-body physics |
 | Windows API (`comdlg32`) | System | Debug file dialog |

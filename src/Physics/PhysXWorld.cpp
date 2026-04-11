@@ -56,8 +56,8 @@ void PhysXWorld::step(float dt)
     m_steppedThisFrame = true;
 }
 
-PxRigidDynamic* PhysXWorld::createDynamicBox(sf::Vector2f position,
-                                             sf::Vector2f halfExtents)
+PxRigidDynamic* PhysXWorld::createDynamicBox(glm::vec2 position,
+                                             glm::vec2 halfExtents)
 {
     PxTransform pose(PxVec3(position.x, position.y, 0.f));
     PxRigidDynamic* actor = m_physics->createRigidDynamic(pose);
@@ -87,8 +87,8 @@ PxRigidDynamic* PhysXWorld::createDynamicBox(sf::Vector2f position,
     return actor;
 }
 
-PxRigidStatic* PhysXWorld::createStaticBox(sf::Vector2f position,
-                                           sf::Vector2f halfExtents)
+PxRigidStatic* PhysXWorld::createStaticBox(glm::vec2 position,
+                                           glm::vec2 halfExtents)
 {
     PxTransform pose(PxVec3(position.x, position.y, 0.f));
     PxRigidStatic* actor = m_physics->createRigidStatic(pose);

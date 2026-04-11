@@ -58,8 +58,8 @@ void CombatComponent::checkHits()
     if (!physics)
         return;
 
-    const sf::Vector2f& pos  = getOwner()->position;
-    const sf::Vector2f& size = physics->collisionSize;
+    const glm::vec2& pos  = getOwner()->position;
+    const glm::vec2& size = physics->collisionSize;
     bool right = physics->facingRight();
 
     // Rectangular hitbox in front of the player
@@ -90,8 +90,8 @@ void CombatComponent::checkHits()
         if (!ePhys)
             continue;
 
-        const sf::Vector2f& ePos  = enemy->position;
-        const sf::Vector2f& eSize = ePhys->collisionSize;
+        const glm::vec2& ePos  = enemy->position;
+        const glm::vec2& eSize = ePhys->collisionSize;
 
         float eLeft   = ePos.x - eSize.x * 0.5f;
         float eRight  = ePos.x + eSize.x * 0.5f;

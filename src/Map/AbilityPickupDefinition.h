@@ -2,14 +2,14 @@
 
 #include <string>
 
-#include <SFML/System/Vector2.hpp>
+#include <glm/vec2.hpp>
 
 #include "../Core/Ability.h"
 
 struct AbilityPickupDefinition
 {
-    std::string  id;                       // unique identifier for persistence
-    Ability      ability;
-    sf::Vector2f position;
-    sf::Vector2f size { 30.f, 30.f };
+    std::string id;                       // unique identifier for persistence
+    Ability     ability;
+    glm::vec2   position { 0.f, 0.f };
+    glm::vec2   size     { 30.f, 30.f };
 };

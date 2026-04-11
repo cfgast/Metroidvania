@@ -6,11 +6,12 @@
 #include "../Core/GameObject.h"
 #include "../Core/PlayerState.h"
 #include "../Map/Map.h"
+#include "../Math/Types.h"
 #include "../Physics/PhysXWorld.h"
 
 using namespace physx;
 
-PhysicsComponent::PhysicsComponent(Map& map, sf::Vector2f collisionSize, float speed)
+PhysicsComponent::PhysicsComponent(Map& map, glm::vec2 collisionSize, float speed)
     : m_map(map), collisionSize(collisionSize), speed(speed)
 {
     // Deferred: the actor is created when an owner is assigned (see update).
@@ -107,7 +108,7 @@ void PhysicsComponent::update(float dt)
     // Lazy-create the PhysX actor once we have an owner with a position.
     if (!m_actor && getOwner())
     {
-        sf::Vector2f half{ collisionSize.x * 0.5f, collisionSize.y * 0.5f };
+        glm::vec2 half{ collisionSize.x * 0.5f, collisionSize.y * 0.5f };
         m_actor = PhysXWorld::instance().createDynamicBox(
             getOwner()->position, half);
     }
@@ -273,14 +274,14 @@ void PhysicsComponent::update(float dt)
     }
 
     // --- Fall-off / death zone: respawn ---
-    const sf::FloatRect& bounds = m_map.getBounds();
-    if (getOwner()->position.y > bounds.top + bounds.height)
+    const Rect& bounds = m_map.getBounds();
+    if (getOwner()->position.y > bounds.y + bounds.height)
     {
         teleport(m_map.getSpawnPoint());
     }
 }
 
-void PhysicsComponent::teleport(sf::Vector2f position)
+void PhysicsComponent::teleport(glm::vec2 position)
 {
     if (getOwner())
         getOwner()->position = position;

@@ -2,12 +2,12 @@
 
 #include <string>
 
-#include <SFML/Graphics/Rect.hpp>
+#include "../Math/Types.h"
 
 struct TransitionZone
 {
-    std::string   name;
-    sf::FloatRect bounds;
-    std::string   targetMap;
-    std::string   targetSpawn;
+    std::string name;
+    Rect        bounds;
+    std::string targetMap;
+    std::string targetSpawn;
 };

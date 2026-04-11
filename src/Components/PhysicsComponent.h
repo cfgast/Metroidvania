@@ -1,6 +1,6 @@
 #pragma once
 
-#include <SFML/System/Vector2.hpp>
+#include <glm/vec2.hpp>
 
 #include "../Core/Component.h"
 
@@ -13,7 +13,7 @@ struct PlayerState;
 class PhysicsComponent : public Component
 {
 public:
-    PhysicsComponent(Map& map, sf::Vector2f collisionSize, float speed = 300.f);
+    PhysicsComponent(Map& map, glm::vec2 collisionSize, float speed = 300.f);
     ~PhysicsComponent() override;
 
     void update(float dt) override;
@@ -21,7 +21,7 @@ public:
     // Instantly move the owning GameObject and its PhysX actor to the given
     // position, resetting velocity and air-jump state.  Use this for map
     // transitions and respawns so the PhysX actor stays in sync.
-    void teleport(sf::Vector2f position);
+    void teleport(glm::vec2 position);
 
     bool isGrounded() const { return m_grounded; }
     bool isWallSliding() const { return m_wallSliding; }
@@ -32,17 +32,17 @@ public:
 
     void setPlayerState(PlayerState* state) { m_playerState = state; }
 
-    float        speed             = 300.f;
-    float        gravity           = 980.f;
-    float        jumpForce         = -520.f;
-    float        fallMultiplier    = 2.5f;
-    float        lowJumpMultiplier = 2.0f;
-    float        wallSlideSpeed    = 60.f;
-    float        dashSpeed         = 1000.f;
-    float        dashDuration      = 0.15f;
-    float        dashCooldown      = 0.5f;
-    sf::Vector2f velocity          { 0.f, 0.f };
-    sf::Vector2f collisionSize;
+    float     speed             = 300.f;
+    float     gravity           = 980.f;
+    float     jumpForce         = -520.f;
+    float     fallMultiplier    = 2.5f;
+    float     lowJumpMultiplier = 2.0f;
+    float     wallSlideSpeed    = 60.f;
+    float     dashSpeed         = 1000.f;
+    float     dashDuration      = 0.15f;
+    float     dashCooldown      = 0.5f;
+    glm::vec2 velocity          { 0.f, 0.f };
+    glm::vec2 collisionSize;
 
 private:
     bool checkGrounded() const;

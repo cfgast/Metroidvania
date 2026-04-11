@@ -11,7 +11,7 @@ MovementComponent::MovementComponent(float speed)
 
 void MovementComponent::update(float dt)
 {
-    velocity = sf::Vector2f(0.f, 0.f);
+    velocity = glm::vec2(0.f, 0.f);
 
     if (sf::Keyboard::isKeyPressed(sf::Keyboard::W) || sf::Keyboard::isKeyPressed(sf::Keyboard::Up))
         velocity.y -= speed;

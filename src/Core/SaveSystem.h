@@ -3,14 +3,14 @@
 #include <string>
 #include <vector>
 
-#include <SFML/System/Vector2.hpp>
+#include <glm/vec2.hpp>
 
 #include "PlayerState.h"
 
 // Data written to / read from a save file.
 struct SaveData
 {
-    sf::Vector2f  playerPosition  { 0.f, 0.f };
+    glm::vec2     playerPosition  { 0.f, 0.f };
     std::string   currentMapFile;
     float         currentHp       = 100.f;
     float         maxHp           = 100.f;

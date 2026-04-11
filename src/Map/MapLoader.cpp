@@ -5,6 +5,8 @@
 
 #include <nlohmann/json.hpp>
 
+#include "../Math/Types.h"
+
 Map MapLoader::loadFromFile(const std::string& filePath)
 {
     std::ifstream file(filePath);
@@ -58,10 +60,10 @@ Map MapLoader::loadFromFile(const std::string& filePath)
             p.at("width").get<float>(),
             p.at("height").get<float>()
         };
-        platform.color = sf::Color(
-            static_cast<sf::Uint8>(p.value("r", 100)),
-            static_cast<sf::Uint8>(p.value("g", 100)),
-            static_cast<sf::Uint8>(p.value("b", 100))
+        platform.color = Color(
+            static_cast<uint8_t>(p.value("r", 100)),
+            static_cast<uint8_t>(p.value("g", 100)),
+            static_cast<uint8_t>(p.value("b", 100))
         );
         map.addPlatform(platform);
     }

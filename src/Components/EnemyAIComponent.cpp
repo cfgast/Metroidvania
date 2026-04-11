@@ -7,8 +7,8 @@
 
 #include <cmath>
 
-EnemyAIComponent::EnemyAIComponent(GameObject& player, sf::Vector2f waypointA,
-                                   sf::Vector2f waypointB, float damage,
+EnemyAIComponent::EnemyAIComponent(GameObject& player, glm::vec2 waypointA,
+                                   glm::vec2 waypointB, float damage,
                                    float damageInterval)
     : m_player(player)
     , m_waypointA(waypointA)
@@ -25,10 +25,10 @@ bool EnemyAIComponent::checkPlayerOverlap() const
     if (!ownerPhys || !playerPhys)
         return false;
 
-    const sf::Vector2f& ePos  = getOwner()->position;
-    const sf::Vector2f& eSize = ownerPhys->collisionSize;
-    const sf::Vector2f& pPos  = m_player.position;
-    const sf::Vector2f& pSize = playerPhys->collisionSize;
+    const glm::vec2& ePos  = getOwner()->position;
+    const glm::vec2& eSize = ownerPhys->collisionSize;
+    const glm::vec2& pPos  = m_player.position;
+    const glm::vec2& pSize = playerPhys->collisionSize;
 
     return std::abs(ePos.x - pPos.x) < (eSize.x + pSize.x) * 0.5f &&
            std::abs(ePos.y - pPos.y) < (eSize.y + pSize.y) * 0.5f;

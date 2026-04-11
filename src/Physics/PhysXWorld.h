@@ -4,7 +4,7 @@
 
 #include <PxPhysicsAPI.h>
 
-#include <SFML/System/Vector2.hpp>
+#include <glm/vec2.hpp>
 
 using namespace physx;
 
@@ -26,12 +26,12 @@ public:
     void step(float dt);
 
     // Create a dynamic box actor (for the player / moving objects).
-    PxRigidDynamic* createDynamicBox(sf::Vector2f position,
-                                     sf::Vector2f halfExtents);
+    PxRigidDynamic* createDynamicBox(glm::vec2 position,
+                                     glm::vec2 halfExtents);
 
     // Create a static box actor (for platforms).
-    PxRigidStatic* createStaticBox(sf::Vector2f position,
-                                   sf::Vector2f halfExtents);
+    PxRigidStatic* createStaticBox(glm::vec2 position,
+                                   glm::vec2 halfExtents);
 
     // Remove all static actors that were registered as platforms.
     void clearStaticActors();
