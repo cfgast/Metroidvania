@@ -31,7 +31,7 @@ The migration is ordered so the project builds and runs after every task.
 
 ==============================================================================
 Task: Implement the OpenGL renderer core— GLRenderer with shader management, orthographic projection, and rectangle drawing.
-Implemented: false
+Implemented: true
 
 Details:
 - Create src/Rendering/GLRenderer.h and src/Rendering/GLRenderer.cpp implementing the Renderer interface.

@@ -122,6 +122,8 @@ A back-end–agnostic rendering abstraction that isolates all draw calls behind 
 |---|---|
 | `Renderer.h` | Pure-virtual interface. Covers `getInput()` for InputSystem access, window operations (`isOpen`/`close`/`setMouseCursorVisible`/`setWindowSize`/`setWindowPosition`/`getDesktopSize`), lifecycle (`clear`/`display`), camera/view, primitives (rect, circle, rounded-rect), textured sprites via opaque `TextureHandle`, text via `FontHandle`, and raw vertex-colored geometry (`drawTriangleStrip`/`drawLines`). No SFML types in the public API. |
 | `SFMLRenderer.h/.cpp` | SFML 2.6 implementation. Owns `sf::RenderWindow`, `SFMLInput`, and internal `handle → sf::Texture / sf::Font` maps. Constructor takes title, width, height, FPS cap. |
+| `GLRenderer.h/.cpp` | OpenGL 3.3 Core implementation. Owns a `GLFWwindow*`, flat-color `Shader`, and a persistent unit-quad VAO/VBO. Implements `drawRect` and `drawRectOutlined` via model-transform + flat shader. Other methods (texture, text, circle, rounded-rect, vertex-colored geometry) are stubbed for later tasks. |
+| `Shader.h/.cpp` | Compiles and links vertex + fragment GLSL source strings into a GL program. Provides `use()`, `setMat4()`, `setVec4()`, `setInt()` uniform helpers with error logging. |
 
 **Migration status:** All rendering and input go through the `Renderer` and `InputSystem` abstractions. All SFML math types have been replaced with GLM and custom types from `src/Math/Types.h`. All SFML input/event types (`sf::Event`, `sf::Keyboard`, `sf::Joystick`, `sf::Mouse`, `sf::Clock`) have been replaced with the custom `InputSystem`/`InputEvent`/`KeyCode` abstraction and `std::chrono`. No file outside `src/Input/SFMLInput.cpp` and `src/Rendering/SFMLRenderer.cpp` directly includes any SFML header.
 

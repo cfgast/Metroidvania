@@ -404,3 +404,20 @@ Details:
 - Linked glfw, freetype, and opengl32 alongside existing SFML links
 - All existing SFML dependencies kept intact for transition period
 - Project builds and links successfully with all new dependencies
+
+==============================================================================
+Task: Implement the OpenGL renderer core-- GLRenderer with shader management, orthographic projection, and rectangle drawing.
+Implemented: true
+
+Details:
+- Created src/Rendering/GLRenderer.h and src/Rendering/GLRenderer.cpp implementing the Renderer interface.
+- GLRenderer constructor: calls glfwInit(), creates a GLFWwindow with OpenGL 3.3 Core profile, initializes GLAD, enables alpha blending, sets up viewport and framebuffer-size callback.
+- Created src/Rendering/Shader.h and src/Rendering/Shader.cpp: compiles vertex + fragment GLSL source strings, provides use(), setMat4(), setVec4(), setInt() uniform helpers with error logging.
+- Implemented flat-color shader pair (vertex: vec2 pos + mat4 projection + mat4 model; fragment: uniform vec4 color).
+- Implemented clear() via glClearColor + glClear, display() via glfwSwapBuffers.
+- Implemented setView() building glm::ortho from center/size (top-left origin), resetView() with identity ortho.
+- Implemented getWindowSize() returning stored dimensions updated by resize callback.
+- Implemented drawRect() and drawRectOutlined() using a persistent unit-quad VAO with model-transform (translate + scale) and the flat shader. Outline drawn as 4 thin quads.
+- All other Renderer methods (circle, rounded-rect, texture, text, vertex-colored geometry) are stubbed for later tasks.
+- Added GLRenderer.cpp and Shader.cpp to CMakeLists.txt sources.
+- Verified the project compiles successfully.

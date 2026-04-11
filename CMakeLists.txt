@@ -81,6 +81,8 @@ add_executable(Metroidvania
     src/UI/PauseMenu.cpp
     src/UI/ControlsMenu.cpp
     src/Rendering/SFMLRenderer.cpp
+    src/Rendering/GLRenderer.cpp
+    src/Rendering/Shader.cpp
     src/Input/SFMLInput.cpp
     third_party/glad/src/gl.c
     third_party/stb/stb_image_impl.cpp
