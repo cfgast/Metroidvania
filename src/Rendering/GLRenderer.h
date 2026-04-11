@@ -125,6 +125,8 @@ private:
     void initQuadVAO();
     void initSpriteVAO();
     void initTextVAO();
+    void initDynamicVAO();
+    void initVertexColorVAO();
     void drawQuad(float x, float y, float w, float h,
                   float r, float g, float b, float a);
     GLuint createMagentaTexture();
@@ -151,6 +153,15 @@ private:
     std::unique_ptr<Shader> m_textShader;
     GLuint m_textVAO = 0;
     GLuint m_textVBO = 0;
+
+    // Dynamic VAO/VBO for circle and rounded-rect geometry (flat-color)
+    GLuint m_dynVAO = 0;
+    GLuint m_dynVBO = 0;
+
+    // Vertex-color shader and VAO/VBO for drawTriangleStrip / drawLines
+    std::unique_ptr<Shader> m_vertColorShader;
+    GLuint m_vcVAO = 0;
+    GLuint m_vcVBO = 0;
 
     // FreeType library handle
     FT_Library m_ftLib = nullptr;

@@ -65,35 +65,6 @@ Details:
 - Do NOT switch main.cpp to use GLRenderer yet. Just verify it compiles and the class can be instantiated.
 
 ==============================================================================
-Task: Implement OpenGL circle, rounded rectangle, triangle strip, and line drawing in GLRenderer.
-Implemented: false
-
-Details:
-- Implement drawCircle():
-    - Generate vertices for a triangle fan with ~32 segments (enough for smooth circles at game scale).
-    - Use the flat color shader with the projection matrix.
-    - For outlines: draw a second ring of triangles (outer_radius to outer_radius+thickness) in the outline color, or draw the outline as a GL_TRIANGLE_STRIP ring.
-    - Reuse a single VBO, upload vertices each call.
-
-- Implement drawRoundedRect():
-    - Generate vertices for a rounded rectangle: 4 corner arcs (each ~8 segments) connected by straight edges, all as a triangle fan from the center.
-    - Use the flat color shader.
-    - For outlines: generate an outline strip similar to the circle approach.
-    - This replaces the custom RoundedRectangleShape.h SFML shape used throughout the UI.
-
-- Implement drawTriangleStrip():
-    - Accept a vector<Renderer::Vertex> with per-vertex position and color.
-    - Upload to a dynamic VBO, draw with GL_TRIANGLE_STRIP using a per-vertex-color shader.
-    - Create a "vertex color" shader pair: vertex shader takes vec2 pos + vec4 color, passes color to fragment, fragment outputs interpolated color.
-    - This is used by CombatComponent for the sword arc VFX.
-
-- Implement drawLines():
-    - Same vertex format as triangle strip but drawn with GL_LINES.
-    - Used by CombatComponent for the bright leading-edge line.
-
-- After this task, GLRenderer should implement every method in the Renderer interface.
-
-==============================================================================
 Task: Implement GLFWInput (the GLFW-backed InputSystem) so the game can receive input without SFML.
 Implemented: false
 

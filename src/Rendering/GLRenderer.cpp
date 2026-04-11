@@ -5,6 +5,8 @@
 #include <stb_image.h>
 #include <iostream>
 #include <stdexcept>
+#include <cmath>
+#include <vector>
 
 // ── Shader sources ────────────────────────────────────────────────────────────
 
@@ -94,6 +96,34 @@ void main()
 }
 )";
 
+// Per-vertex-color shader: each vertex carries its own RGBA color
+static const char* kVertColorVS = R"(
+#version 330 core
+layout (location = 0) in vec2 aPos;
+layout (location = 1) in vec4 aColor;
+
+uniform mat4 uProjection;
+
+out vec4 vColor;
+
+void main()
+{
+    gl_Position = uProjection * vec4(aPos, 0.0, 1.0);
+    vColor = aColor;
+}
+)";
+
+static const char* kVertColorFS = R"(
+#version 330 core
+in vec4 vColor;
+out vec4 FragColor;
+
+void main()
+{
+    FragColor = vColor;
+}
+)";
+
 // ── GLFW callbacks ────────────────────────────────────────────────────────────
 
 void GLRenderer::framebufferSizeCallback(GLFWwindow* win, int w, int h)
@@ -155,11 +185,14 @@ GLRenderer::GLRenderer(const std::string& title, unsigned int width,
     m_flatShader = std::make_unique<Shader>(kFlatVS, kFlatFS);
     m_texShader  = std::make_unique<Shader>(kTexVS, kTexFS);
     m_textShader = std::make_unique<Shader>(kTextVS, kTextFS);
+    m_vertColorShader = std::make_unique<Shader>(kVertColorVS, kVertColorFS);
 
     // Create persistent GPU buffers
     initQuadVAO();
     initSpriteVAO();
     initTextVAO();
+    initDynamicVAO();
+    initVertexColorVAO();
 
     // Initialize FreeType
     if (FT_Init_FreeType(&m_ftLib))
@@ -180,6 +213,10 @@ GLRenderer::~GLRenderer()
     if (m_spriteVBO) glDeleteBuffers(1, &m_spriteVBO);
     if (m_textVAO) glDeleteVertexArrays(1, &m_textVAO);
     if (m_textVBO) glDeleteBuffers(1, &m_textVBO);
+    if (m_dynVAO) glDeleteVertexArrays(1, &m_dynVAO);
+    if (m_dynVBO) glDeleteBuffers(1, &m_dynVBO);
+    if (m_vcVAO) glDeleteVertexArrays(1, &m_vcVAO);
+    if (m_vcVBO) glDeleteBuffers(1, &m_vcVBO);
 
     for (auto& [handle, info] : m_textures)
     {
@@ -201,6 +238,7 @@ GLRenderer::~GLRenderer()
     m_flatShader.reset();
     m_texShader.reset();
     m_textShader.reset();
+    m_vertColorShader.reset();
 
     if (m_window)
         glfwDestroyWindow(m_window);
@@ -480,23 +518,245 @@ GLRenderer::GlyphAtlas& GLRenderer::getOrBuildAtlas(FontData& font, unsigned int
     return insertIt->second;
 }
 
-// ── Stubs for methods implemented in later tasks ──────────────────────────────
+// ── Dynamic VAO for circle / rounded-rect geometry (vec2 position) ────────────
 
-void GLRenderer::drawCircle(float, float, float,
-                            float, float, float, float,
-                            float, float, float, float,
-                            float)
+void GLRenderer::initDynamicVAO()
 {
-    // Will be implemented in a later task (circle/rounded-rect/tri-strip).
+    glGenVertexArrays(1, &m_dynVAO);
+    glGenBuffers(1, &m_dynVBO);
+
+    glBindVertexArray(m_dynVAO);
+    glBindBuffer(GL_ARRAY_BUFFER, m_dynVBO);
+    glBufferData(GL_ARRAY_BUFFER, 0, nullptr, GL_DYNAMIC_DRAW);
+
+    // position (location 0)
+    glVertexAttribPointer(0, 2, GL_FLOAT, GL_FALSE, 2 * sizeof(float), nullptr);
+    glEnableVertexAttribArray(0);
+
+    glBindVertexArray(0);
 }
 
-void GLRenderer::drawRoundedRect(float, float, float, float,
-                                 float,
-                                 float, float, float, float,
-                                 float, float, float, float,
-                                 float)
+// ── Vertex-color VAO (vec2 pos + vec4 color = 6 floats per vertex) ────────────
+
+void GLRenderer::initVertexColorVAO()
 {
-    // Will be implemented in a later task.
+    glGenVertexArrays(1, &m_vcVAO);
+    glGenBuffers(1, &m_vcVBO);
+
+    glBindVertexArray(m_vcVAO);
+    glBindBuffer(GL_ARRAY_BUFFER, m_vcVBO);
+    glBufferData(GL_ARRAY_BUFFER, 0, nullptr, GL_DYNAMIC_DRAW);
+
+    // position (location 0)
+    glVertexAttribPointer(0, 2, GL_FLOAT, GL_FALSE, 6 * sizeof(float), nullptr);
+    glEnableVertexAttribArray(0);
+    // color (location 1)
+    glVertexAttribPointer(1, 4, GL_FLOAT, GL_FALSE, 6 * sizeof(float),
+                          reinterpret_cast<void*>(2 * sizeof(float)));
+    glEnableVertexAttribArray(1);
+
+    glBindVertexArray(0);
+}
+
+// ── Circle ────────────────────────────────────────────────────────────────────
+
+static constexpr int kCircleSegments = 32;
+static constexpr float kPi = 3.14159265358979323846f;
+
+void GLRenderer::drawCircle(float cx, float cy, float radius,
+                            float r, float g, float b, float a,
+                            float outR, float outG, float outB, float outA,
+                            float outlineThickness)
+{
+    // Build triangle-fan vertices: center + (segments+1) rim points
+    std::vector<float> verts;
+    verts.reserve(2 * (kCircleSegments + 2));
+
+    // Center
+    verts.push_back(cx);
+    verts.push_back(cy);
+
+    for (int i = 0; i <= kCircleSegments; ++i)
+    {
+        float angle = 2.f * kPi * static_cast<float>(i) / static_cast<float>(kCircleSegments);
+        verts.push_back(cx + radius * std::cos(angle));
+        verts.push_back(cy + radius * std::sin(angle));
+    }
+
+    // Upload and draw the fill
+    m_flatShader->use();
+    m_flatShader->setMat4("uProjection", m_projection);
+    glm::mat4 identity(1.f);
+    m_flatShader->setMat4("uModel", identity);
+    m_flatShader->setVec4("uColor", glm::vec4(r, g, b, a));
+
+    glBindVertexArray(m_dynVAO);
+    glBindBuffer(GL_ARRAY_BUFFER, m_dynVBO);
+    glBufferData(GL_ARRAY_BUFFER,
+                 static_cast<GLsizeiptr>(verts.size() * sizeof(float)),
+                 verts.data(), GL_DYNAMIC_DRAW);
+    glDrawArrays(GL_TRIANGLE_FAN, 0, static_cast<GLsizei>(verts.size() / 2));
+
+    // Outline as a triangle-strip ring
+    if (outlineThickness > 0.f && outA > 0.f)
+    {
+        float innerR = radius;
+        float outerR = radius + outlineThickness;
+
+        std::vector<float> ring;
+        ring.reserve(2 * 2 * (kCircleSegments + 1));
+
+        for (int i = 0; i <= kCircleSegments; ++i)
+        {
+            float angle = 2.f * kPi * static_cast<float>(i) / static_cast<float>(kCircleSegments);
+            float cosA = std::cos(angle);
+            float sinA = std::sin(angle);
+            // Inner vertex
+            ring.push_back(cx + innerR * cosA);
+            ring.push_back(cy + innerR * sinA);
+            // Outer vertex
+            ring.push_back(cx + outerR * cosA);
+            ring.push_back(cy + outerR * sinA);
+        }
+
+        m_flatShader->setVec4("uColor", glm::vec4(outR, outG, outB, outA));
+
+        glBindBuffer(GL_ARRAY_BUFFER, m_dynVBO);
+        glBufferData(GL_ARRAY_BUFFER,
+                     static_cast<GLsizeiptr>(ring.size() * sizeof(float)),
+                     ring.data(), GL_DYNAMIC_DRAW);
+        glDrawArrays(GL_TRIANGLE_STRIP, 0, static_cast<GLsizei>(ring.size() / 2));
+    }
+
+    glBindVertexArray(0);
+}
+
+// ── Rounded rectangle ─────────────────────────────────────────────────────────
+
+static constexpr int kCornerSegments = 8;
+
+void GLRenderer::drawRoundedRect(float x, float y, float w, float h,
+                                 float cornerRadius,
+                                 float r, float g, float b, float a,
+                                 float outR, float outG, float outB, float outA,
+                                 float outlineThickness)
+{
+    // Clamp corner radius so it doesn't exceed half the rect size
+    float maxR = std::min(w * 0.5f, h * 0.5f);
+    float cr = std::min(cornerRadius, maxR);
+    if (cr < 0.f) cr = 0.f;
+
+    // Center of the rectangle
+    float cxr = x + w * 0.5f;
+    float cyr = y + h * 0.5f;
+
+    // Build triangle-fan: center + perimeter points around the rounded rect
+    // Corner centers (inner corners):
+    //   top-left:     (x + cr,     y + cr)
+    //   top-right:    (x + w - cr, y + cr)
+    //   bottom-right: (x + w - cr, y + h - cr)
+    //   bottom-left:  (x + cr,     y + h - cr)
+    struct CornerArc {
+        float cx, cy;
+        float startAngle; // radians
+    };
+
+    CornerArc corners[4] = {
+        { x + w - cr, y + cr,     -kPi * 0.5f },  // top-right (from -90° to 0°)
+        { x + w - cr, y + h - cr,  0.f },           // bottom-right (from 0° to 90°)
+        { x + cr,     y + h - cr,  kPi * 0.5f },    // bottom-left (from 90° to 180°)
+        { x + cr,     y + cr,      kPi },            // top-left (from 180° to 270°)
+    };
+
+    std::vector<float> verts;
+    // Center + 4 corners * (segments+1) + 1 to close
+    verts.reserve(2 * (1 + 4 * (kCornerSegments + 1) + 1));
+
+    // Center point of fan
+    verts.push_back(cxr);
+    verts.push_back(cyr);
+
+    for (int c = 0; c < 4; ++c)
+    {
+        float arcCx = corners[c].cx;
+        float arcCy = corners[c].cy;
+        float start = corners[c].startAngle;
+
+        for (int i = 0; i <= kCornerSegments; ++i)
+        {
+            float angle = start + (kPi * 0.5f) * static_cast<float>(i) / static_cast<float>(kCornerSegments);
+            verts.push_back(arcCx + cr * std::cos(angle));
+            verts.push_back(arcCy + cr * std::sin(angle));
+        }
+    }
+
+    // Close the fan by repeating the first rim vertex
+    verts.push_back(verts[2]);
+    verts.push_back(verts[3]);
+
+    // Upload and draw the fill
+    m_flatShader->use();
+    m_flatShader->setMat4("uProjection", m_projection);
+    glm::mat4 identity(1.f);
+    m_flatShader->setMat4("uModel", identity);
+    m_flatShader->setVec4("uColor", glm::vec4(r, g, b, a));
+
+    glBindVertexArray(m_dynVAO);
+    glBindBuffer(GL_ARRAY_BUFFER, m_dynVBO);
+    glBufferData(GL_ARRAY_BUFFER,
+                 static_cast<GLsizeiptr>(verts.size() * sizeof(float)),
+                 verts.data(), GL_DYNAMIC_DRAW);
+    glDrawArrays(GL_TRIANGLE_FAN, 0, static_cast<GLsizei>(verts.size() / 2));
+
+    // Outline as a triangle-strip ring
+    if (outlineThickness > 0.f && outA > 0.f)
+    {
+        float ot = outlineThickness;
+
+        // Build inner and outer perimeter points
+        // Inner = same perimeter as the fill (skip the center = index 1 onward)
+        // Outer = expanded by outlineThickness along the normal direction
+        int perimCount = static_cast<int>((verts.size() / 2) - 1); // skip center
+        std::vector<float> ring;
+        ring.reserve(2 * 2 * perimCount);
+
+        for (int c = 0; c < 4; ++c)
+        {
+            float arcCx = corners[c].cx;
+            float arcCy = corners[c].cy;
+            float start = corners[c].startAngle;
+
+            for (int i = 0; i <= kCornerSegments; ++i)
+            {
+                float angle = start + (kPi * 0.5f) * static_cast<float>(i) / static_cast<float>(kCornerSegments);
+                float cosA = std::cos(angle);
+                float sinA = std::sin(angle);
+
+                // Inner vertex (on the rect edge)
+                ring.push_back(arcCx + cr * cosA);
+                ring.push_back(arcCy + cr * sinA);
+                // Outer vertex (pushed outward along normal)
+                ring.push_back(arcCx + (cr + ot) * cosA);
+                ring.push_back(arcCy + (cr + ot) * sinA);
+            }
+        }
+
+        // Close the ring by repeating the first pair
+        ring.push_back(ring[0]);
+        ring.push_back(ring[1]);
+        ring.push_back(ring[2]);
+        ring.push_back(ring[3]);
+
+        m_flatShader->setVec4("uColor", glm::vec4(outR, outG, outB, outA));
+
+        glBindBuffer(GL_ARRAY_BUFFER, m_dynVBO);
+        glBufferData(GL_ARRAY_BUFFER,
+                     static_cast<GLsizeiptr>(ring.size() * sizeof(float)),
+                     ring.data(), GL_DYNAMIC_DRAW);
+        glDrawArrays(GL_TRIANGLE_STRIP, 0, static_cast<GLsizei>(ring.size() / 2));
+    }
+
+    glBindVertexArray(0);
 }
 
 // ── Sprite VAO (dynamic, position + texcoord) ────────────────────────────────
@@ -782,12 +1042,36 @@ void GLRenderer::measureText(FontHandle font, const std::string& str,
     outHeight = static_cast<float>(atlas.lineHeight * lineCount);
 }
 
-void GLRenderer::drawTriangleStrip(const std::vector<Vertex>&)
+// ── Vertex-colored geometry ───────────────────────────────────────────────────
+
+void GLRenderer::drawTriangleStrip(const std::vector<Vertex>& verts)
 {
-    // Will be implemented in the vertex-colored geometry task.
+    if (verts.size() < 3) return;
+
+    m_vertColorShader->use();
+    m_vertColorShader->setMat4("uProjection", m_projection);
+
+    glBindVertexArray(m_vcVAO);
+    glBindBuffer(GL_ARRAY_BUFFER, m_vcVBO);
+    glBufferData(GL_ARRAY_BUFFER,
+                 static_cast<GLsizeiptr>(verts.size() * sizeof(Vertex)),
+                 verts.data(), GL_DYNAMIC_DRAW);
+    glDrawArrays(GL_TRIANGLE_STRIP, 0, static_cast<GLsizei>(verts.size()));
+    glBindVertexArray(0);
 }
 
-void GLRenderer::drawLines(const std::vector<Vertex>&)
+void GLRenderer::drawLines(const std::vector<Vertex>& verts)
 {
-    // Will be implemented in the vertex-colored geometry task.
+    if (verts.size() < 2) return;
+
+    m_vertColorShader->use();
+    m_vertColorShader->setMat4("uProjection", m_projection);
+
+    glBindVertexArray(m_vcVAO);
+    glBindBuffer(GL_ARRAY_BUFFER, m_vcVBO);
+    glBufferData(GL_ARRAY_BUFFER,
+                 static_cast<GLsizeiptr>(verts.size() * sizeof(Vertex)),
+                 verts.data(), GL_DYNAMIC_DRAW);
+    glDrawArrays(GL_LINES, 0, static_cast<GLsizei>(verts.size()));
+    glBindVertexArray(0);
 }
