@@ -28,6 +28,7 @@ sf::Color SFMLRenderer::toSfColor(float r, float g, float b, float a)
 SFMLRenderer::SFMLRenderer(const std::string& title, unsigned int width,
                            unsigned int height, unsigned int fpsCap)
     : m_window(sf::VideoMode(width, height), title)
+    , m_input(m_window)
 {
     m_window.setFramerateLimit(fpsCap);
 }
@@ -42,9 +43,21 @@ void SFMLRenderer::setMouseCursorVisible(bool visible)
     m_window.setMouseCursorVisible(visible);
 }
 
-bool SFMLRenderer::pollEvent(sf::Event& event)
+void SFMLRenderer::setWindowSize(unsigned int w, unsigned int h)
 {
-    return m_window.pollEvent(event);
+    m_window.setSize(sf::Vector2u(w, h));
+}
+
+void SFMLRenderer::setWindowPosition(int x, int y)
+{
+    m_window.setPosition(sf::Vector2i(x, y));
+}
+
+void SFMLRenderer::getDesktopSize(unsigned int& w, unsigned int& h) const
+{
+    sf::VideoMode desktop = sf::VideoMode::getDesktopMode();
+    w = desktop.width;
+    h = desktop.height;
 }
 
 // ── Lifecycle ─────────────────────────────────────────────────────────────────

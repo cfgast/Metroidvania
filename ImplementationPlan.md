@@ -30,39 +30,6 @@ functions, stb_image loads textures, and FreeType renders text.
 The migration is ordered so the project builds and runs after every task.
 
 ==============================================================================
-Task: Replace SFML input and event types with a custom input abstraction, preparing for the GLFW switch.
-Implemented: false
-
-Details:
-- Create src/Input/InputTypes.h with:
-    - An enum class KeyCode mapping all keys currently used: A, D, W, S, Left, Right, Up, Down, Space, Escape, Return, Delete, F1, X, LShift, RShift, and all letter keys needed by InputBindings. Values should be simple integers that can be mapped from both SFML and GLFW key codes.
-    - An enum class MouseButton { Left, Right, Middle }.
-    - An enum class GamepadButton with values for the ~15 Xbox buttons used.
-    - An enum class GamepadAxis { LeftX, LeftY, RightX, RightY, DPadX, DPadY }.
-    - A struct InputEvent with a type enum { KeyPressed, KeyReleased, MouseMoved, MouseButtonPressed, MouseButtonReleased, GamepadButtonPressed, GamepadButtonReleased, GamepadAxisMoved, WindowClosed, WindowResized } and a union/struct of relevant data fields.
-
-- Create src/Input/InputSystem.h with an abstract class:
-    - virtual bool pollEvent(InputEvent& event) = 0;
-    - virtual bool isKeyPressed(KeyCode key) const = 0;
-    - virtual bool isGamepadConnected(int id = 0) const = 0;
-    - virtual float getGamepadAxis(int id, GamepadAxis axis) const = 0;
-    - virtual bool isGamepadButtonPressed(int id, GamepadButton btn) const = 0;
-    - virtual void setMouseCursorVisible(bool visible) = 0;
-
-- Create src/Input/SFMLInput.h/.cpp implementing InputSystem by wrapping sf::Event, sf::Keyboard, sf::Joystick, sf::Mouse. The SFMLRenderer should create and own the SFMLInput instance (since it owns the sf::RenderWindow). Add an accessor `InputSystem& getInput()` to Renderer.
-
-- Migrate all event-handling code:
-    - src/Components/InputComponent.cpp: replace sf::Keyboard::isKeyPressed() and sf::Joystick calls with InputSystem methods. Replace sf::Keyboard::Key references with KeyCode.
-    - src/Core/InputBindings.h/.cpp: replace sf::Keyboard::Key with KeyCode in all bindings and the key-to-string mapping table. Update save/load to use the new key names.
-    - src/UI/PauseMenu.h/.cpp: replace sf::Event with InputEvent in handleEvent().
-    - src/UI/SaveSlotScreen.h/.cpp: same.
-    - src/UI/ControlsMenu.h/.cpp: same.
-    - src/Debug/DebugMenu.h/.cpp: same.
-    - src/main.cpp: replace sf::Event polling with InputSystem::pollEvent(). Replace sf::Keyboard/sf::Joystick constants with KeyCode/GamepadButton.
-
-- After this task, no file outside src/Input/SFMLInput.cpp and src/Rendering/SFMLRenderer.cpp should include any SFML header. The game should still build and run identically.
-
-==============================================================================
 Task: Add GLFW, GLAD, stb_image, and FreeType as project dependencies via CMake. Verify they compile and link.
 Implemented: false
 

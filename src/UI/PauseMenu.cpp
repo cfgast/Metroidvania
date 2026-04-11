@@ -35,23 +35,23 @@ void PauseMenu::layout(Renderer& renderer)
     }
 }
 
-PauseMenu::Action PauseMenu::handleEvent(const sf::Event& event)
+PauseMenu::Action PauseMenu::handleEvent(const InputEvent& event)
 {
     if (!m_open)
         return None;
 
-    if (event.type == sf::Event::KeyPressed)
+    if (event.type == InputEventType::KeyPressed)
     {
-        if (event.key.code == sf::Keyboard::Escape)
+        if (event.key == KeyCode::Escape)
         {
             m_open = false;
             return Resume;
         }
-        if (event.key.code == sf::Keyboard::Up)
+        if (event.key == KeyCode::Up)
             m_selectedIndex = (m_selectedIndex - 1 + ITEM_COUNT) % ITEM_COUNT;
-        else if (event.key.code == sf::Keyboard::Down)
+        else if (event.key == KeyCode::Down)
             m_selectedIndex = (m_selectedIndex + 1) % ITEM_COUNT;
-        else if (event.key.code == sf::Keyboard::Return)
+        else if (event.key == KeyCode::Enter)
         {
             Action a = ACTIONS[m_selectedIndex];
             if (a == Resume)
@@ -61,17 +61,17 @@ PauseMenu::Action PauseMenu::handleEvent(const sf::Event& event)
     }
 
     // Controller: A button = confirm, B/Start = resume
-    if (event.type == sf::Event::JoystickButtonPressed)
+    if (event.type == InputEventType::GamepadButtonPressed)
     {
-        unsigned int btn = event.joystickButton.button;
-        if (btn == 0) // A button - confirm
+        GamepadButton btn = event.gamepadButton;
+        if (btn == GamepadButton::A)
         {
             Action a = ACTIONS[m_selectedIndex];
             if (a == Resume)
                 m_open = false;
             return a;
         }
-        if (btn == 1 || btn == 7) // B button or Start - resume
+        if (btn == GamepadButton::B || btn == GamepadButton::Start)
         {
             m_open = false;
             return Resume;
@@ -79,10 +79,10 @@ PauseMenu::Action PauseMenu::handleEvent(const sf::Event& event)
     }
 
     // Mouse hover – update highlighted item
-    if (event.type == sf::Event::MouseMoved)
+    if (event.type == InputEventType::MouseMoved)
     {
-        float mx = static_cast<float>(event.mouseMove.x);
-        float my = static_cast<float>(event.mouseMove.y);
+        float mx = static_cast<float>(event.mouseX);
+        float my = static_cast<float>(event.mouseY);
         for (int i = 0; i < ITEM_COUNT; ++i)
         {
             auto& il = m_itemLayouts[i];
@@ -96,11 +96,11 @@ PauseMenu::Action PauseMenu::handleEvent(const sf::Event& event)
     }
 
     // Mouse click – activate item
-    if (event.type == sf::Event::MouseButtonPressed &&
-        event.mouseButton.button == sf::Mouse::Left)
+    if (event.type == InputEventType::MouseButtonPressed &&
+        event.mouseButton == MouseButton::Left)
     {
-        float mx = static_cast<float>(event.mouseButton.x);
-        float my = static_cast<float>(event.mouseButton.y);
+        float mx = static_cast<float>(event.mouseX);
+        float my = static_cast<float>(event.mouseY);
         for (int i = 0; i < ITEM_COUNT; ++i)
         {
             auto& il = m_itemLayouts[i];
@@ -117,13 +117,13 @@ PauseMenu::Action PauseMenu::handleEvent(const sf::Event& event)
     }
 
     // Controller: D-pad / left stick vertical for menu navigation
-    if (event.type == sf::Event::JoystickMoved)
+    if (event.type == InputEventType::GamepadAxisMoved)
     {
         constexpr float threshold = 50.f;
-        float pos = event.joystickMove.position;
+        float pos = event.axisPosition;
 
-        bool isStickY = (event.joystickMove.axis == sf::Joystick::Y);
-        bool isPovY   = (event.joystickMove.axis == sf::Joystick::PovY);
+        bool isStickY = (event.gamepadAxis == GamepadAxis::LeftY);
+        bool isPovY   = (event.gamepadAxis == GamepadAxis::DPadY);
 
         if (isStickY || isPovY)
         {

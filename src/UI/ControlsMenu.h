@@ -2,11 +2,8 @@
 
 #include <string>
 
-#include <SFML/Window/Event.hpp>
-
+#include "../Input/InputTypes.h"
 #include "../Rendering/Renderer.h"
-
-namespace sf { class RenderWindow; }
 
 // Full-screen controls rebinding menu accessible from the main menu.
 class ControlsMenu
@@ -19,7 +16,7 @@ public:
     bool isOpen() const { return m_open; }
 
     // Process one event. Call each frame while open.
-    void handleEvent(const sf::Event& event);
+    void handleEvent(const InputEvent& event);
 
     void render(Renderer& renderer);
 

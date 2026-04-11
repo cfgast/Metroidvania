@@ -60,6 +60,7 @@ add_executable(Metroidvania
     src/UI/PauseMenu.cpp
     src/UI/ControlsMenu.cpp
     src/Rendering/SFMLRenderer.cpp
+    src/Input/SFMLInput.cpp
 )
 
 target_include_directories(Metroidvania PRIVATE

@@ -1,6 +1,6 @@
 # Architecture Overview
 
-A 4–8 player 2D Metroidvania platformer written in C++17. Built with **SFML 2.6** (rendering/input), **GLM 1.0.1** (math types), **Nvidia PhysX** (collision/physics), and **nlohmann/json** (serialization). Uses **CMake ≥ 3.20** with `FetchContent` for SFML, GLM, and JSON; PhysX is pre-built in `third_party/`.
+A 4–8 player 2D Metroidvania platformer written in C++17. Built with **SFML 2.6** (rendering), **a custom InputSystem abstraction** (input, with SFML backend), **GLM 1.0.1** (math types), **Nvidia PhysX** (collision/physics), and **nlohmann/json** (serialization). Uses **CMake ≥ 3.20** with `FetchContent` for SFML, GLM, and JSON; PhysX is pre-built in `third_party/`.
 
 ---
 
@@ -13,7 +13,7 @@ Metroidvania/
 │   ├── Core/                  # Entity model, abilities, save system, input config
 │   ├── Components/            # All gameplay Component subclasses
 │   ├── Math/                  # GLM-based math types: Rect, IntRect, Color
-│   ├── Map/                   # Level data, JSON loading, room transitions
+│   ├── Input/                  # Backend-agnostic input abstraction
 │   ├── Physics/               # PhysX singleton wrapper
 │   ├── Rendering/             # Renderer abstraction and back-end implementations
 │   ├── Debug/                 # F1 debug map-loader dialog
@@ -40,7 +40,7 @@ The game uses a **Component-Based Entity System**.
 | `GameObject.h/.cpp` | Entity container. Holds `glm::vec2 position` and a `vector<unique_ptr<Component>>`. Provides `addComponent<T>()` / `getComponent<T>()` templates. |
 | `Ability.h` | Enum `{DoubleJump, WallSlide, Dash}` with string serialization helpers. |
 | `PlayerState.h` | Persistent progression: `set<Ability> unlockedAbilities`, `set<string> consumedPickups`. Carried across room transitions. |
-| `InputBindings.h/.cpp` | **Singleton.** Configurable keyboard + controller bindings. Persists to `saves/controls.json`. |
+| `InputBindings.h/.cpp` | **Singleton.** Configurable keyboard + controller bindings using `KeyCode` enum. Persists to `saves/controls.json`. |
 | `SaveSystem.h/.cpp` | Static API. 3 save slots (`saves/save_N.json`). Serializes player position, map, HP, abilities, consumed pickups. |
 
 ---
@@ -51,7 +51,7 @@ Each component adds one slice of behavior to a `GameObject`.
 
 | Component | Purpose | Key Dependencies |
 |---|---|---|
-| `InputComponent` | Polls keyboard/gamepad, exposes `InputState` bools (`moveLeft`, `moveRight`, `jump`, `dash`, `attack`). AI can inject input via `setInputState()`. | `InputBindings` |
+| `InputComponent` | Polls keyboard/gamepad via `InputSystem::current()`, exposes `InputState` bools (`moveLeft`, `moveRight`, `jump`, `dash`, `attack`). AI can inject input via `setInputState()`. | `InputBindings`, `InputSystem` |
 | `PhysicsComponent` | Platformer physics: gravity (980), jumping (-520), wall-slide, dash, double-jump, ceiling/floor collision, fall-death respawn. Reads abilities from `PlayerState`. | `InputComponent`, `PlayerState`, `Map`, `PhysXWorld` |
 | `RenderComponent` | Draws a colored rectangle via `Renderer::drawRect()`; skips draw if `AnimationComponent` is present. Stores size/color as plain floats. | `Renderer` |
 | `AnimationComponent` | Frame-based sprite animation from sprite sheets. Uses `Renderer::TextureHandle` for lazy-loaded textures. Frame rects stored as plain `{x,y,w,h}` structs. | `Renderer` |
@@ -120,10 +120,22 @@ A back-end–agnostic rendering abstraction that isolates all draw calls behind 
 
 | File | Role |
 |---|---|
-| `Renderer.h` | Pure-virtual interface. Covers window operations (`isOpen`/`close`/`setMouseCursorVisible`), lifecycle (`clear`/`display`), camera/view, primitives (rect, circle, rounded-rect), textured sprites via opaque `TextureHandle`, text via `FontHandle`, and raw vertex-colored geometry (`drawTriangleStrip`/`drawLines`). No SFML types in the public API. |
-| `SFMLRenderer.h/.cpp` | SFML 2.6 implementation. Owns `sf::RenderWindow` and internal `handle → sf::Texture / sf::Font` maps. Constructor takes title, width, height, FPS cap. Adds `pollEvent(sf::Event&)` for SFML-specific event polling. Exposes `getWindow()` for legacy code that still needs direct SFML access (e.g. resolution resize in SaveSlotScreen). |
+| `Renderer.h` | Pure-virtual interface. Covers `getInput()` for InputSystem access, window operations (`isOpen`/`close`/`setMouseCursorVisible`/`setWindowSize`/`setWindowPosition`/`getDesktopSize`), lifecycle (`clear`/`display`), camera/view, primitives (rect, circle, rounded-rect), textured sprites via opaque `TextureHandle`, text via `FontHandle`, and raw vertex-colored geometry (`drawTriangleStrip`/`drawLines`). No SFML types in the public API. |
+| `SFMLRenderer.h/.cpp` | SFML 2.6 implementation. Owns `sf::RenderWindow`, `SFMLInput`, and internal `handle → sf::Texture / sf::Font` maps. Constructor takes title, width, height, FPS cap. |
 
-**Migration status:** The entire game loop in `main.cpp` now runs through the `Renderer` abstraction end to end. All `window.clear()`, `window.display()`, `window.setView()`, `window.isOpen()`, `window.close()`, and `window.setMouseCursorVisible()` calls go through `renderer`. Dash ghost rendering uses `renderer.drawRect()` instead of `sf::RectangleShape`. All SFML math types (`sf::Vector2f`, `sf::FloatRect`, `sf::IntRect`, `sf::Color`) have been replaced with `glm::vec2` and custom structs (`Rect`, `IntRect`, `Color`) from `src/Math/Types.h`. GLM 1.0.1 is fetched via CMake FetchContent. The only remaining SFML usage outside `src/Rendering/` is SFML event types (`sf::Event`, `sf::Keyboard`, `sf::Joystick`), `sf::Clock`, and `SaveSlotScreen::handleEvent()` which still takes `sf::RenderWindow&` for resolution changes via `renderer.getWindow()` — these will be migrated in subsequent tasks.
+**Migration status:** All rendering and input go through the `Renderer` and `InputSystem` abstractions. All SFML math types have been replaced with GLM and custom types from `src/Math/Types.h`. All SFML input/event types (`sf::Event`, `sf::Keyboard`, `sf::Joystick`, `sf::Mouse`, `sf::Clock`) have been replaced with the custom `InputSystem`/`InputEvent`/`KeyCode` abstraction and `std::chrono`. No file outside `src/Input/SFMLInput.cpp` and `src/Rendering/SFMLRenderer.cpp` directly includes any SFML header.
+
+---
+
+## Input (`src/Input/`)
+
+A back-end–agnostic input abstraction that isolates all input polling and event handling behind a single interface so the input back-end can be swapped (SFML → GLFW) without touching game code.
+
+| File | Role |
+|---|---|
+| `InputTypes.h` | Enums (`KeyCode`, `MouseButton`, `GamepadButton`, `GamepadAxis`, `InputEventType`) and the `InputEvent` struct used by all game code. |
+| `InputSystem.h` | Pure-virtual interface: `pollEvent()`, `isKeyPressed()`, `isGamepadConnected()`, `getGamepadAxis()`, `isGamepadButtonPressed()`, `setMouseCursorVisible()`. Also provides `InputSystem::current()` static accessor (set by the active backend). |
+| `SFMLInput.h/.cpp` | SFML 2.6 implementation. Wraps `sf::RenderWindow::pollEvent()`, `sf::Keyboard`, `sf::Joystick`, and `sf::Mouse`. Translates `sf::Event` to `InputEvent` and maps `KeyCode` ↔ `sf::Keyboard::Key`. Owned by `SFMLRenderer`. |
 
 ---
 
@@ -131,16 +143,16 @@ A back-end–agnostic rendering abstraction that isolates all draw calls behind 
 
 | File | Role |
 |---|---|
-| `UIStyle.h` | Shared dark-theme palette and drawing helpers (`drawMenuItem`, `drawMenuRow`, `drawGlow`, `drawAccentBar`). All helpers take `Renderer&` and use float RGBA colors. Returns `UIBounds` struct instead of `sf::FloatRect`. |
-| `SaveSlotScreen.h/.cpp` | Startup screen: 3 save slots, resolution selector, controls button. Renders via `Renderer&`; lazy-loads font via `Renderer::loadFont()`. Still takes `sf::RenderWindow&` in `handleEvent()` for resolution resize. |
-| `PauseMenu.h/.cpp` | In-game pause: Resume / Save / Quit. Keyboard + controller + mouse. Renders via `Renderer&`. |
-| `ControlsMenu.h/.cpp` | Full-screen rebinding UI. Enter rebind mode → press new key → saved via `InputBindings`. Renders via `Renderer&`. |
+| `UIStyle.h` | Shared dark-theme palette and drawing helpers (`drawMenuItem`, `drawMenuRow`, `drawGlow`, `drawAccentBar`). All helpers take `Renderer&` and use float RGBA colors. Returns `UIBounds` struct. |
+| `SaveSlotScreen.h/.cpp` | Startup screen: 3 save slots, resolution selector, controls button. Renders via `Renderer&`; `handleEvent()` takes `const InputEvent&` and `Renderer&` (for resolution changes via `setWindowSize`/`setWindowPosition`). |
+| `PauseMenu.h/.cpp` | In-game pause: Resume / Save / Quit. Keyboard + controller + mouse. `handleEvent()` takes `const InputEvent&`. Renders via `Renderer&`. |
+| `ControlsMenu.h/.cpp` | Full-screen rebinding UI. Enter rebind mode → press new key → saved via `InputBindings`. `handleEvent()` takes `const InputEvent&`. Renders via `Renderer&`. |
 
 ---
 
 ## Debug (`src/Debug/`)
 
-`DebugMenu` — F1-toggled overlay with "Open Map…" button that launches a Windows native file dialog to hot-load any map JSON. Renders via `Renderer&`; `handleEvent()` no longer needs the window reference.
+`DebugMenu` — F1-toggled overlay with "Open Map…" button that launches a Windows native file dialog to hot-load any map JSON. Renders via `Renderer&`; `handleEvent()` takes `const InputEvent&`.
 
 ---
 
@@ -155,7 +167,8 @@ A back-end–agnostic rendering abstraction that isolates all draw calls behind 
  └─────────────────────────────────────────────┘
            │
  ┌─ Per Frame ─────────────────────────────────┐
- │  1. Poll events via renderer.pollEvent()    │
+ │  1. Poll events via renderer.getInput()     │
+ │     .pollEvent(InputEvent)                  │
  │  2. Debug menu poll (hot-load map)          │
  │  3. If paused → render pause menu, skip ↓   │
  │  4. If transitioning → render fade, skip ↓  │

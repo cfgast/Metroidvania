@@ -4,6 +4,8 @@
 #include <vector>
 #include <cstdint>
 
+class InputSystem;
+
 // Pure-virtual rendering interface.
 // All game code draws through this API so the back-end (SFML, OpenGL, …)
 // can be swapped without touching callers.
@@ -12,10 +14,16 @@ class Renderer
 public:
     virtual ~Renderer() = default;
 
+    // ── Input ─────────────────────────────────────────────────────────
+    virtual InputSystem& getInput() = 0;
+
     // ── Window operations ─────────────────────────────────────────────
     virtual bool isOpen() const = 0;
     virtual void close() = 0;
     virtual void setMouseCursorVisible(bool visible) = 0;
+    virtual void setWindowSize(unsigned int w, unsigned int h) = 0;
+    virtual void setWindowPosition(int x, int y) = 0;
+    virtual void getDesktopSize(unsigned int& w, unsigned int& h) const = 0;
 
     // ── Lifecycle ──────────────────────────────────────────────────────
     virtual void clear(float r, float g, float b, float a = 1.f) = 0;

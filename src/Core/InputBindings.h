@@ -2,7 +2,7 @@
 
 #include <string>
 
-#include <SFML/Window/Keyboard.hpp>
+#include "../Input/InputTypes.h"
 
 // Singleton that holds user-configurable keyboard and controller bindings.
 // Persists to saves/controls.json.
@@ -12,13 +12,13 @@ public:
     static InputBindings& instance();
 
     // Keyboard bindings
-    sf::Keyboard::Key moveLeftKey    = sf::Keyboard::A;
-    sf::Keyboard::Key moveLeftAlt    = sf::Keyboard::Left;
-    sf::Keyboard::Key moveRightKey   = sf::Keyboard::D;
-    sf::Keyboard::Key moveRightAlt   = sf::Keyboard::Right;
-    sf::Keyboard::Key jumpKey        = sf::Keyboard::Space;
-    sf::Keyboard::Key dashKey        = sf::Keyboard::LShift;
-    sf::Keyboard::Key attackKey      = sf::Keyboard::X;
+    KeyCode moveLeftKey    = KeyCode::A;
+    KeyCode moveLeftAlt    = KeyCode::Left;
+    KeyCode moveRightKey   = KeyCode::D;
+    KeyCode moveRightAlt   = KeyCode::Right;
+    KeyCode jumpKey        = KeyCode::Space;
+    KeyCode dashKey        = KeyCode::LShift;
+    KeyCode attackKey      = KeyCode::X;
 
     // Controller bindings
     unsigned int controllerJumpButton   = 0;
@@ -30,8 +30,8 @@ public:
     void load();
 
     // Human-readable names for display and serialization
-    static std::string keyToString(sf::Keyboard::Key key);
-    static sf::Keyboard::Key stringToKey(const std::string& name);
+    static std::string keyToString(KeyCode key);
+    static KeyCode stringToKey(const std::string& name);
     static std::string buttonToString(unsigned int button);
 
 private:

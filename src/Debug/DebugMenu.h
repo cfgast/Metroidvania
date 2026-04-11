@@ -2,8 +2,7 @@
 
 #include <string>
 
-#include <SFML/Window/Event.hpp>
-
+#include "../Input/InputTypes.h"
 #include "../Rendering/Renderer.h"
 
 class DebugMenu
@@ -12,7 +11,7 @@ public:
     DebugMenu() = default;
 
     // Feed every window event through here while the game loop runs.
-    void handleEvent(const sf::Event& event);
+    void handleEvent(const InputEvent& event);
 
     // Returns the path the user selected via the file dialog, then clears it.
     // Returns an empty string when nothing new was chosen.

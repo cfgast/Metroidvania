@@ -4,20 +4,15 @@
 #include <sstream>
 #include <iomanip>
 
-#include <SFML/Graphics/RenderWindow.hpp>
-
 SaveSlotScreen::SaveSlotScreen()
 {
-    populateResolutions();
-    updateResolutionLabel();
 }
 
 void SaveSlotScreen::populateResolutions()
 {
     m_resolutions.clear();
 
-    sf::VideoMode desktop = sf::VideoMode::getDesktopMode();
-
+    // Desktop size will be populated on first handleEvent via Renderer
     static const Resolution COMMON[] = {
         {800, 600}, {1024, 768}, {1280, 720}, {1280, 800},
         {1366, 768}, {1440, 900}, {1600, 900}, {1680, 1050},
@@ -26,7 +21,7 @@ void SaveSlotScreen::populateResolutions()
 
     for (const auto& r : COMMON)
     {
-        if (r.width <= desktop.width && r.height <= desktop.height)
+        if (r.width <= m_desktopW && r.height <= m_desktopH)
             m_resolutions.push_back(r);
     }
 
@@ -56,16 +51,15 @@ void SaveSlotScreen::updateResolutionLabel()
                + "  >";
 }
 
-void SaveSlotScreen::applyResolution(sf::RenderWindow& window)
+void SaveSlotScreen::applyResolution(Renderer& renderer)
 {
     const auto& res = m_resolutions[m_resolutionIndex];
-    window.setSize(sf::Vector2u(res.width, res.height));
+    renderer.setWindowSize(res.width, res.height);
 
     // Center the window on screen
-    sf::VideoMode desktop = sf::VideoMode::getDesktopMode();
-    int x = static_cast<int>((desktop.width  - res.width)  / 2);
-    int y = static_cast<int>((desktop.height - res.height) / 2);
-    window.setPosition(sf::Vector2i(x, y));
+    int x = static_cast<int>((m_desktopW  - res.width)  / 2);
+    int y = static_cast<int>((m_desktopH - res.height) / 2);
+    renderer.setWindowPosition(x, y);
 
     updateResolutionLabel();
 }
@@ -154,38 +148,46 @@ void SaveSlotScreen::layout(Renderer& renderer)
     }
 }
 
-SaveSlotResult SaveSlotScreen::handleEvent(const sf::Event& event,
-                                           sf::RenderWindow& window)
+SaveSlotResult SaveSlotScreen::handleEvent(const InputEvent& event,
+                                           Renderer& renderer)
 {
     SaveSlotResult result;
     if (!m_open)
         return result;
 
-    if (event.type == sf::Event::KeyPressed)
+    // Lazy-initialize desktop size and resolution list on first call
+    if (m_desktopW == 0)
+    {
+        renderer.getDesktopSize(m_desktopW, m_desktopH);
+        populateResolutions();
+        updateResolutionLabel();
+    }
+
+    if (event.type == InputEventType::KeyPressed)
     {
         const int total = totalItemCount();
 
-        if (event.key.code == sf::Keyboard::Up)
+        if (event.key == KeyCode::Up)
         {
             m_selectedIndex = (m_selectedIndex - 1 + total) % total;
         }
-        else if (event.key.code == sf::Keyboard::Down)
+        else if (event.key == KeyCode::Down)
         {
             m_selectedIndex = (m_selectedIndex + 1) % total;
         }
-        else if (event.key.code == sf::Keyboard::Left && isOnResolutionRow())
+        else if (event.key == KeyCode::Left && isOnResolutionRow())
         {
             m_resolutionIndex = (m_resolutionIndex - 1 + static_cast<int>(m_resolutions.size()))
                                 % static_cast<int>(m_resolutions.size());
-            applyResolution(window);
+            applyResolution(renderer);
         }
-        else if (event.key.code == sf::Keyboard::Right && isOnResolutionRow())
+        else if (event.key == KeyCode::Right && isOnResolutionRow())
         {
             m_resolutionIndex = (m_resolutionIndex + 1)
                                 % static_cast<int>(m_resolutions.size());
-            applyResolution(window);
+            applyResolution(renderer);
         }
-        else if (event.key.code == sf::Keyboard::Return && !isOnResolutionRow())
+        else if (event.key == KeyCode::Enter && !isOnResolutionRow())
         {
             if (isOnControlsRow())
             {
@@ -206,7 +208,7 @@ SaveSlotResult SaveSlotScreen::handleEvent(const sf::Event& event,
                 }
             }
         }
-        else if (event.key.code == sf::Keyboard::Delete && !isOnResolutionRow() && !isOnControlsRow())
+        else if (event.key == KeyCode::Delete && !isOnResolutionRow() && !isOnControlsRow())
         {
             int slot = m_slots[m_selectedIndex].slot;
             SaveSystem::deleteSlot(slot);
@@ -215,10 +217,10 @@ SaveSlotResult SaveSlotScreen::handleEvent(const sf::Event& event,
     }
 
     // Mouse hover – highlight item under cursor
-    if (event.type == sf::Event::MouseMoved)
+    if (event.type == InputEventType::MouseMoved)
     {
-        float mx = static_cast<float>(event.mouseMove.x);
-        float my = static_cast<float>(event.mouseMove.y);
+        float mx = static_cast<float>(event.mouseX);
+        float my = static_cast<float>(event.mouseY);
         for (int i = 0; i < static_cast<int>(m_slotLayouts.size()); ++i)
         {
             auto& il = m_slotLayouts[i];
@@ -238,11 +240,11 @@ SaveSlotResult SaveSlotScreen::handleEvent(const sf::Event& event,
     }
 
     // Mouse click – activate item
-    if (event.type == sf::Event::MouseButtonPressed &&
-        event.mouseButton.button == sf::Mouse::Left)
+    if (event.type == InputEventType::MouseButtonPressed &&
+        event.mouseButton == MouseButton::Left)
     {
-        float mx = static_cast<float>(event.mouseButton.x);
-        float my = static_cast<float>(event.mouseButton.y);
+        float mx = static_cast<float>(event.mouseX);
+        float my = static_cast<float>(event.mouseY);
 
         // Check slot widgets
         for (int i = 0; i < static_cast<int>(m_slotLayouts.size()); ++i)
@@ -277,13 +279,13 @@ SaveSlotResult SaveSlotScreen::handleEvent(const sf::Event& event,
             {
                 m_resolutionIndex = (m_resolutionIndex - 1 + static_cast<int>(m_resolutions.size()))
                                     % static_cast<int>(m_resolutions.size());
-                applyResolution(window);
+                applyResolution(renderer);
             }
             else if (mx > m_resLayout.x + 2.f * third)
             {
                 m_resolutionIndex = (m_resolutionIndex + 1)
                                     % static_cast<int>(m_resolutions.size());
-                applyResolution(window);
+                applyResolution(renderer);
             }
         }
 
@@ -298,10 +300,10 @@ SaveSlotResult SaveSlotScreen::handleEvent(const sf::Event& event,
     }
 
     // Controller: A button = confirm, X button = delete slot
-    if (event.type == sf::Event::JoystickButtonPressed)
+    if (event.type == InputEventType::GamepadButtonPressed)
     {
-        unsigned int btn = event.joystickButton.button;
-        if (btn == 0 && !isOnResolutionRow()) // A button - select/load
+        GamepadButton btn = event.gamepadButton;
+        if (btn == GamepadButton::A && !isOnResolutionRow())
         {
             if (isOnControlsRow())
             {
@@ -322,7 +324,7 @@ SaveSlotResult SaveSlotScreen::handleEvent(const sf::Event& event,
                 }
             }
         }
-        else if (btn == 2 && !isOnResolutionRow() && !isOnControlsRow()) // X button - delete
+        else if (btn == GamepadButton::X && !isOnResolutionRow() && !isOnControlsRow())
         {
             int slot = m_slots[m_selectedIndex].slot;
             SaveSystem::deleteSlot(slot);
@@ -331,16 +333,16 @@ SaveSlotResult SaveSlotScreen::handleEvent(const sf::Event& event,
     }
 
     // Controller: D-pad / left stick for navigation
-    if (event.type == sf::Event::JoystickMoved)
+    if (event.type == InputEventType::GamepadAxisMoved)
     {
         constexpr float threshold = 50.f;
-        float pos = event.joystickMove.position;
+        float pos = event.axisPosition;
         const int total = totalItemCount();
 
-        bool isStickY = (event.joystickMove.axis == sf::Joystick::Y);
-        bool isPovY   = (event.joystickMove.axis == sf::Joystick::PovY);
-        bool isStickX = (event.joystickMove.axis == sf::Joystick::X);
-        bool isPovX   = (event.joystickMove.axis == sf::Joystick::PovX);
+        bool isStickY = (event.gamepadAxis == GamepadAxis::LeftY);
+        bool isPovY   = (event.gamepadAxis == GamepadAxis::DPadY);
+        bool isStickX = (event.gamepadAxis == GamepadAxis::LeftX);
+        bool isPovX   = (event.gamepadAxis == GamepadAxis::DPadX);
 
         if (isStickY || isPovY)
         {
@@ -378,7 +380,7 @@ SaveSlotResult SaveSlotScreen::handleEvent(const sf::Event& event,
             {
                 m_resolutionIndex = (m_resolutionIndex - 1 + static_cast<int>(m_resolutions.size()))
                                     % static_cast<int>(m_resolutions.size());
-                applyResolution(window);
+                applyResolution(renderer);
                 m_joyLeftHeld = true;
             }
             else if (!left)
@@ -390,7 +392,7 @@ SaveSlotResult SaveSlotScreen::handleEvent(const sf::Event& event,
             {
                 m_resolutionIndex = (m_resolutionIndex + 1)
                                     % static_cast<int>(m_resolutions.size());
-                applyResolution(window);
+                applyResolution(renderer);
                 m_joyRightHeld = true;
             }
             else if (!right)

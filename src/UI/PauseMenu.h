@@ -3,11 +3,8 @@
 #include <functional>
 #include <string>
 
-#include <SFML/Window/Event.hpp>
-
+#include "../Input/InputTypes.h"
 #include "../Rendering/Renderer.h"
-
-namespace sf { class RenderWindow; }
 
 // Simple pause menu shown when the player presses Escape during gameplay.
 // Offers Resume, Save, and Quit options.
@@ -23,7 +20,7 @@ public:
     bool isOpen() const    { return m_open; }
 
     // Process a single event.  Returns an action when the player picks one.
-    Action handleEvent(const sf::Event& event);
+    Action handleEvent(const InputEvent& event);
 
     void render(Renderer& renderer);
 

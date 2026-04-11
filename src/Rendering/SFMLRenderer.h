@@ -1,6 +1,7 @@
 #pragma once
 
 #include "Renderer.h"
+#include "../Input/SFMLInput.h"
 
 #include <unordered_map>
 #include <memory>
@@ -9,28 +10,25 @@
 #include <SFML/Graphics/RenderWindow.hpp>
 #include <SFML/Graphics/Font.hpp>
 #include <SFML/Graphics/Texture.hpp>
-#include <SFML/Window/Event.hpp>
 
 // SFML-backed implementation of the Renderer interface.
-// Owns the sf::RenderWindow and all loaded GPU resources.
+// Owns the sf::RenderWindow, the SFMLInput, and all loaded GPU resources.
 class SFMLRenderer : public Renderer
 {
 public:
     SFMLRenderer(const std::string& title, unsigned int width,
                  unsigned int height, unsigned int fpsCap = 60);
 
-    // Access the underlying window (needed during migration while some
-    // systems still use SFML types directly).
-    sf::RenderWindow&       getWindow()       { return m_window; }
-    const sf::RenderWindow& getWindow() const { return m_window; }
+    // ── Input ─────────────────────────────────────────────────────────
+    InputSystem& getInput() override { return m_input; }
 
     // ── Window operations ─────────────────────────────────────────────
     bool isOpen() const override;
     void close() override;
     void setMouseCursorVisible(bool visible) override;
-
-    // SFML-specific event polling (will move to input abstraction later)
-    bool pollEvent(sf::Event& event);
+    void setWindowSize(unsigned int w, unsigned int h) override;
+    void setWindowPosition(int x, int y) override;
+    void getDesktopSize(unsigned int& w, unsigned int& h) const override;
 
     // ── Lifecycle ─────────────────────────────────────────────────────
     void clear(float r, float g, float b, float a = 1.f) override;
@@ -85,6 +83,7 @@ private:
     static sf::Color toSfColor(float r, float g, float b, float a);
 
     sf::RenderWindow m_window;
+    SFMLInput        m_input;
 
     // Handle → resource maps
     std::unordered_map<TextureHandle, sf::Texture> m_textures;

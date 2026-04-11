@@ -75,7 +75,7 @@ void ControlsMenu::refreshLabels()
     }
 }
 
-void ControlsMenu::handleEvent(const sf::Event& event)
+void ControlsMenu::handleEvent(const InputEvent& event)
 {
     if (!m_open)
         return;
@@ -87,9 +87,9 @@ void ControlsMenu::handleEvent(const sf::Event& event)
     {
         if (isControllerRow(m_selected))
         {
-            if (event.type == sf::Event::JoystickButtonPressed)
+            if (event.type == InputEventType::GamepadButtonPressed)
             {
-                unsigned int btn = event.joystickButton.button;
+                unsigned int btn = static_cast<unsigned int>(event.gamepadButton);
                 switch (m_selected)
                 {
                     case ControllerJump: bindings.controllerJumpButton = btn; break;
@@ -101,8 +101,8 @@ void ControlsMenu::handleEvent(const sf::Event& event)
                 m_rebinding = false;
                 refreshLabels();
             }
-            if (event.type == sf::Event::KeyPressed
-                && event.key.code == sf::Keyboard::Escape)
+            if (event.type == InputEventType::KeyPressed
+                && event.key == KeyCode::Escape)
             {
                 m_rebinding = false;
                 refreshLabels();
@@ -110,11 +110,11 @@ void ControlsMenu::handleEvent(const sf::Event& event)
         }
         else
         {
-            if (event.type == sf::Event::KeyPressed)
+            if (event.type == InputEventType::KeyPressed)
             {
-                sf::Keyboard::Key newKey = event.key.code;
+                KeyCode newKey = event.key;
 
-                if (newKey == sf::Keyboard::Escape)
+                if (newKey == KeyCode::Escape)
                 {
                     m_rebinding = false;
                     refreshLabels();
@@ -143,10 +143,10 @@ void ControlsMenu::handleEvent(const sf::Event& event)
     // --- Normal navigation ---
 
     // Mouse hover – highlight row under cursor
-    if (event.type == sf::Event::MouseMoved)
+    if (event.type == InputEventType::MouseMoved)
     {
-        float mx = static_cast<float>(event.mouseMove.x);
-        float my = static_cast<float>(event.mouseMove.y);
+        float mx = static_cast<float>(event.mouseX);
+        float my = static_cast<float>(event.mouseY);
         for (int i = 0; i < ROW_COUNT; ++i)
         {
             auto& il = m_rowLayouts[i];
@@ -160,11 +160,11 @@ void ControlsMenu::handleEvent(const sf::Event& event)
     }
 
     // Mouse click – activate row
-    if (event.type == sf::Event::MouseButtonPressed &&
-        event.mouseButton.button == sf::Mouse::Left)
+    if (event.type == InputEventType::MouseButtonPressed &&
+        event.mouseButton == MouseButton::Left)
     {
-        float mx = static_cast<float>(event.mouseButton.x);
-        float my = static_cast<float>(event.mouseButton.y);
+        float mx = static_cast<float>(event.mouseX);
+        float my = static_cast<float>(event.mouseY);
         for (int i = 0; i < ROW_COUNT; ++i)
         {
             auto& il = m_rowLayouts[i];
@@ -194,18 +194,18 @@ void ControlsMenu::handleEvent(const sf::Event& event)
         }
     }
 
-    if (event.type == sf::Event::KeyPressed)
+    if (event.type == InputEventType::KeyPressed)
     {
-        if (event.key.code == sf::Keyboard::Escape)
+        if (event.key == KeyCode::Escape)
         {
             close();
             return;
         }
-        if (event.key.code == sf::Keyboard::Up)
+        if (event.key == KeyCode::Up)
             m_selected = (m_selected - 1 + ROW_COUNT) % ROW_COUNT;
-        else if (event.key.code == sf::Keyboard::Down)
+        else if (event.key == KeyCode::Down)
             m_selected = (m_selected + 1) % ROW_COUNT;
-        else if (event.key.code == sf::Keyboard::Return)
+        else if (event.key == KeyCode::Enter)
         {
             if (m_selected == Back)
             {
@@ -228,10 +228,10 @@ void ControlsMenu::handleEvent(const sf::Event& event)
     }
 
     // Controller: A = confirm, B = back
-    if (event.type == sf::Event::JoystickButtonPressed)
+    if (event.type == InputEventType::GamepadButtonPressed)
     {
-        unsigned int btn = event.joystickButton.button;
-        if (btn == 0)
+        GamepadButton btn = event.gamepadButton;
+        if (btn == GamepadButton::A)
         {
             if (m_selected == Back)
             {
@@ -251,7 +251,7 @@ void ControlsMenu::handleEvent(const sf::Event& event)
                 refreshLabels();
             }
         }
-        else if (btn == 1)
+        else if (btn == GamepadButton::B)
         {
             close();
             return;
@@ -259,13 +259,13 @@ void ControlsMenu::handleEvent(const sf::Event& event)
     }
 
     // Controller: D-pad / left stick vertical navigation
-    if (event.type == sf::Event::JoystickMoved)
+    if (event.type == InputEventType::GamepadAxisMoved)
     {
         constexpr float threshold = 50.f;
-        float pos = event.joystickMove.position;
+        float pos = event.axisPosition;
 
-        bool isStickY = (event.joystickMove.axis == sf::Joystick::Y);
-        bool isPovY   = (event.joystickMove.axis == sf::Joystick::PovY);
+        bool isStickY = (event.gamepadAxis == GamepadAxis::LeftY);
+        bool isPovY   = (event.gamepadAxis == GamepadAxis::DPadY);
 
         if (isStickY || isPovY)
         {

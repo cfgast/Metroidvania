@@ -319,6 +319,20 @@ Task: Implement the dash ability, it should allow you to dash forward a fixed di
 Implemented: true
 
 ==============================================================================
+Task: Replace SFML input and event types with a custom input abstraction, preparing for the GLFW switch.
+Implemented: true
+
+Details:
+- Created src/Input/InputTypes.h with KeyCode, MouseButton, GamepadButton, GamepadAxis enums and InputEvent struct.
+- Created src/Input/InputSystem.h with abstract InputSystem class and static current() accessor.
+- Created src/Input/SFMLInput.h/.cpp implementing InputSystem by wrapping sf::Event, sf::Keyboard, sf::Joystick, sf::Mouse.
+- SFMLRenderer creates and owns SFMLInput; Renderer base class exposes getInput().
+- Added setWindowSize(), setWindowPosition(), getDesktopSize() to Renderer interface.
+- Migrated all event-handling code: InputComponent, MovementComponent, InputBindings, PauseMenu, SaveSlotScreen, ControlsMenu, DebugMenu, main.cpp.
+- Replaced sf::Clock with std::chrono-based GameClock in main.cpp.
+- No file outside src/Input/SFMLInput.cpp and src/Rendering/SFMLRenderer.cpp includes any SFML header.
+
+==============================================================================
 Task: Implement a sword slash ability so the character can attack. It should be attached to the X button. The sword should have an arcing slash that can hit enemies and damage them, for now it should take 3 hits to kill an enemy unit.
 Implemented: true
 

@@ -10,10 +10,10 @@ static constexpr float k_panelH  = 150.f;
 static constexpr float k_btnW    = 220.f;
 static constexpr float k_btnH    =  44.f;
 
-void DebugMenu::handleEvent(const sf::Event& event)
+void DebugMenu::handleEvent(const InputEvent& event)
 {
-    if (event.type == sf::Event::KeyPressed &&
-        event.key.code == sf::Keyboard::F1)
+    if (event.type == InputEventType::KeyPressed &&
+        event.key == KeyCode::F1)
     {
         m_open = !m_open;
         return;
@@ -22,11 +22,11 @@ void DebugMenu::handleEvent(const sf::Event& event)
     if (!m_open)
         return;
 
-    if (event.type == sf::Event::MouseButtonPressed &&
-        event.mouseButton.button == sf::Mouse::Left)
+    if (event.type == InputEventType::MouseButtonPressed &&
+        event.mouseButton == MouseButton::Left)
     {
-        float mx = static_cast<float>(event.mouseButton.x);
-        float my = static_cast<float>(event.mouseButton.y);
+        float mx = static_cast<float>(event.mouseX);
+        float my = static_cast<float>(event.mouseY);
         if (mx >= m_buttonLayout.x && mx <= m_buttonLayout.x + m_buttonLayout.w &&
             my >= m_buttonLayout.y && my <= m_buttonLayout.y + m_buttonLayout.h)
             openFileDialog();

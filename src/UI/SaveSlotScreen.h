@@ -3,13 +3,9 @@
 #include <vector>
 #include <string>
 
-#include <SFML/Window/Event.hpp>
-#include <SFML/Window/VideoMode.hpp>
-
+#include "../Input/InputTypes.h"
 #include "../Core/SaveSystem.h"
 #include "../Rendering/Renderer.h"
-
-namespace sf { class RenderWindow; }
 
 // Result produced by the save-slot selection screen each frame.
 struct SaveSlotResult
@@ -30,8 +26,8 @@ public:
     bool isOpen() const        { return m_open; }
 
     // Handle input.  Returns an action when the player makes a choice.
-    // Window is non-const so the resolution selector can resize it.
-    SaveSlotResult handleEvent(const sf::Event& event, sf::RenderWindow& window);
+    // Renderer is used so the resolution selector can resize the window.
+    SaveSlotResult handleEvent(const InputEvent& event, Renderer& renderer);
 
     void render(Renderer& renderer);
 
@@ -39,7 +35,7 @@ private:
     void refreshSlots();
     void populateResolutions();
     void updateResolutionLabel();
-    void applyResolution(sf::RenderWindow& window);
+    void applyResolution(Renderer& renderer);
     void layout(Renderer& renderer);
 
     int  totalItemCount() const;
@@ -63,6 +59,10 @@ private:
     bool m_joyRightHeld = false;
 
     Renderer::FontHandle m_font = 0;
+
+    // Cached desktop size (populated on first handleEvent call)
+    unsigned int m_desktopW = 0;
+    unsigned int m_desktopH = 0;
 
     // Slot labels (rebuilt on refreshSlots)
     std::vector<std::string> m_slotLabels;

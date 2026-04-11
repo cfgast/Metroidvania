@@ -2,11 +2,12 @@
 #include <vector>
 #include <memory>
 #include <algorithm>
+#include <chrono>
 
-#include <SFML/Graphics.hpp>
 #include <glm/vec2.hpp>
 
 #include "Rendering/SFMLRenderer.h"
+#include "Input/InputSystem.h"
 #include "Core/GameObject.h"
 #include "Core/PlayerState.h"
 #include "Core/SaveSystem.h"
@@ -203,7 +204,19 @@ int main()
     float halfW = viewW / 2.f;
     float halfH = viewH / 2.f;
 
-    sf::Clock clock;
+    // Simple chrono-based clock (replaces the former sf::Clock usage)
+    struct GameClock {
+        std::chrono::high_resolution_clock::time_point last =
+            std::chrono::high_resolution_clock::now();
+        float restart() {
+            auto now = std::chrono::high_resolution_clock::now();
+            float dt = std::chrono::duration<float>(now - last).count();
+            last = now;
+            return dt;
+        }
+    };
+
+    GameClock clock;
     DebugMenu  debugMenu;
     PauseMenu  pauseMenu;
     ControlsMenu controlsMenu;
@@ -218,10 +231,11 @@ int main()
 
     while (renderer.isOpen())
     {
-        sf::Event event;
-        while (renderer.pollEvent(event))
+        InputEvent event;
+        auto& input = renderer.getInput();
+        while (input.pollEvent(event))
         {
-            if (event.type == sf::Event::Closed)
+            if (event.type == InputEventType::WindowClosed)
             {
                 renderer.close();
                 break;
@@ -230,10 +244,10 @@ int main()
             // Handle window resize: keep 1:1 pixel-to-world-unit mapping so
             // that resizing the window shows more (or less) of the map without
             // changing the zoom level.
-            if (event.type == sf::Event::Resized)
+            if (event.type == InputEventType::WindowResized)
             {
-                viewW = static_cast<float>(event.size.width);
-                viewH = static_cast<float>(event.size.height);
+                viewW = static_cast<float>(event.width);
+                viewH = static_cast<float>(event.height);
                 halfW = viewW / 2.f;
                 halfH = viewH / 2.f;
             }
@@ -248,7 +262,7 @@ int main()
             // --- Save-slot screen has priority ---
             if (saveSlotScreen.isOpen())
             {
-                SaveSlotResult slotResult = saveSlotScreen.handleEvent(event, renderer.getWindow());
+                SaveSlotResult slotResult = saveSlotScreen.handleEvent(event, renderer);
                 if (slotResult.action == SaveSlotResult::NewGame)
                 {
                     activeSaveSlot = slotResult.slot;
@@ -335,15 +349,15 @@ int main()
             }
 
             // Escape opens the pause menu instead of closing the window.
-            if (event.type == sf::Event::KeyPressed && event.key.code == sf::Keyboard::Escape)
+            if (event.type == InputEventType::KeyPressed && event.key == KeyCode::Escape)
             {
                 pauseMenu.open();
                 continue;
             }
 
-            // Controller Start button (7) also opens the pause menu.
-            if (event.type == sf::Event::JoystickButtonPressed
-                && event.joystickButton.button == 7)
+            // Controller Start button also opens the pause menu.
+            if (event.type == InputEventType::GamepadButtonPressed
+                && event.gamepadButton == GamepadButton::Start)
             {
                 pauseMenu.open();
                 continue;
@@ -398,7 +412,7 @@ int main()
         // Pause gameplay while debug or pause menu is open
         float dt = 0.f;
         if (!debugMenu.isOpen() && !pauseMenu.isOpen())
-            dt = clock.restart().asSeconds();
+            dt = clock.restart();
         else
             clock.restart();
 
