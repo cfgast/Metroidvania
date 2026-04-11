@@ -30,47 +30,7 @@ functions, stb_image loads textures, and FreeType renders text.
 The migration is ordered so the project builds and runs after every task.
 
 ==============================================================================
-Task: Add GLFW, GLAD, stb_image, and FreeType as project dependencies via CMake. Verify they compile and link.
-Implemented: false
-
-Details:
-- Files to modify: CMakeLists.txt
-- Add GLFW via FetchContent:
-    set(GLFW_BUILD_DOCS OFF CACHE BOOL "" FORCE)
-    set(GLFW_BUILD_TESTS OFF CACHE BOOL "" FORCE)
-    set(GLFW_BUILD_EXAMPLES OFF CACHE BOOL "" FORCE)
-    FetchContent_Declare(glfw GIT_REPOSITORY https://github.com/glfw/glfw.git GIT_TAG 3.4 GIT_SHALLOW TRUE)
-    FetchContent_MakeAvailable(glfw)
-
-- Add GLAD (OpenGL 3.3 Core). Generate the loader from https://glad.dav1d.de/ or use a FetchContent-compatible source. The simplest approach is to vendor the generated glad.c and glad.h / KHR/khrplatform.h into third_party/glad/. Add glad.c to the source list.
-    target_include_directories(Metroidvania PRIVATE third_party/glad/include)
-    Add third_party/glad/src/glad.c to the executable sources.
-
-- Add stb_image: vendor stb_image.h into third_party/stb/. Create a third_party/stb/stb_image_impl.cpp with:
-    #define STB_IMAGE_IMPLEMENTATION
-    #include "stb_image.h"
-    Add this .cpp to the source list. Add third_party/stb/ to include dirs.
-
-- Add FreeType via FetchContent:
-    FetchContent_Declare(freetype GIT_REPOSITORY https://github.com/freetype/freetype.git GIT_TAG VER-2-13-3 GIT_SHALLOW TRUE)
-    FetchContent_MakeAvailable(freetype)
-    target_link_libraries(Metroidvania PRIVATE freetype)
-
-- Link GLFW and OpenGL:
-    target_link_libraries(Metroidvania PRIVATE glfw opengl32)
-
-- Do NOT link sfml-graphics, sfml-window, or sfml-system yet (still needed by SFMLRenderer/SFMLInput during transition). Keep all existing SFML links.
-
-- Create a minimal test: in a temporary main() or a separate test .cpp, verify:
-    1. GLFW initializes and creates a window
-    2. GLAD loads GL functions
-    3. glGetString(GL_VERSION) returns 3.3+
-    4. stb_image loads a PNG (e.g. assets/player_spritesheet.png)
-    5. FreeType initializes and loads a font face
-  Remove the test code after verification. The actual project should build with both SFML and the new deps linked.
-
-==============================================================================
-Task: Implement the OpenGL renderer core — GLRenderer with shader management, orthographic projection, and rectangle drawing.
+Task: Implement the OpenGL renderer core— GLRenderer with shader management, orthographic projection, and rectangle drawing.
 Implemented: false
 
 Details:

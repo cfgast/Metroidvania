@@ -1,6 +1,6 @@
 # Architecture Overview
 
-A 4–8 player 2D Metroidvania platformer written in C++17. Built with **SFML 2.6** (rendering), **a custom InputSystem abstraction** (input, with SFML backend), **GLM 1.0.1** (math types), **Nvidia PhysX** (collision/physics), and **nlohmann/json** (serialization). Uses **CMake ≥ 3.20** with `FetchContent` for SFML, GLM, and JSON; PhysX is pre-built in `third_party/`.
+A 4–8 player 2D Metroidvania platformer written in C++17. Built with **SFML 2.6** (rendering), **a custom InputSystem abstraction** (input, with SFML backend), **GLM 1.0.1** (math types), **Nvidia PhysX** (collision/physics), and **nlohmann/json** (serialization). Uses **CMake ≥ 3.20** with `FetchContent` for SFML, GLM, JSON, GLFW, and FreeType; PhysX is pre-built in `third_party/`; GLAD and stb_image are vendored in `third_party/`.
 
 ---
 
@@ -25,7 +25,7 @@ Metroidvania/
 ├── tools/
 │   ├── MapEditor/             # C# WinForms map editor
 │   └── run-tasks.ps1          # Automation: runs ImplementationPlan tasks via Copilot
-└── third_party/               # PhysX source, build, and install directories
+└── third_party/               # PhysX, GLAD, and stb_image vendored libraries
 ```
 
 ---
@@ -197,7 +197,11 @@ A back-end–agnostic input abstraction that isolates all input polling and even
 
 | Dependency | Source | Purpose |
 |---|---|---|
-| SFML 2.6.1 | FetchContent (Git) | Graphics, windowing, input, audio |
+| SFML 2.6.1 | FetchContent (Git) | Graphics, windowing, input, audio (current renderer) |
+| GLFW 3.4 | FetchContent (Git) | Windowing/input for OpenGL migration (linked, not yet active) |
+| GLAD (GL 3.3 Core) | Vendored in `third_party/glad/` | OpenGL function loader (linked, not yet active) |
+| stb_image | Vendored in `third_party/stb/` | Image loading for OpenGL textures (linked, not yet active) |
+| FreeType 2.13.3 | FetchContent (Git) | Font rasterization for OpenGL text (linked, not yet active) |
 | GLM 1.0.1 | FetchContent (Git) | Vector/matrix math types |
 | nlohmann/json 3.11.3 | FetchContent (Git) | JSON parse/serialize |
 | Nvidia PhysX | Pre-built in `third_party/` | Collision detection, rigid-body physics |
@@ -205,7 +209,7 @@ A back-end–agnostic input abstraction that isolates all input polling and even
 
 Build: `cmake --preset default && cmake --build build`
 
-Post-build steps copy SFML DLLs, PhysX DLLs, `maps/`, and `assets/` next to the executable.
+Post-build steps copy SFML DLLs, GLFW DLL, PhysX DLLs, `maps/`, and `assets/` next to the executable.
 
 ---
 

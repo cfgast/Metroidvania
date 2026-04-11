@@ -386,3 +386,21 @@ Details:
     target_link_libraries(Metroidvania PRIVATE glm::glm)
 - After this task, no file outside src/Rendering/SFMLRenderer.cpp should reference sf::Vector2f, sf::FloatRect, sf::IntRect, or sf::Color. The SFMLRenderer converts between glm::vec2/Rect and SFML types internally.
 - The game should still build and run identically.
+
+==============================================================================
+Task: Add GLFW, GLAD, stb_image, and FreeType as project dependencies via CMake. Verify they compile and link.
+Implemented: true
+
+Details:
+- Files modified: CMakeLists.txt
+- Added GLFW 3.4 via FetchContent (docs/tests/examples disabled)
+- Added GLAD (OpenGL 3.3 Core, generated via glad2) vendored into third_party/glad/
+  - third_party/glad/include/glad/gl.h, third_party/glad/include/KHR/khrplatform.h
+  - third_party/glad/src/gl.c added to executable sources
+- Added stb_image vendored into third_party/stb/
+  - third_party/stb/stb_image.h (header-only library)
+  - third_party/stb/stb_image_impl.cpp (defines STB_IMAGE_IMPLEMENTATION)
+- Added FreeType 2.13.3 via FetchContent
+- Linked glfw, freetype, and opengl32 alongside existing SFML links
+- All existing SFML dependencies kept intact for transition period
+- Project builds and links successfully with all new dependencies
