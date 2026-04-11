@@ -1,266 +1,406 @@
 ==============================================================================
 Implementation Notes
 ==============================================================================
-This implementation plan contains a series of tasks. Each task should be picked up and implementated by an individual agent. Every Task contains the task description and if it has been implemented already. When an implementation is completed, change it to true. When implementations are updated, update any corresponding documentation. Also add new built files to .gitignore, and check in and push the new change to the remote along with the description of the change.
+This file contains pending tasks for agents to pick up. Each task should be
+implemented by an individual agent, one at a time, in order.
+
+When a task is completed:
+1. Change "Implemented: false" to "Implemented: true" on the task
+2. Move the completed task (the full block from ============ to the next
+   ============) to CompletedTasks.md, appending it at the end of that file
+3. Update architecture.md so future agents understand the current layout
+4. Update anything in ReadMe.md that was changed by the task
+5. Add new build artifacts to .gitignore
+6. Commit and push with a descriptive message
+
+See CompletedTasks.md for the history of all previously completed work.
+See architecture.md for the current codebase layout.
 
 ==============================================================================
-Task: Create a GameObject that should be a generic object in game. You should be able to add components to a game object to give it additional functionality. To start we just want to create the basic movement component and rendering component which should be responsible for their indivdual parts.
-Implemented: true
+==============================================================================
+==  OPENGL MIGRATION — Replace SFML with GLFW + OpenGL 3.3 Core + GLM     ==
+==============================================================================
+==============================================================================
+
+The following tasks migrate the renderer from SFML's built-in drawing to a
+custom OpenGL 3.3 Core pipeline. SFML is fully removed — GLFW handles
+windowing/input, GLM replaces SFML vector/rect types, GLAD loads GL
+functions, stb_image loads textures, and FreeType renders text.
+
+The migration is ordered so the project builds and runs after every task.
 
 ==============================================================================
-Task: Create a basic map system, It should have defined areas that the player can walk on. It should understand where the player is on the map, and make sure that we draw that portion of the map on screen
-Implemented: true
-
-==============================================================================
-Task: Create a basic starting map that has multiple platforms defined for the player to talk on
-Implemented: true
-
-==============================================================================
-Task: Change the movement system so objects fall until they are on a walkable portion of the map, you can still move along those platforms with the controls
-Implemented: true
-
-==============================================================================
-Task: Make sure the player starts on a walkable portion of the map so they don't fall. if the player falls off the map teleport them back to a valid location.
-Implemented: true
-
-==============================================================================
-Task: Make is possible for the player to jump using the space bar key.
-Implemented: true
-
-==============================================================================
-Task: Instead of harddcoding the platforms, make a map file format that describes the map, migrate the current map into the file, and then use the file to load the current map
-Implemented: true
-
-==============================================================================
-Task: Add a debug menu that opens when I hit the F1 key. It should be a menu containing one button that lets me open a file selector and select a different map to lojad, it should pull open that map and let me use it in game
-Implemented: true
-
-==============================================================================
-Task: Replace the custom physics implementation (PhysicsComponent) with Nvidia PhysX. Integrate the PhysX SDK, create a PhysXWorld singleton that owns the PxScene, and rewrite PhysicsComponent to create a PxRigidDynamic actor for its owner. Collision shapes should be PxBoxGeometry derived from the existing collisionSize. Gravity, jump impulse, and fall multipliers should produce behaviour identical to the current implementation. The Map should register each Platform as a static PxRigidStatic with a matching PxBoxGeometry. Remove the old hand-rolled AABB resolveCollision path from Map once PhysX owns all collision.
-Implemented: true
-
-==============================================================================
-Task: Separate input handling from PhysicsComponent into a dedicated InputComponent. InputComponent should read keyboard state each frame and expose a simple InputState struct (moveLeft, moveRight, jump). PhysicsComponent should consume InputState rather than polling sf::Keyboard directly. This separation is required before multiplayer so that remote player input can be injected as an InputState without touching the keyboard.
-Implemented: true
-
-==============================================================================
-Task: Add an AnimationComponent that plays sprite-sheet animations. Each animation is defined by a name, a path to a texture atlas, a list of frame rects, and a frame duration. AnimationComponent should support play(name), stop(), and looping. Hook it into the player GameObject so that idle, run-left, run-right, jump, and fall each use a distinct animation. The existing RenderComponent should be bypassed when AnimationComponent is present.
-Implemented: true
-
-==============================================================================
-Task: Add a HealthComponent that tracks current and maximum hit points. Expose takeDamage(float) and heal(float) methods. When HP reaches zero emit an onDeath event (use a simple std::function callback). Add a visible HP bar rendered above the owning GameObject in world space using a RenderComponent-style draw call (no UI system needed yet).
-Implemented: true
-
-==============================================================================
-Task: Add an EnemyGameObject with a simple patrol AI: it walks back and forth between two waypoints defined in the map file, turns around when it hits a wall or reaches a waypoint, and deals damage on contact with the player. It should use PhysicsComponent (PhysX), HealthComponent, and RenderComponent. Add enemy definitions to the map JSON format so that world_01.json can include a few patrolling enemies.
-Implemented: true
-
-==============================================================================
-Task: Add a room/zone transition system. A map can contain named Transition zones (axis-aligned rectangles in the map JSON). When the player walks into a transition zone the game fades to black, unloads the current map, loads the target map (referenced by filename in the transition definition), and spawns the player at the target map's matching spawn point. Update world_01.json with at least one transition leading to a second map file.
-Implemented: true
-
-==============================================================================
-Task: Add a collectible ability pick-up system. Define an Ability enum (e.g. DoubleJump, WallSlide, Dash). Each Ability pick-up is a static GameObject placed in the map JSON. When the player overlaps one, the pick-up is consumed and the corresponding ability is unlocked on the player's PhysicsComponent. Implement DoubleJump first (allow one extra jump while airborne). Abilities persist across room transitions in a PlayerState struct.
-Implemented: true
-
-==============================================================================
-Task: Add a persistent save/load system. PlayerState (position, current map filename, unlocked abilities, HP) should be serializable to a JSON save file. Add a save slot selection screen accessible from the main menu. Auto-save on room transition. Allow manual save from the pause menu (Escape key).
-Implemented: true
-
-==============================================================================
-Task: Fix the Map Editor menu bar ordering and sub-menu item spacing. The File menu should appear at the very top of the window (above the toolbar), and several sub-menu items have words mashed together with missing spaces.
-Implemented: true
+Task: Migrate the Component base classand all Component subclasses to render through the Renderer interface instead of sf::RenderWindow.
+Implemented: false
 
 Details:
-- File: tools/MapEditor/MainForm.cs
-- In MainForm.BuildUI(), the MenuStrip is added to Controls before the ToolStrip. In WinForms, later-added DockStyle.Top controls dock higher, so the toolbar ends up above the menu bar. Fix this so the menu bar is always on top. One approach is to reverse the add order (add toolbar first, then menu strip). Another is to call Controls.SetChildIndex() to force correct Z-order after adding both.
-- Audit every ToolStripMenuItem text string in BuildMenu() across the File, Edit, and View menus. Look for missing spaces between words in display text. Fix any items where words are concatenated without spaces. Also check that the \t shortcut separator and & accelerator key markers are placed correctly and do not eat adjacent spaces.
-- Audit toolbar button labels and tooltip strings in BuildToolbar() for the same spacing problems.
-- After making changes, build and run the editor to confirm: (1) the menu bar is visually above the toolbar, (2) all menu item text reads naturally with proper spacing, and (3) keyboard shortcuts (Ctrl+N, Ctrl+O, Ctrl+S, Del, F, G, S, D, 1, -, =) still work.
+- Files to modify: src/Core/Component.h, src/Core/GameObject.h, src/Core/GameObject.cpp, src/Components/RenderComponent.h, src/Components/RenderComponent.cpp, src/Components/AnimationComponent.h, src/Components/AnimationComponent.cpp, src/Components/HealthComponent.h, src/Components/HealthComponent.cpp, src/Components/CombatComponent.h, src/Components/CombatComponent.cpp, src/Components/SlimeAttackComponent.h, src/Components/SlimeAttackComponent.cpp
+- In Component.h: forward-declare `class Renderer;` (from src/Rendering/Renderer.h). Change the virtual render signature from `virtual void render(sf::RenderWindow& window)` to `virtual void render(Renderer& renderer)`. Remove the sf::RenderWindow forward declaration.
+- In GameObject.h/.cpp: change `void render(sf::RenderWindow&)` to `void render(Renderer&)`. Add the Renderer forward-declare / include.
+- RenderComponent: replace `window.draw(shape)` with `renderer.drawRect()`. The shape's position, size, and fill color should be passed as floats. Remove sf::RectangleShape member — store position/size/color as plain floats or a small struct. Remove SFML includes.
+- AnimationComponent: store texture handles (Renderer::TextureHandle) instead of sf::Texture. Replace `window.draw(m_sprite)` with `renderer.drawSprite(handle, ...)`. Remove sf::Sprite member. The frame rects (sf::IntRect) should become plain {x,y,w,h} structs. Remove SFML includes.
+- HealthComponent: replace the two sf::RectangleShape members (bar background + fill) with direct `renderer.drawRect()` / `renderer.drawRectOutlined()` calls. Remove SFML includes.
+- CombatComponent: replace the sf::VertexArray arc rendering with `renderer.drawTriangleStrip()` and `renderer.drawLines()` using Renderer::Vertex. Remove SFML includes from the .cpp.
+- SlimeAttackComponent: replace sf::CircleShape particle rendering with `renderer.drawCircle()`. Remove SFML includes.
+- After all changes, verify the project builds. The game will not run yet until main.cpp is updated (next task).
 
 ==============================================================================
-Task: Extend the Map Editor data models to cover every feature in the map JSON format so that opening and re-saving a map does not silently drop enemies, transitions, ability pickups, or named spawn points.
-Implemented: true
+Task: Migrate the Map rendering, TransitionManager, and all UI classes to use the Renderer interface instead of sf::RenderWindow.
+Implemented: false
 
 Details:
-- File: tools/MapEditor/Models.cs
-- The current MapData class only has Name, Bounds, SpawnPoint, and Platforms. The game engine's map JSON also contains "spawnPoints", "enemies", "transitions", and "abilityPickups" arrays/objects. When the editor opens a map and saves it back, all of these extra fields are silently lost. This task fixes that by adding model classes for every field.
-- Add to MapData:
-    [JsonPropertyName("spawnPoints")]
-    public Dictionary<string, PointData> SpawnPoints { get; set; } = new();
-- Add an EnemyData class with these JsonPropertyName-annotated properties:
-    "x" (float), "y" (float),
-    "waypointA" (PointData), "waypointB" (PointData),
-    "speed" (float, default 100), "damage" (float, default 10), "hp" (float, default 50),
-    "width" (float, default 40), "height" (float, default 40)
-  Add to MapData:
-    [JsonPropertyName("enemies")]
-    public List<EnemyData> Enemies { get; set; } = new();
-- Add a TransitionData class with these JsonPropertyName-annotated properties:
-    "name" (string, default ""), "x" (float), "y" (float),
-    "width" (float), "height" (float),
-    "targetMap" (string), "targetSpawn" (string, default "default")
-  Add to MapData:
-    [JsonPropertyName("transitions")]
-    public List<TransitionData> Transitions { get; set; } = new();
-- Add an AbilityPickupData class with these JsonPropertyName-annotated properties:
-    "id" (string), "ability" (string — one of "DoubleJump", "WallSlide", "Dash"),
-    "x" (float), "y" (float),
-    "width" (float, default 30), "height" (float, default 30)
-  Add to MapData:
-    [JsonPropertyName("abilityPickups")]
-    public List<AbilityPickupData> AbilityPickups { get; set; } = new();
-- Configure JsonSerializerOptions in MainForm.cs (both read and write paths) to use DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingDefault or equivalent so that empty collections are omitted from the output JSON (the C++ engine treats these arrays as optional).
-- Verify round-trip: open maps/world_01.json and maps/world_02.json in the editor, save to a temp location, and diff the output against the original to confirm no data is lost and no spurious empty arrays are added.
+- Files to modify: src/Map/Map.h, src/Map/Map.cpp, src/Map/TransitionManager.h, src/Map/TransitionManager.cpp, src/UI/UIStyle.h, src/UI/RoundedRectangleShape.h, src/UI/PauseMenu.h, src/UI/PauseMenu.cpp, src/UI/SaveSlotScreen.h, src/UI/SaveSlotScreen.cpp, src/UI/ControlsMenu.h, src/UI/ControlsMenu.cpp, src/Debug/DebugMenu.h, src/Debug/DebugMenu.cpp
+
+- Map::render(): change parameter to `Renderer&`. Replace sf::RectangleShape platform drawing with `renderer.drawRect()`. Replace pickup drawing with `renderer.drawRectOutlined()`. Remove SFML shape includes.
+
+- TransitionManager::render(): change parameter to `Renderer&`. The fade overlay should use `renderer.resetView()` to draw in screen space, then `renderer.drawRect()` for the black overlay. Replace `window.getSize()` with `renderer.getWindowSize()`. Remove the sf::RectangleShape member. Remove SFML includes.
+
+- UIStyle.h: This is the most complex file. Every helper function currently takes `sf::RenderWindow&` — change to `Renderer&`. Replace all sf::Color usage with inline float parameters or a small Color struct. Replace RoundedRectangleShape draws with `renderer.drawRoundedRect()`. Replace sf::Text draws with `renderer.drawText()` and `renderer.measureText()`. The sf::FloatRect return from drawMenuItem/drawMenuRow should become a simple struct {x, y, w, h}.
+
+- RoundedRectangleShape.h: This file can be deleted entirely once UIStyle.h uses renderer.drawRoundedRect() instead. Remove it from includes.
+
+- PauseMenu: replace sf::Font with Renderer::FontHandle. Remove sf::Text members — call renderer.drawText() directly. Replace sf::RectangleShape overlay with renderer.drawRect(). Replace layout() to use renderer.getWindowSize() instead of window.getSize(). The handleEvent() method still uses sf::Event — this is fine for now, it will be migrated in a later GLFW task. Change render() to take Renderer&. Remove SFML rendering includes (keep sf::Event, sf::Keyboard, sf::Joystick, sf::Mouse for now).
+
+- SaveSlotScreen: same pattern as PauseMenu. Replace all sf::Font, sf::Text, sf::RectangleShape rendering with Renderer calls. Keep sf::Event/input includes for now. Change render() and handleEvent() rendering portions to use Renderer.
+
+- ControlsMenu: same pattern as PauseMenu.
+
+- DebugMenu: same pattern. Replace sf::Font, sf::Text, RoundedRectangleShape rendering with Renderer calls. Keep the Windows file dialog code unchanged.
+
+- After all changes, the game code should exclusively call Renderer methods for drawing. No file outside src/Rendering/ should include SFML graphics headers (sf::Event, sf::Keyboard, sf::Joystick, sf::Mouse are still allowed temporarily).
 
 ==============================================================================
-Task: Add named spawn points editing to the Map Editor. Users should be able to view, add, edit, and delete named spawn points, and see them rendered on the canvas.
-Implemented: true
+Task: Wire up the SFMLRenderer in main.cpp so the game runs through the Renderer abstraction end to end.
+Implemented: false
 
 Details:
-- Files: tools/MapEditor/MainForm.cs, tools/MapEditor/MapCanvas.cs
-- Properties panel (MainForm.cs):
-  - Add a "SPAWN POINTS" section below the existing map settings area (after the "Apply Map Settings" button and separator).
-  - Include a ListBox that displays all named spawn point keys (e.g. "default", "from_world_02").
-  - Below the ListBox add text fields for Name (the key string), X, and Y.
-  - Add an "Add" button that inserts a new spawn point into MapData.SpawnPoints with the entered name and coordinates, and refreshes the ListBox.
-  - Add a "Delete" button that removes the selected spawn point from MapData.SpawnPoints.
-  - When a ListBox item is selected, populate the Name/X/Y fields with its values. An "Apply" or "Update" button should write changes back to the dictionary (handling key renames by removing the old key and inserting the new one).
-  - All changes should call MarkDirty() and refresh the canvas.
-- Canvas rendering (MapCanvas.cs):
-  - In the OnPaint method, after drawing the default spawn point, iterate MapData.SpawnPoints and draw each named spawn point as a small diamond marker in a distinct color (e.g. yellow/gold) so it is visually different from the green default spawn diamond.
-  - When zoom > 0.3, draw the spawn point name as a label next to the marker.
-- Sync: Update SyncMapFields() in MainForm.cs to populate the spawn points ListBox when a map is loaded or created.
-- The existing default spawnPoint field should continue to work as before. If a "default" key exists in SpawnPoints, it does not replace spawnPoint — they are independent fields in the JSON.
+- Files to modify: src/main.cpp
+- Replace `sf::RenderWindow window(...)` with `SFMLRenderer renderer("Metroidvania", 800, 600, 60)`. Include src/Rendering/SFMLRenderer.h.
+- Replace every `window.clear(...)` with `renderer.clear(r, g, b)` using float colors (0-1 range).
+- Replace every `window.display()` with `renderer.display()`.
+- Replace `window.setView(gameView)` / view manipulation with `renderer.setView(cx, cy, w, h)`.
+- Replace the screen-space view resets (`window.setView(sf::View(sf::FloatRect(...)))`) with `renderer.resetView()`.
+- Replace the dash ghost sf::RectangleShape rendering with `renderer.drawRect()`.
+- Pass `renderer` instead of `window` to all render() calls: `player.render(renderer)`, `enemy->render(renderer)`, `map.render(renderer)`, `transitionMgr.render(renderer)`, `pauseMenu.render(renderer)`, `debugMenu.render(renderer)`, etc.
+- For sf::Event handling: the SFMLRenderer should expose `bool pollEvent(sf::Event&)`, `bool isOpen()`, `void close()`, `void setMouseCursorVisible(bool)`, `sf::Vector2u getSize()` (these are window operations the renderer owns). Add these methods to the Renderer base class as needed (or add a getWindow() escape hatch on SFMLRenderer temporarily).
+- For window resize events: the SFMLRenderer should update its internal view size.
+- The sf::Clock usage can remain as-is for now (it comes from sfml-system, not sfml-graphics).
+- After this task, the game should build, run, and be fully playable — but still using SFML under the hood via SFMLRenderer.
+- This is the critical validation checkpoint: verify all rendering works identically (platforms, sprites, HP bars, combat arcs, slime particles, menus, transitions, dash ghosts).
 
 ==============================================================================
-Task: Add enemy editing to the Map Editor. Users should be able to view, place, select, move, resize, and delete enemies on the map canvas, and edit their properties in a side panel.
-Implemented: true
+Task: Replace all SFML math types (sf::Vector2f, sf::FloatRect, sf::IntRect, sf::Color) with GLM or custom equivalents throughout the entire codebase.
+Implemented: false
 
 Details:
-- Files: tools/MapEditor/MainForm.cs, tools/MapEditor/MapCanvas.cs
-- Selection model refactor (MapCanvas.cs):
-  - The canvas currently tracks selection as a single PlatformData? field (_selected / SelectedPlatform). This must be extended to support selecting different entity types. Add an enum SelectableType { None, Platform, Enemy, Transition, Pickup } and track the selected type alongside the selected object. For example, add a SelectedEnemy property (EnemyData?), and set SelectedPlatform to null when an enemy is selected (and vice versa). Fire SelectionChanged for any selection change.
-  - Update HitPlatform-style hit testing: add HitEnemy(PointF world) that checks if a world point falls inside any enemy's bounding box (x, y, width, height). In OnMouseDown, after checking platform hits, also check enemy hits (or check enemies first, or check whichever is on top).
-- Canvas rendering (MapCanvas.cs):
-  - Draw each enemy as a filled rectangle using a red/orange color (e.g. Color.FromArgb(200, 80, 60)) at their (X, Y) position with their (Width, Height).
-  - Draw a dashed line from WaypointA to WaypointB to visualize the patrol path.
-  - Draw a small circle or marker at each waypoint position.
-  - When an enemy is selected, draw a cyan outline and resize handles (same as platforms).
-  - When zoom > 0.3, label enemies with "ENEMY" or their index.
-- Properties panel (MainForm.cs):
-  - Add a "SELECTED ENEMY" section (similar to "SELECTED PLATFORM"). It should be a separate Panel that is enabled/disabled based on whether an enemy is selected.
-  - Fields: X, Y (position), WaypointA X, WaypointA Y, WaypointB X, WaypointB Y, Speed, Damage, HP, Width, Height.
-  - Include "Apply" and "Delete" buttons.
-  - Wire up SelectionChanged to populate these fields when an enemy is selected and clear/disable them when deselected.
-- Drawing new enemies:
-  - Add EditorTool.DrawEnemy to the EditorTool enum. Add a toolbar button "Draw Enemy" for it.
-  - When in DrawEnemy mode, clicking on the canvas should place a new enemy at the clicked position with default values (speed=100, damage=10, hp=50, width=40, height=40). Set waypointA to 100 units left and waypointB to 100 units right of the placement position.
-- Moving/resizing enemies should work the same way as platforms (drag to move, handles to resize the bounding box). Update waypoints proportionally if the enemy is moved (shift both waypoints by the same delta).
-- The Edit > Delete menu item and Del key should delete whatever is currently selected (platform or enemy).
+- This task eliminates the dependency on SFML headers in game logic files, preparing for full SFML removal.
+- Use glm::vec2 for sf::Vector2f. Create a small utility header src/Math/Types.h that provides:
+    - A Rect struct: { float x, y, width, height } with an intersects() method and contains(glm::vec2) method to match sf::FloatRect's API.
+    - An IntRect struct: { int x, y, width, height } for sprite frame rectangles.
+    - A Color struct: { uint8_t r, g, b, a } with a constructor and float accessors.
+- Files to update (every file that uses sf::Vector2f, sf::FloatRect, sf::IntRect, or sf::Color):
+    - src/Core/GameObject.h: position becomes glm::vec2
+    - src/Core/SaveSystem.h/.cpp: SaveData::playerPosition becomes glm::vec2
+    - src/Core/InputBindings.h/.cpp: sf::Keyboard::Key stays for now (input, not math)
+    - src/Components/PhysicsComponent.h/.cpp: velocity, collisionSize become glm::vec2
+    - src/Components/MovementComponent.h: velocity becomes glm::vec2
+    - src/Components/EnemyAIComponent.h/.cpp: waypoints become glm::vec2
+    - src/Components/RenderComponent.h/.cpp: size/color become glm::vec2/Color
+    - src/Components/CombatComponent.cpp: position references become glm::vec2
+    - src/Components/SlimeAttackComponent.h/.cpp: particle position/velocity become glm::vec2
+    - src/Map/Platform.h: bounds becomes Rect, color becomes Color
+    - src/Map/Map.h/.cpp: spawn point, bounds, collision checks use glm::vec2 and Rect
+    - src/Map/MapLoader.cpp: construct Rect/Color/glm::vec2 instead of SFML types
+    - src/Map/TransitionZone.h: bounds becomes Rect
+    - src/Map/EnemyDefinition.h: position, waypoints, size become glm::vec2
+    - src/Map/AbilityPickupDefinition.h: position, size become glm::vec2
+    - src/Physics/PhysXWorld.h/.cpp: parameter types become glm::vec2
+    - src/main.cpp: all sf::Vector2f usage becomes glm::vec2
+- Add `#include <glm/vec2.hpp>` where needed. GLM should already be available from CMakeLists.txt (added in a later task, but this task should also add GLM to CMakeLists.txt via FetchContent if not already present).
+- Add GLM to CMakeLists.txt:
+    FetchContent_Declare(glm GIT_REPOSITORY https://github.com/g-truc/glm.git GIT_TAG 1.0.1 GIT_SHALLOW TRUE)
+    FetchContent_MakeAvailable(glm)
+    target_link_libraries(Metroidvania PRIVATE glm::glm)
+- After this task, no file outside src/Rendering/SFMLRenderer.cpp should reference sf::Vector2f, sf::FloatRect, sf::IntRect, or sf::Color. The SFMLRenderer converts between glm::vec2/Rect and SFML types internally.
+- The game should still build and run identically.
 
 ==============================================================================
-Task: Add transition zone editing to the Map Editor. Users should be able to view, place, select, move, resize, and delete transition zones on the map canvas, and edit their properties including target map and spawn point.
-Implemented: true
+Task: Replace SFML input and event types with a custom input abstraction, preparing for the GLFW switch.
+Implemented: false
 
 Details:
-- Files: tools/MapEditor/MainForm.cs, tools/MapEditor/MapCanvas.cs
-- Canvas rendering (MapCanvas.cs):
-  - Draw each transition zone as a semi-transparent rectangle (e.g. Color.FromArgb(80, 100, 100, 220) fill) with a dashed border in a blue/purple color. This should be visually distinct from platforms and enemies.
-  - When zoom > 0.3, label each transition with its name and target map filename.
-  - When a transition is selected, draw a cyan outline and resize handles.
-- Hit testing and selection (MapCanvas.cs):
-  - Add HitTransition(PointF world) to check if a click lands inside a transition zone.
-  - Integrate into the existing OnMouseDown selection logic. Since transitions are overlay zones, check them after platforms and enemies (so platforms are easier to select when overlapping).
-- Properties panel (MainForm.cs):
-  - Add a "SELECTED TRANSITION" section with fields: Name (text), X, Y, Width, Height, Target Map (text field with a "Browse…" button that opens an OpenFileDialog pre-navigated to the maps/ directory), Target Spawn (text).
-  - Include "Apply" and "Delete" buttons.
-  - Wire up SelectionChanged to populate/clear these fields.
-- Drawing new transitions:
-  - Add EditorTool.DrawTransition to the EditorTool enum. Add a toolbar button "Draw Transition".
-  - Drawing should work like platform drawing: click and drag to define the rectangle. On mouse-up, create a new TransitionData with default name "new_transition", empty targetMap, and targetSpawn "default".
-- Moving/resizing transitions should use the same handle system as platforms.
-- Update the Edit > Delete menu item label to be generic (e.g. "Delete Selected" instead of "Delete Platform") since it now applies to multiple entity types.
+- Create src/Input/InputTypes.h with:
+    - An enum class KeyCode mapping all keys currently used: A, D, W, S, Left, Right, Up, Down, Space, Escape, Return, Delete, F1, X, LShift, RShift, and all letter keys needed by InputBindings. Values should be simple integers that can be mapped from both SFML and GLFW key codes.
+    - An enum class MouseButton { Left, Right, Middle }.
+    - An enum class GamepadButton with values for the ~15 Xbox buttons used.
+    - An enum class GamepadAxis { LeftX, LeftY, RightX, RightY, DPadX, DPadY }.
+    - A struct InputEvent with a type enum { KeyPressed, KeyReleased, MouseMoved, MouseButtonPressed, MouseButtonReleased, GamepadButtonPressed, GamepadButtonReleased, GamepadAxisMoved, WindowClosed, WindowResized } and a union/struct of relevant data fields.
+
+- Create src/Input/InputSystem.h with an abstract class:
+    - virtual bool pollEvent(InputEvent& event) = 0;
+    - virtual bool isKeyPressed(KeyCode key) const = 0;
+    - virtual bool isGamepadConnected(int id = 0) const = 0;
+    - virtual float getGamepadAxis(int id, GamepadAxis axis) const = 0;
+    - virtual bool isGamepadButtonPressed(int id, GamepadButton btn) const = 0;
+    - virtual void setMouseCursorVisible(bool visible) = 0;
+
+- Create src/Input/SFMLInput.h/.cpp implementing InputSystem by wrapping sf::Event, sf::Keyboard, sf::Joystick, sf::Mouse. The SFMLRenderer should create and own the SFMLInput instance (since it owns the sf::RenderWindow). Add an accessor `InputSystem& getInput()` to Renderer.
+
+- Migrate all event-handling code:
+    - src/Components/InputComponent.cpp: replace sf::Keyboard::isKeyPressed() and sf::Joystick calls with InputSystem methods. Replace sf::Keyboard::Key references with KeyCode.
+    - src/Core/InputBindings.h/.cpp: replace sf::Keyboard::Key with KeyCode in all bindings and the key-to-string mapping table. Update save/load to use the new key names.
+    - src/UI/PauseMenu.h/.cpp: replace sf::Event with InputEvent in handleEvent().
+    - src/UI/SaveSlotScreen.h/.cpp: same.
+    - src/UI/ControlsMenu.h/.cpp: same.
+    - src/Debug/DebugMenu.h/.cpp: same.
+    - src/main.cpp: replace sf::Event polling with InputSystem::pollEvent(). Replace sf::Keyboard/sf::Joystick constants with KeyCode/GamepadButton.
+
+- After this task, no file outside src/Input/SFMLInput.cpp and src/Rendering/SFMLRenderer.cpp should include any SFML header. The game should still build and run identically.
 
 ==============================================================================
-Task: Add ability pickup editing to the Map Editor. Users should be able to view, place, select, move, resize, and delete ability pickups on the map canvas, and edit their properties including choosing the ability type from a dropdown.
-Implemented: true
+Task: Add GLFW, GLAD, stb_image, and FreeType as project dependencies via CMake. Verify they compile and link.
+Implemented: false
 
 Details:
-- Files: tools/MapEditor/MainForm.cs, tools/MapEditor/MapCanvas.cs
-- Canvas rendering (MapCanvas.cs):
-  - Draw each ability pickup as a small filled rectangle or diamond shape in a gold/yellow color (e.g. Color.FromArgb(220, 200, 50)).
-  - Add a subtle glow or thicker border to distinguish pickups from other entities.
-  - When zoom > 0.3, label each pickup with its ability name (e.g. "DoubleJump").
-  - When selected, draw a cyan outline and resize handles.
-- Hit testing and selection (MapCanvas.cs):
-  - Add HitPickup(PointF world) to check if a click lands inside a pickup's bounding box.
-  - Integrate into OnMouseDown selection logic (check after transitions).
-- Properties panel (MainForm.cs):
-  - Add a "SELECTED ABILITY PICKUP" section with fields: ID (text), Ability (ComboBox dropdown with items: "DoubleJump", "WallSlide", "Dash"), X, Y, Width, Height.
-  - Include "Apply" and "Delete" buttons.
-  - The ComboBox should be a DropDownList style (no free-form typing) since only the three ability values are valid.
-  - Wire up SelectionChanged to populate/clear these fields. Set the ComboBox selected item to match the pickup's ability string.
-- Drawing new pickups:
-  - Add EditorTool.DrawPickup to the EditorTool enum. Add a toolbar button "Draw Pickup".
-  - Clicking on the canvas in DrawPickup mode places a new AbilityPickupData at the click position with default values: id = "pickup_NN" (auto-increment), ability = "DoubleJump", width = 30, height = 30.
-- Moving/resizing pickups should use the same handle system as platforms.
-- After this task, verify the full workflow end-to-end: open world_02.json (which has an ability pickup and enemies and a transition), verify all entities render correctly, edit some properties, save, and confirm the output JSON matches the expected format.
+- Files to modify: CMakeLists.txt
+- Add GLFW via FetchContent:
+    set(GLFW_BUILD_DOCS OFF CACHE BOOL "" FORCE)
+    set(GLFW_BUILD_TESTS OFF CACHE BOOL "" FORCE)
+    set(GLFW_BUILD_EXAMPLES OFF CACHE BOOL "" FORCE)
+    FetchContent_Declare(glfw GIT_REPOSITORY https://github.com/glfw/glfw.git GIT_TAG 3.4 GIT_SHALLOW TRUE)
+    FetchContent_MakeAvailable(glfw)
+
+- Add GLAD (OpenGL 3.3 Core). Generate the loader from https://glad.dav1d.de/ or use a FetchContent-compatible source. The simplest approach is to vendor the generated glad.c and glad.h / KHR/khrplatform.h into third_party/glad/. Add glad.c to the source list.
+    target_include_directories(Metroidvania PRIVATE third_party/glad/include)
+    Add third_party/glad/src/glad.c to the executable sources.
+
+- Add stb_image: vendor stb_image.h into third_party/stb/. Create a third_party/stb/stb_image_impl.cpp with:
+    #define STB_IMAGE_IMPLEMENTATION
+    #include "stb_image.h"
+    Add this .cpp to the source list. Add third_party/stb/ to include dirs.
+
+- Add FreeType via FetchContent:
+    FetchContent_Declare(freetype GIT_REPOSITORY https://github.com/freetype/freetype.git GIT_TAG VER-2-13-3 GIT_SHALLOW TRUE)
+    FetchContent_MakeAvailable(freetype)
+    target_link_libraries(Metroidvania PRIVATE freetype)
+
+- Link GLFW and OpenGL:
+    target_link_libraries(Metroidvania PRIVATE glfw opengl32)
+
+- Do NOT link sfml-graphics, sfml-window, or sfml-system yet (still needed by SFMLRenderer/SFMLInput during transition). Keep all existing SFML links.
+
+- Create a minimal test: in a temporary main() or a separate test .cpp, verify:
+    1. GLFW initializes and creates a window
+    2. GLAD loads GL functions
+    3. glGetString(GL_VERSION) returns 3.3+
+    4. stb_image loads a PNG (e.g. assets/player_spritesheet.png)
+    5. FreeType initializes and loads a font face
+  Remove the test code after verification. The actual project should build with both SFML and the new deps linked.
 
 ==============================================================================
-Task: In the main menu, add an option to change the resolution, it should be a combo box that lets you switch between multiple good resolutions based on the monitor of the player
-Implemented: true
-
-==============================================================================
-Task: Add Controller support, so if a controller connects to the game you can use it to control the player.
-Implemented: true
-
-==============================================================================
-Task: To the main menu add an option to rebind controls to different buttons. It should show the keyboard and controller bindings and allow both to be changed.
-Implemented: true
-
-==============================================================================
-Task: When a menu is open, add the ability to click on menu items with the mouse. When your back in game the mouse should get hidden again
-Implemented: true
-
-==============================================================================
-Task: Right now in windowed mode when you resize the window, it changes the zoom. Instead of changing the zoom, it should just make it so you can see more of the map.
-Implemented: true
-
-==============================================================================
-Task: I'd like the menu items to look more modern, right now the rendering of them is very basic and ugly.
-Implemented: true
+Task: Implement the OpenGL renderer core — GLRenderer with shader management, orthographic projection, and rectangle drawing.
+Implemented: false
 
 Details:
-- Created src/UI/RoundedRectangleShape.h — custom SFML ConvexShape subclass that draws rectangles with rounded corners, used by all menu panels and buttons.
-- Created src/UI/UIStyle.h — centralized color palette and drawing helpers (drawMenuItem, drawMenuRow, drawGlow, drawAccentBar) so all menus share the same modern dark theme.
-- Updated PauseMenu, SaveSlotScreen, ControlsMenu, and DebugMenu to use rounded-rectangle shapes for panels and buttons, a refined dark color scheme, a subtle glow behind selected items, and a left-side accent bar on the selected row.
-- All menus remain fully functional with keyboard, mouse, and controller input.
+- Create src/Rendering/GLRenderer.h and src/Rendering/GLRenderer.cpp implementing the Renderer interface.
+- The GLRenderer constructor should:
+    1. Call glfwInit() and create a GLFWwindow with the given title, width, height
+    2. Set OpenGL 3.3 Core profile hints before window creation
+    3. Make the context current and call gladLoadGLLoader()
+    4. Enable blending: glEnable(GL_BLEND); glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA)
+    5. Store window dimensions, set up viewport
+
+- Create src/Rendering/Shader.h/.cpp:
+    - A Shader class that compiles vertex + fragment shader source strings
+    - Methods: use(), setMat4(name, mat4), setVec4(name, vec4), setInt(name, int)
+    - Error reporting via std::cerr with shader compilation log
+
+- Implement a "flat color" shader pair:
+    Vertex shader: takes vec2 position, applies a uniform mat4 projection, outputs gl_Position.
+    Fragment shader: outputs a uniform vec4 color.
+
+- Implement clear(): glClearColor + glClear(GL_COLOR_BUFFER_BIT)
+- Implement display(): glfwSwapBuffers
+- Implement setView(): build a glm::ortho projection matrix from (left, right, bottom, top) derived from center and size. Store as the current projection.
+- Implement resetView(): set projection to glm::ortho(0, windowW, windowH, 0) (top-left origin to match SFML's convention).
+- Implement getWindowSize(): return stored dimensions, update on resize callback.
+
+- Implement drawRect(): create (or reuse) a VAO/VBO for a unit quad, bind the flat shader, set projection and a model transform (translate + scale), set color uniform, draw. Use a single persistent quad VAO that is reused for all rect draws.
+
+- Implement drawRectOutlined(): draw the filled rect, then draw 4 thin quads for the outline edges (or use glLineWidth + GL_LINE_LOOP but line width > 1 is deprecated in core profile, so prefer quads).
+
+- Add GLRenderer.cpp and Shader.cpp to CMakeLists.txt sources.
+- Do NOT switch main.cpp to use GLRenderer yet. Just verify it compiles and the class can be instantiated.
 
 ==============================================================================
-Task: There are some problems with Map Transitions at the moment. When I transition between maps, you see popping because it looks like it updates the position of the player after the fade in has occured. Also when you transition from map 2 back to map 1 it takes you to the incorrect location. It goes back to the spawn inside of the from map 2 point.
-Implemented: true
+Task: Implement OpenGL texture loading and sprite rendering in GLRenderer.
+Implemented: false
+
+Details:
+- Implement loadTexture(): use stb_image to load the image file. Create a GL texture (glGenTextures, glTexImage2D with GL_RGBA). Set filtering to GL_NEAREST (pixel art). Store in an internal map<TextureHandle, GLuint>. Return the handle.
+
+- Create a "textured" shader pair:
+    Vertex shader: takes vec2 position + vec2 texcoord, applies projection, passes texcoord to fragment.
+    Fragment shader: samples a texture2D uniform and outputs the texel color.
+
+- Implement drawSprite(): given a TextureHandle, position, frame rect (source rectangle within the atlas), and origin:
+    1. Bind the textured shader and the GL texture
+    2. Compute UV coordinates from the frame rect and texture dimensions
+    3. Build 4 vertices (position quad with UV coordinates) for the frame
+    4. Upload to a dynamic VBO and draw
+    5. The origin offset should shift the quad so the sprite is centered correctly
+
+- For efficiency, use a single dynamic VBO that is re-uploaded each frame (or use a simple sprite batch that collects quads and flushes in one draw call). A sprite batch is preferred for performance — collect all drawSprite calls, sort by texture, and flush at display() or when the texture changes.
+
+- Implement a fallback: if a texture file fails to load, create a 2x2 magenta texture (matching SFML's behavior in AnimationComponent).
+
+- Test by temporarily instantiating GLRenderer and calling loadTexture + drawSprite with assets/player_spritesheet.png to verify a sprite frame renders correctly.
 
 ==============================================================================
-Task: When the application closes and it tries to call m_actor->release() the game crashes, we should fix that, I think the remote actor might clean it up
-Implemented: true
+Task: Implement OpenGL text rendering in GLRenderer using FreeType.
+Implemented: false
+
+Details:
+- Implement loadFont(): use FreeType to load the font file (e.g. C:\Windows\Fonts\arial.ttf). For each font handle, store the FT_Face.
+
+- For rendering, use the standard glyph-atlas approach:
+    1. On first use of a font at a given size, rasterize all printable ASCII glyphs (32-126) into a single texture atlas. Store glyph metrics (advance, bearing, size, UV rect in atlas) in a lookup table.
+    2. Create a GL texture from the atlas bitmap (single-channel, use GL_RED format with a swizzle or a dedicated text shader that reads the red channel as alpha).
+
+- Create a "text" shader pair:
+    Vertex shader: vec2 position + vec2 texcoord, applies projection.
+    Fragment shader: samples texture red channel as alpha, multiplies by a uniform vec4 textColor. This produces colored text with transparent background.
+
+- Implement drawText(): for each character in the string, look up the glyph metrics, compute the quad position (applying bearing offsets and advance), add vertices to a batch, then draw all quads in one call with the glyph atlas bound.
+
+- Implement measureText(): iterate the string, sum advance values for width. Height is the line height from font metrics. This replaces sf::Text::getLocalBounds().
+
+- Handle newlines in the string by advancing the Y cursor.
+
+- Cache glyph atlases per (font, size) pair to avoid regenerating every frame.
 
 ==============================================================================
-Task: Change the sprite art of the charater too look like a small man running, not just a box with dots
-Implemented: true
+Task: Implement OpenGL circle, rounded rectangle, triangle strip, and line drawing in GLRenderer.
+Implemented: false
+
+Details:
+- Implement drawCircle():
+    - Generate vertices for a triangle fan with ~32 segments (enough for smooth circles at game scale).
+    - Use the flat color shader with the projection matrix.
+    - For outlines: draw a second ring of triangles (outer_radius to outer_radius+thickness) in the outline color, or draw the outline as a GL_TRIANGLE_STRIP ring.
+    - Reuse a single VBO, upload vertices each call.
+
+- Implement drawRoundedRect():
+    - Generate vertices for a rounded rectangle: 4 corner arcs (each ~8 segments) connected by straight edges, all as a triangle fan from the center.
+    - Use the flat color shader.
+    - For outlines: generate an outline strip similar to the circle approach.
+    - This replaces the custom RoundedRectangleShape.h SFML shape used throughout the UI.
+
+- Implement drawTriangleStrip():
+    - Accept a vector<Renderer::Vertex> with per-vertex position and color.
+    - Upload to a dynamic VBO, draw with GL_TRIANGLE_STRIP using a per-vertex-color shader.
+    - Create a "vertex color" shader pair: vertex shader takes vec2 pos + vec4 color, passes color to fragment, fragment outputs interpolated color.
+    - This is used by CombatComponent for the sword arc VFX.
+
+- Implement drawLines():
+    - Same vertex format as triangle strip but drawn with GL_LINES.
+    - Used by CombatComponent for the bright leading-edge line.
+
+- After this task, GLRenderer should implement every method in the Renderer interface.
 
 ==============================================================================
-Task: Implement the wall slide ability. It should allow you to slowly slide down the side of a wall, and reset your jump when you start sliding. Also add new animations so you look correct when sliding on the wall.
-Implemented: true
+Task: Implement GLFWInput (the GLFW-backed InputSystem) so the game can receive input without SFML.
+Implemented: false
+
+Details:
+- Create src/Input/GLFWInput.h and src/Input/GLFWInput.cpp implementing the InputSystem interface using GLFW callbacks.
+
+- GLFW uses callbacks for input, not polling-then-queue like SFML. The implementation should:
+    1. Register GLFW callbacks: glfwSetKeyCallback, glfwSetMouseButtonCallback, glfwSetCursorPosCallback, glfwSetWindowSizeCallback, glfwSetWindowCloseCallback, glfwSetJoystickCallback.
+    2. Each callback pushes an InputEvent into an internal std::queue<InputEvent>.
+    3. pollEvent() pops from the queue. Before popping, call glfwPollEvents() if the queue is empty.
+
+- Implement isKeyPressed(): use glfwGetKey(window, glfwKeyCode). Create a mapping function from KeyCode enum → GLFW key constant.
+- Implement isGamepadConnected(): use glfwJoystickPresent().
+- Implement getGamepadAxis(): use glfwGetGamepadState() (GLFW 3.3+ gamepad API) or glfwGetJoystickAxes().
+- Implement isGamepadButtonPressed(): use glfwGetGamepadState() or glfwGetJoystickButtons().
+- Implement setMouseCursorVisible(): use glfwSetInputMode(window, GLFW_CURSOR, GLFW_CURSOR_NORMAL / GLFW_CURSOR_HIDDEN).
+
+- Map GLFW key codes to the KeyCode enum. GLFW uses GLFW_KEY_A, GLFW_KEY_SPACE, etc. Create a bidirectional mapping table.
+
+- Map GLFW gamepad buttons to GamepadButton enum. GLFW uses GLFW_GAMEPAD_BUTTON_A, etc.
+
+- Map GLFW gamepad axes to GamepadAxis enum. GLFW_GAMEPAD_AXIS_LEFT_X, etc.
+
+- The GLRenderer should create and own a GLFWInput instance (since it owns the GLFWwindow). Pass the GLFWwindow* to GLFWInput's constructor.
+
+- Wire up the WindowResized callback to also update GLRenderer's internal window size and glViewport.
+- Wire up WindowClosed to set a flag that GLRenderer::isOpen() checks.
+
+- Add GLFWInput.cpp to CMakeLists.txt sources.
+- Do NOT switch to GLFWInput yet — just verify it compiles.
 
 ==============================================================================
-Task: Implement the dash ability, it should allow you to dash forward a fixed distance. This ability should be attached to the right shoulder button. You can use the ability on the ground or in the air. Add an animation for the dash forward, and allow have a glowing trail as you dash.
-Implemented: true
+Task: Switch the game from SFMLRenderer to GLRenderer and from SFMLInput to GLFWInput. Remove all SFML dependencies.
+Implemented: false
+
+Details:
+- Files to modify: src/main.cpp, CMakeLists.txt
+
+- In main.cpp:
+    1. Replace `#include "Rendering/SFMLRenderer.h"` with `#include "Rendering/GLRenderer.h"`.
+    2. Replace `SFMLRenderer renderer(...)` with `GLRenderer renderer("Metroidvania", 800, 600, 60)`.
+    3. Replace any remaining sf::Clock usage with a GLFW-based timer: use glfwGetTime() to compute dt. Create a small helper or inline the logic. Alternatively, add a getTime() method to Renderer that wraps glfwGetTime().
+    4. The rest of main.cpp should work unchanged since it already goes through the Renderer and InputSystem abstractions.
+
+- In CMakeLists.txt:
+    1. Remove the SFML FetchContent block entirely (FetchContent_Declare for SFML, FetchContent_MakeAvailable).
+    2. Remove sfml-graphics, sfml-window, sfml-system from target_link_libraries.
+    3. Remove the SFML DLL copy post-build command.
+    4. Remove SFMLRenderer.cpp and SFMLInput.cpp from the source list.
+    5. Delete src/Rendering/SFMLRenderer.h, src/Rendering/SFMLRenderer.cpp, src/Input/SFMLInput.h, src/Input/SFMLInput.cpp.
+    6. Verify no file in the project includes any SFML header. Run a search for `#include.*SFML` to confirm.
+
+- The file dialog in DebugMenu uses Windows API (comdlg32) directly — this should still work without SFML.
+
+- Update the sf::VideoMode::getDesktopMode() calls in SaveSlotScreen to use GLFW:
+    - glfwGetPrimaryMonitor() + glfwGetVideoMode() to get desktop resolution.
+    - Window resize: glfwSetWindowSize() instead of window.setSize().
+    - Window reposition: glfwSetWindowPos() instead of window.setPosition().
+
+- Build and run the game end-to-end. Verify:
+    1. Window opens at 800x600 with "Metroidvania" title
+    2. Save slot screen renders correctly with text, rounded rects, glow effects
+    3. Game loads and renders platforms, player sprite, enemies with animations
+    4. HP bars render above entities
+    5. Combat arc VFX renders correctly
+    6. Slime particles render as circles
+    7. Dash ghost trail renders
+    8. Room transitions fade to black and back
+    9. Pause menu renders with rounded rect styling
+    10. Controls menu renders and rebinding works
+    11. Debug menu F1 works with file dialog
+    12. Controller input works
+    13. Window resize shows more of the map (not zoom)
+    14. Mouse cursor shows/hides appropriately
 
 ==============================================================================
-Task: Implement a sword slash ability so the character can attack. It should be attached to the X button. The sword should have an arcing slash that can hit enemies and damage them, for now it should take 3 hits to kill an enemy unit.
-Implemented: true
+Task: Clean up the codebase post-migration. Remove dead SFML code, update documentation, and verify the build is clean.
+Implemented: false
 
-==============================================================================
-Task: All of the current enemies on the map should get turned into slimes. They should be animated green blobs and have the same behavior they do now. infrequently they should rapidly jitter and shoot out particles that can damage the player.
-Implemented: true
+Details:
+- Search the entire src/ directory for any remaining references to SFML. Remove any leftover includes, comments referencing SFML types, or dead code paths.
+- Update ReadMe.md:
+    - Change "Game Renderer: SFML" to "Game Renderer: OpenGL 3.3 Core (via GLFW + GLAD)"
+    - Update the project description to reflect the new rendering stack
+- Update architecture.md:
+    - Replace all SFML rendering references with OpenGL/GLFW equivalents
+    - Document the new src/Rendering/ directory (Renderer, GLRenderer, Shader)
+    - Document the new src/Input/ directory (InputSystem, GLFWInput, InputTypes)
+    - Document the new src/Math/Types.h
+    - Update the dependency table (remove SFML, add GLFW, GLAD, GLM, stb_image, FreeType)
+    - Update the main loop description to reflect GLFW event handling
+- Update docs/GameObjects.md if it references SFML types in component descriptions.
+- Verify a clean build from scratch: delete the build directory, reconfigure with CMake, build, and run.
+- Run the game and perform a final smoke test of all features listed in the previous task's verification checklist.
+- Commit with a descriptive message summarizing the SFML→OpenGL migration.

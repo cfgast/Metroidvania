@@ -50,6 +50,7 @@ add_executable(Metroidvania
     src/UI/SaveSlotScreen.cpp
     src/UI/PauseMenu.cpp
     src/UI/ControlsMenu.cpp
+    src/Rendering/SFMLRenderer.cpp
 )
 
 target_include_directories(Metroidvania PRIVATE
