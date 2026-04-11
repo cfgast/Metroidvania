@@ -65,30 +65,6 @@ Details:
 - Do NOT switch main.cpp to use GLRenderer yet. Just verify it compiles and the class can be instantiated.
 
 ==============================================================================
-Task: Implement OpenGL texture loading and sprite rendering in GLRenderer.
-Implemented: false
-
-Details:
-- Implement loadTexture(): use stb_image to load the image file. Create a GL texture (glGenTextures, glTexImage2D with GL_RGBA). Set filtering to GL_NEAREST (pixel art). Store in an internal map<TextureHandle, GLuint>. Return the handle.
-
-- Create a "textured" shader pair:
-    Vertex shader: takes vec2 position + vec2 texcoord, applies projection, passes texcoord to fragment.
-    Fragment shader: samples a texture2D uniform and outputs the texel color.
-
-- Implement drawSprite(): given a TextureHandle, position, frame rect (source rectangle within the atlas), and origin:
-    1. Bind the textured shader and the GL texture
-    2. Compute UV coordinates from the frame rect and texture dimensions
-    3. Build 4 vertices (position quad with UV coordinates) for the frame
-    4. Upload to a dynamic VBO and draw
-    5. The origin offset should shift the quad so the sprite is centered correctly
-
-- For efficiency, use a single dynamic VBO that is re-uploaded each frame (or use a simple sprite batch that collects quads and flushes in one draw call). A sprite batch is preferred for performance — collect all drawSprite calls, sort by texture, and flush at display() or when the texture changes.
-
-- Implement a fallback: if a texture file fails to load, create a 2x2 magenta texture (matching SFML's behavior in AnimationComponent).
-
-- Test by temporarily instantiating GLRenderer and calling loadTexture + drawSprite with assets/player_spritesheet.png to verify a sprite frame renders correctly.
-
-==============================================================================
 Task: Implement OpenGL text rendering in GLRenderer using FreeType.
 Implemented: false
 

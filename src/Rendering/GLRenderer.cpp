@@ -2,6 +2,7 @@
 #include "../Input/InputSystem.h"
 
 #include <glm/gtc/matrix_transform.hpp>
+#include <stb_image.h>
 #include <iostream>
 #include <stdexcept>
 
@@ -29,6 +30,35 @@ uniform vec4 uColor;
 void main()
 {
     FragColor = uColor;
+}
+)";
+
+static const char* kTexVS = R"(
+#version 330 core
+layout (location = 0) in vec2 aPos;
+layout (location = 1) in vec2 aTexCoord;
+
+uniform mat4 uProjection;
+
+out vec2 vTexCoord;
+
+void main()
+{
+    gl_Position = uProjection * vec4(aPos, 0.0, 1.0);
+    vTexCoord = aTexCoord;
+}
+)";
+
+static const char* kTexFS = R"(
+#version 330 core
+in vec2 vTexCoord;
+out vec4 FragColor;
+
+uniform sampler2D uTexture;
+
+void main()
+{
+    FragColor = texture(uTexture, vTexCoord);
 }
 )";
 
@@ -89,11 +119,13 @@ GLRenderer::GLRenderer(const std::string& title, unsigned int width,
     glfwSetWindowUserPointer(m_window, this);
     glfwSetFramebufferSizeCallback(m_window, framebufferSizeCallback);
 
-    // Build the flat-color shader
+    // Build shaders
     m_flatShader = std::make_unique<Shader>(kFlatVS, kFlatFS);
+    m_texShader  = std::make_unique<Shader>(kTexVS, kTexFS);
 
-    // Create the persistent unit-quad VAO
+    // Create persistent GPU buffers
     initQuadVAO();
+    initSpriteVAO();
 
     // Default projection: top-left origin
     resetView();
@@ -103,7 +135,16 @@ GLRenderer::~GLRenderer()
 {
     if (m_quadVAO) glDeleteVertexArrays(1, &m_quadVAO);
     if (m_quadVBO) glDeleteBuffers(1, &m_quadVBO);
+    if (m_spriteVAO) glDeleteVertexArrays(1, &m_spriteVAO);
+    if (m_spriteVBO) glDeleteBuffers(1, &m_spriteVBO);
+
+    for (auto& [handle, info] : m_textures)
+    {
+        if (info.glId) glDeleteTextures(1, &info.glId);
+    }
+
     m_flatShader.reset();
+    m_texShader.reset();
 
     if (m_window)
         glfwDestroyWindow(m_window);
@@ -298,17 +339,142 @@ void GLRenderer::drawRoundedRect(float, float, float, float,
     // Will be implemented in a later task.
 }
 
-Renderer::TextureHandle GLRenderer::loadTexture(const std::string&)
+// ── Sprite VAO (dynamic, position + texcoord) ────────────────────────────────
+
+void GLRenderer::initSpriteVAO()
 {
-    // Will be implemented in the texture/sprite task.
-    return 0;
+    glGenVertexArrays(1, &m_spriteVAO);
+    glGenBuffers(1, &m_spriteVBO);
+
+    glBindVertexArray(m_spriteVAO);
+    glBindBuffer(GL_ARRAY_BUFFER, m_spriteVBO);
+    // 6 vertices × 4 floats (x, y, u, v) — re-uploaded each draw call
+    glBufferData(GL_ARRAY_BUFFER, 6 * 4 * sizeof(float), nullptr, GL_DYNAMIC_DRAW);
+
+    // position (location 0)
+    glVertexAttribPointer(0, 2, GL_FLOAT, GL_FALSE, 4 * sizeof(float), nullptr);
+    glEnableVertexAttribArray(0);
+    // texcoord (location 1)
+    glVertexAttribPointer(1, 2, GL_FLOAT, GL_FALSE, 4 * sizeof(float),
+                          reinterpret_cast<void*>(2 * sizeof(float)));
+    glEnableVertexAttribArray(1);
+
+    glBindVertexArray(0);
 }
 
-void GLRenderer::drawSprite(TextureHandle, float, float,
-                            int, int, int, int,
-                            float, float)
+// ── Magenta fallback texture ──────────────────────────────────────────────────
+
+GLuint GLRenderer::createMagentaTexture()
 {
-    // Will be implemented in the texture/sprite task.
+    unsigned char magenta[2 * 2 * 4] = {
+        255, 0, 255, 255,   255, 0, 255, 255,
+        255, 0, 255, 255,   255, 0, 255, 255,
+    };
+
+    GLuint texId = 0;
+    glGenTextures(1, &texId);
+    glBindTexture(GL_TEXTURE_2D, texId);
+    glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, 2, 2, 0,
+                 GL_RGBA, GL_UNSIGNED_BYTE, magenta);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+    glBindTexture(GL_TEXTURE_2D, 0);
+    return texId;
+}
+
+// ── Textured sprites ──────────────────────────────────────────────────────────
+
+Renderer::TextureHandle GLRenderer::loadTexture(const std::string& path)
+{
+    // Return cached handle if already loaded
+    auto it = m_texturePaths.find(path);
+    if (it != m_texturePaths.end())
+        return it->second;
+
+    TextureHandle handle = m_nextTexHandle++;
+    TextureInfo info;
+
+    stbi_set_flip_vertically_on_load(0); // top-left origin, no flip
+    int channels = 0;
+    unsigned char* data = stbi_load(path.c_str(), &info.width, &info.height,
+                                    &channels, 4); // force RGBA
+
+    if (!data)
+    {
+        std::cerr << "GLRenderer: failed to load texture: " << path << "\n";
+        info.glId   = createMagentaTexture();
+        info.width  = 2;
+        info.height = 2;
+    }
+    else
+    {
+        glGenTextures(1, &info.glId);
+        glBindTexture(GL_TEXTURE_2D, info.glId);
+        glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, info.width, info.height, 0,
+                     GL_RGBA, GL_UNSIGNED_BYTE, data);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+        glBindTexture(GL_TEXTURE_2D, 0);
+
+        stbi_image_free(data);
+    }
+
+    m_textures[handle] = info;
+    m_texturePaths[path] = handle;
+    return handle;
+}
+
+void GLRenderer::drawSprite(TextureHandle tex, float x, float y,
+                            int frameX, int frameY, int frameW, int frameH,
+                            float originX, float originY)
+{
+    auto it = m_textures.find(tex);
+    if (it == m_textures.end())
+        return;
+
+    const TextureInfo& info = it->second;
+    float texW = static_cast<float>(info.width);
+    float texH = static_cast<float>(info.height);
+
+    // Compute UV coordinates from the frame rect
+    float u0 = static_cast<float>(frameX) / texW;
+    float v0 = static_cast<float>(frameY) / texH;
+    float u1 = static_cast<float>(frameX + frameW) / texW;
+    float v1 = static_cast<float>(frameY + frameH) / texH;
+
+    // Position quad with origin offset (top-left origin)
+    float px = x - originX;
+    float py = y - originY;
+    float pw = static_cast<float>(frameW);
+    float ph = static_cast<float>(frameH);
+
+    // 6 vertices: 2 triangles, each with (x, y, u, v)
+    float verts[] = {
+        px,      py,      u0, v0,
+        px + pw, py,      u1, v0,
+        px + pw, py + ph, u1, v1,
+
+        px,      py,      u0, v0,
+        px + pw, py + ph, u1, v1,
+        px,      py + ph, u0, v1,
+    };
+
+    m_texShader->use();
+    m_texShader->setMat4("uProjection", m_projection);
+    m_texShader->setInt("uTexture", 0);
+
+    glActiveTexture(GL_TEXTURE0);
+    glBindTexture(GL_TEXTURE_2D, info.glId);
+
+    glBindVertexArray(m_spriteVAO);
+    glBindBuffer(GL_ARRAY_BUFFER, m_spriteVBO);
+    glBufferSubData(GL_ARRAY_BUFFER, 0, sizeof(verts), verts);
+    glDrawArrays(GL_TRIANGLES, 0, 6);
+    glBindVertexArray(0);
+
+    glBindTexture(GL_TEXTURE_2D, 0);
 }
 
 Renderer::FontHandle GLRenderer::loadFont(const std::string&)

@@ -17,6 +17,12 @@ class InputSystem;
 // Owns the GLFWwindow, shaders, and persistent GPU resources.
 class GLRenderer : public Renderer
 {
+    struct TextureInfo {
+        GLuint glId   = 0;
+        int    width  = 0;
+        int    height = 0;
+    };
+
 public:
     GLRenderer(const std::string& title, unsigned int width,
                unsigned int height, unsigned int fpsCap = 60);
@@ -89,8 +95,10 @@ public:
 
 private:
     void initQuadVAO();
+    void initSpriteVAO();
     void drawQuad(float x, float y, float w, float h,
                   float r, float g, float b, float a);
+    GLuint createMagentaTexture();
 
     static void framebufferSizeCallback(GLFWwindow* win, int w, int h);
 
@@ -103,6 +111,16 @@ private:
     std::unique_ptr<Shader> m_flatShader;
     GLuint m_quadVAO = 0;
     GLuint m_quadVBO = 0;
+
+    // Textured shader and dynamic sprite VAO/VBO
+    std::unique_ptr<Shader> m_texShader;
+    GLuint m_spriteVAO = 0;
+    GLuint m_spriteVBO = 0;
+
+    // Texture management
+    std::unordered_map<TextureHandle, TextureInfo> m_textures;
+    std::unordered_map<std::string, TextureHandle> m_texturePaths;
+    TextureHandle m_nextTexHandle = 1;
 
     // Current projection matrix
     glm::mat4 m_projection{1.f};
