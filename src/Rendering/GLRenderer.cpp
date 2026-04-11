@@ -62,6 +62,38 @@ void main()
 }
 )";
 
+// Text shader: samples a single-channel glyph atlas and applies a color uniform
+static const char* kTextVS = R"(
+#version 330 core
+layout (location = 0) in vec2 aPos;
+layout (location = 1) in vec2 aTexCoord;
+
+uniform mat4 uProjection;
+
+out vec2 vTexCoord;
+
+void main()
+{
+    gl_Position = uProjection * vec4(aPos, 0.0, 1.0);
+    vTexCoord = aTexCoord;
+}
+)";
+
+static const char* kTextFS = R"(
+#version 330 core
+in vec2 vTexCoord;
+out vec4 FragColor;
+
+uniform sampler2D uGlyphAtlas;
+uniform vec4 uTextColor;
+
+void main()
+{
+    float alpha = texture(uGlyphAtlas, vTexCoord).r;
+    FragColor = vec4(uTextColor.rgb, uTextColor.a * alpha);
+}
+)";
+
 // ── GLFW callbacks ────────────────────────────────────────────────────────────
 
 void GLRenderer::framebufferSizeCallback(GLFWwindow* win, int w, int h)
@@ -122,10 +154,19 @@ GLRenderer::GLRenderer(const std::string& title, unsigned int width,
     // Build shaders
     m_flatShader = std::make_unique<Shader>(kFlatVS, kFlatFS);
     m_texShader  = std::make_unique<Shader>(kTexVS, kTexFS);
+    m_textShader = std::make_unique<Shader>(kTextVS, kTextFS);
 
     // Create persistent GPU buffers
     initQuadVAO();
     initSpriteVAO();
+    initTextVAO();
+
+    // Initialize FreeType
+    if (FT_Init_FreeType(&m_ftLib))
+    {
+        std::cerr << "GLRenderer: failed to initialize FreeType\n";
+        m_ftLib = nullptr;
+    }
 
     // Default projection: top-left origin
     resetView();
@@ -137,14 +178,29 @@ GLRenderer::~GLRenderer()
     if (m_quadVBO) glDeleteBuffers(1, &m_quadVBO);
     if (m_spriteVAO) glDeleteVertexArrays(1, &m_spriteVAO);
     if (m_spriteVBO) glDeleteBuffers(1, &m_spriteVBO);
+    if (m_textVAO) glDeleteVertexArrays(1, &m_textVAO);
+    if (m_textVBO) glDeleteBuffers(1, &m_textVBO);
 
     for (auto& [handle, info] : m_textures)
     {
         if (info.glId) glDeleteTextures(1, &info.glId);
     }
 
+    // Clean up font atlases and FreeType faces
+    for (auto& [handle, fontData] : m_fonts)
+    {
+        for (auto& [size, atlas] : fontData.atlases)
+        {
+            if (atlas.textureId) glDeleteTextures(1, &atlas.textureId);
+        }
+        if (fontData.face) FT_Done_Face(fontData.face);
+    }
+
+    if (m_ftLib) FT_Done_FreeType(m_ftLib);
+
     m_flatShader.reset();
     m_texShader.reset();
+    m_textShader.reset();
 
     if (m_window)
         glfwDestroyWindow(m_window);
@@ -320,6 +376,110 @@ void GLRenderer::drawRectOutlined(float x, float y, float w, float h,
              outR, outG, outB, outA);
 }
 
+// ── Text VAO (dynamic, position + texcoord) ──────────────────────────────────
+
+void GLRenderer::initTextVAO()
+{
+    glGenVertexArrays(1, &m_textVAO);
+    glGenBuffers(1, &m_textVBO);
+
+    glBindVertexArray(m_textVAO);
+    glBindBuffer(GL_ARRAY_BUFFER, m_textVBO);
+    // Allocate enough for a batch of quads; re-uploaded each drawText call
+    glBufferData(GL_ARRAY_BUFFER, 6 * 4 * sizeof(float) * 256, nullptr, GL_DYNAMIC_DRAW);
+
+    // position (location 0)
+    glVertexAttribPointer(0, 2, GL_FLOAT, GL_FALSE, 4 * sizeof(float), nullptr);
+    glEnableVertexAttribArray(0);
+    // texcoord (location 1)
+    glVertexAttribPointer(1, 2, GL_FLOAT, GL_FALSE, 4 * sizeof(float),
+                          reinterpret_cast<void*>(2 * sizeof(float)));
+    glEnableVertexAttribArray(1);
+
+    glBindVertexArray(0);
+}
+
+// ── Glyph atlas builder ──────────────────────────────────────────────────────
+
+GLRenderer::GlyphAtlas& GLRenderer::getOrBuildAtlas(FontData& font, unsigned int size)
+{
+    auto it = font.atlases.find(size);
+    if (it != font.atlases.end())
+        return it->second;
+
+    FT_Set_Pixel_Sizes(font.face, 0, size);
+
+    // First pass: measure total atlas dimensions
+    int totalWidth = 0;
+    int maxHeight = 0;
+    for (int c = 32; c < 127; ++c)
+    {
+        if (FT_Load_Char(font.face, c, FT_LOAD_RENDER))
+            continue;
+        totalWidth += static_cast<int>(font.face->glyph->bitmap.width) + 1; // 1px padding
+        int h = static_cast<int>(font.face->glyph->bitmap.rows);
+        if (h > maxHeight) maxHeight = h;
+    }
+
+    GlyphAtlas atlas;
+    atlas.atlasWidth  = totalWidth;
+    atlas.atlasHeight = maxHeight > 0 ? maxHeight : 1;
+    atlas.ascender    = static_cast<int>(font.face->size->metrics.ascender >> 6);
+    atlas.lineHeight  = static_cast<int>((font.face->size->metrics.ascender -
+                                          font.face->size->metrics.descender) >> 6);
+
+    // Create the GL texture
+    glGenTextures(1, &atlas.textureId);
+    glBindTexture(GL_TEXTURE_2D, atlas.textureId);
+    glPixelStorei(GL_UNPACK_ALIGNMENT, 1);
+    glTexImage2D(GL_TEXTURE_2D, 0, GL_RED, atlas.atlasWidth, atlas.atlasHeight, 0,
+                 GL_RED, GL_UNSIGNED_BYTE, nullptr);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+
+    // Second pass: rasterize each glyph into the atlas
+    int xOffset = 0;
+    for (int c = 32; c < 127; ++c)
+    {
+        if (FT_Load_Char(font.face, c, FT_LOAD_RENDER))
+        {
+            atlas.glyphs[c] = {};
+            continue;
+        }
+
+        FT_GlyphSlot g = font.face->glyph;
+        int bw = static_cast<int>(g->bitmap.width);
+        int bh = static_cast<int>(g->bitmap.rows);
+
+        if (bw > 0 && bh > 0)
+        {
+            glTexSubImage2D(GL_TEXTURE_2D, 0, xOffset, 0, bw, bh,
+                            GL_RED, GL_UNSIGNED_BYTE, g->bitmap.buffer);
+        }
+
+        GlyphInfo& gi = atlas.glyphs[c];
+        gi.width    = bw;
+        gi.height   = bh;
+        gi.bearingX = g->bitmap_left;
+        gi.bearingY = g->bitmap_top;
+        gi.advance  = static_cast<int>(g->advance.x); // in 1/64 pixels
+        gi.u0 = static_cast<float>(xOffset) / atlas.atlasWidth;
+        gi.v0 = 0.f;
+        gi.u1 = static_cast<float>(xOffset + bw) / atlas.atlasWidth;
+        gi.v1 = static_cast<float>(bh) / atlas.atlasHeight;
+
+        xOffset += bw + 1;
+    }
+
+    glPixelStorei(GL_UNPACK_ALIGNMENT, 4);
+    glBindTexture(GL_TEXTURE_2D, 0);
+
+    auto [insertIt, _] = font.atlases.emplace(size, atlas);
+    return insertIt->second;
+}
+
 // ── Stubs for methods implemented in later tasks ──────────────────────────────
 
 void GLRenderer::drawCircle(float, float, float,
@@ -477,25 +637,149 @@ void GLRenderer::drawSprite(TextureHandle tex, float x, float y,
     glBindTexture(GL_TEXTURE_2D, 0);
 }
 
-Renderer::FontHandle GLRenderer::loadFont(const std::string&)
+Renderer::FontHandle GLRenderer::loadFont(const std::string& path)
 {
-    // Will be implemented in the text rendering task.
-    return 0;
+    // Return cached handle if already loaded
+    auto it = m_fontPaths.find(path);
+    if (it != m_fontPaths.end())
+        return it->second;
+
+    if (!m_ftLib)
+    {
+        std::cerr << "GLRenderer: FreeType not initialized, cannot load font: " << path << "\n";
+        return 0;
+    }
+
+    FontData fontData;
+    if (FT_New_Face(m_ftLib, path.c_str(), 0, &fontData.face))
+    {
+        std::cerr << "GLRenderer: failed to load font: " << path << "\n";
+        return 0;
+    }
+
+    FontHandle handle = m_nextFontHandle++;
+    m_fonts[handle] = std::move(fontData);
+    m_fontPaths[path] = handle;
+    return handle;
 }
 
-void GLRenderer::drawText(FontHandle, const std::string&,
-                           float, float, unsigned int,
-                           float, float, float, float)
+void GLRenderer::drawText(FontHandle font, const std::string& str,
+                           float x, float y, unsigned int size,
+                           float r, float g, float b, float a)
 {
-    // Will be implemented in the text rendering task.
+    auto fontIt = m_fonts.find(font);
+    if (fontIt == m_fonts.end() || str.empty())
+        return;
+
+    GlyphAtlas& atlas = getOrBuildAtlas(fontIt->second, size);
+    if (!atlas.textureId)
+        return;
+
+    // Build vertex data: 6 vertices per character (x, y, u, v)
+    std::vector<float> vertices;
+    vertices.reserve(str.size() * 6 * 4);
+
+    float cursorX = x;
+    float cursorY = y + static_cast<float>(atlas.ascender);
+
+    for (char ch : str)
+    {
+        if (ch == '\n')
+        {
+            cursorX = x;
+            cursorY += static_cast<float>(atlas.lineHeight);
+            continue;
+        }
+
+        int c = static_cast<unsigned char>(ch);
+        if (c < 32 || c >= 127)
+            c = '?';
+
+        const GlyphInfo& gi = atlas.glyphs[c];
+
+        float xpos = cursorX + static_cast<float>(gi.bearingX);
+        float ypos = cursorY - static_cast<float>(gi.bearingY);
+        float w = static_cast<float>(gi.width);
+        float h = static_cast<float>(gi.height);
+
+        if (w > 0 && h > 0)
+        {
+            // Two triangles per glyph quad
+            vertices.insert(vertices.end(), {xpos,     ypos,     gi.u0, gi.v0});
+            vertices.insert(vertices.end(), {xpos + w, ypos,     gi.u1, gi.v0});
+            vertices.insert(vertices.end(), {xpos + w, ypos + h, gi.u1, gi.v1});
+
+            vertices.insert(vertices.end(), {xpos,     ypos,     gi.u0, gi.v0});
+            vertices.insert(vertices.end(), {xpos + w, ypos + h, gi.u1, gi.v1});
+            vertices.insert(vertices.end(), {xpos,     ypos + h, gi.u0, gi.v1});
+        }
+
+        cursorX += static_cast<float>(gi.advance >> 6);
+    }
+
+    if (vertices.empty())
+        return;
+
+    m_textShader->use();
+    m_textShader->setMat4("uProjection", m_projection);
+    m_textShader->setVec4("uTextColor", glm::vec4(r, g, b, a));
+    m_textShader->setInt("uGlyphAtlas", 0);
+
+    glActiveTexture(GL_TEXTURE0);
+    glBindTexture(GL_TEXTURE_2D, atlas.textureId);
+
+    glBindVertexArray(m_textVAO);
+    glBindBuffer(GL_ARRAY_BUFFER, m_textVBO);
+
+    GLsizeiptr dataSize = static_cast<GLsizeiptr>(vertices.size() * sizeof(float));
+    glBufferData(GL_ARRAY_BUFFER, dataSize, vertices.data(), GL_DYNAMIC_DRAW);
+
+    int vertexCount = static_cast<int>(vertices.size()) / 4;
+    glDrawArrays(GL_TRIANGLES, 0, vertexCount);
+
+    glBindVertexArray(0);
+    glBindTexture(GL_TEXTURE_2D, 0);
 }
 
-void GLRenderer::measureText(FontHandle, const std::string&,
-                              unsigned int,
+void GLRenderer::measureText(FontHandle font, const std::string& str,
+                              unsigned int size,
                               float& outWidth, float& outHeight)
 {
-    // Will be implemented in the text rendering task.
     outWidth = outHeight = 0.f;
+
+    auto fontIt = m_fonts.find(font);
+    if (fontIt == m_fonts.end() || str.empty())
+        return;
+
+    GlyphAtlas& atlas = getOrBuildAtlas(fontIt->second, size);
+
+    float maxLineWidth = 0.f;
+    float curLineWidth = 0.f;
+    int lineCount = 1;
+
+    for (char ch : str)
+    {
+        if (ch == '\n')
+        {
+            if (curLineWidth > maxLineWidth)
+                maxLineWidth = curLineWidth;
+            curLineWidth = 0.f;
+            ++lineCount;
+            continue;
+        }
+
+        int c = static_cast<unsigned char>(ch);
+        if (c < 32 || c >= 127)
+            c = '?';
+
+        curLineWidth += static_cast<float>(atlas.glyphs[c].advance >> 6);
+    }
+
+    if (curLineWidth > maxLineWidth)
+        maxLineWidth = curLineWidth;
+
+    outWidth  = maxLineWidth;
+    outHeight = static_cast<float>(atlas.lineHeight * lineCount);
 }
 
 void GLRenderer::drawTriangleStrip(const std::vector<Vertex>&)

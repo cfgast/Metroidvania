@@ -445,3 +445,26 @@ Details:
 - All other Renderer methods (circle, rounded-rect, texture, text, vertex-colored geometry) are stubbed for later tasks.
 - Added GLRenderer.cpp and Shader.cpp to CMakeLists.txt sources.
 - Verified the project compiles successfully.
+
+==============================================================================
+Task: Implement OpenGL text rendering in GLRenderer using FreeType.
+Implemented: true
+
+Details:
+- Implement loadFont(): use FreeType to load the font file (e.g. C:\Windows\Fonts\arial.ttf). For each font handle, store the FT_Face.
+
+- For rendering, use the standard glyph-atlas approach:
+    1. On first use of a font at a given size, rasterize all printable ASCII glyphs (32-126) into a single texture atlas. Store glyph metrics (advance, bearing, size, UV rect in atlas) in a lookup table.
+    2. Create a GL texture from the atlas bitmap (single-channel, use GL_RED format with a swizzle or a dedicated text shader that reads the red channel as alpha).
+
+- Create a "text" shader pair:
+    Vertex shader: vec2 position + vec2 texcoord, applies projection.
+    Fragment shader: samples texture red channel as alpha, multiplies by a uniform vec4 textColor. This produces colored text with transparent background.
+
+- Implement drawText(): for each character in the string, look up the glyph metrics, compute the quad position (applying bearing offsets and advance), add vertices to a batch, then draw all quads in one call with the glyph atlas bound.
+
+- Implement measureText(): iterate the string, sum advance values for width. Height is the line height from font metrics. This replaces sf::Text::getLocalBounds().
+
+- Handle newlines in the string by advancing the Y cursor.
+
+- Cache glyph atlases per (font, size) pair to avoid regenerating every frame.

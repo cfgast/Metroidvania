@@ -7,8 +7,12 @@
 #include <GLFW/glfw3.h>
 #include <glm/glm.hpp>
 
+#include <ft2build.h>
+#include FT_FREETYPE_H
+
 #include <memory>
 #include <unordered_map>
+#include <map>
 #include <string>
 
 class InputSystem;
@@ -21,6 +25,30 @@ class GLRenderer : public Renderer
         GLuint glId   = 0;
         int    width  = 0;
         int    height = 0;
+    };
+
+    // Per-glyph metrics stored after rasterization
+    struct GlyphInfo {
+        float u0, v0, u1, v1; // UV coordinates in the atlas
+        int   width, height;  // glyph bitmap size in pixels
+        int   bearingX, bearingY; // offset from baseline
+        int   advance;        // horizontal advance in 1/64 pixels
+    };
+
+    // A glyph atlas for a specific (font, size) pair
+    struct GlyphAtlas {
+        GLuint          textureId = 0;
+        int             atlasWidth  = 0;
+        int             atlasHeight = 0;
+        int             lineHeight  = 0; // ascender - descender
+        int             ascender    = 0;
+        GlyphInfo       glyphs[128]; // ASCII 0-127; only 32-126 populated
+    };
+
+    // Font data: FreeType face + cached atlases per size
+    struct FontData {
+        FT_Face face = nullptr;
+        std::map<unsigned int, GlyphAtlas> atlases; // keyed by font size
     };
 
 public:
@@ -96,9 +124,11 @@ public:
 private:
     void initQuadVAO();
     void initSpriteVAO();
+    void initTextVAO();
     void drawQuad(float x, float y, float w, float h,
                   float r, float g, float b, float a);
     GLuint createMagentaTexture();
+    GlyphAtlas& getOrBuildAtlas(FontData& font, unsigned int size);
 
     static void framebufferSizeCallback(GLFWwindow* win, int w, int h);
 
@@ -116,6 +146,19 @@ private:
     std::unique_ptr<Shader> m_texShader;
     GLuint m_spriteVAO = 0;
     GLuint m_spriteVBO = 0;
+
+    // Text shader and dynamic text VAO/VBO
+    std::unique_ptr<Shader> m_textShader;
+    GLuint m_textVAO = 0;
+    GLuint m_textVBO = 0;
+
+    // FreeType library handle
+    FT_Library m_ftLib = nullptr;
+
+    // Font management
+    std::unordered_map<FontHandle, FontData> m_fonts;
+    std::unordered_map<std::string, FontHandle> m_fontPaths;
+    FontHandle m_nextFontHandle = 1;
 
     // Texture management
     std::unordered_map<TextureHandle, TextureInfo> m_textures;
