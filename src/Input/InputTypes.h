@@ -3,7 +3,7 @@
 #include <cstdint>
 
 // Backend-agnostic key codes. Values are arbitrary integers that can be mapped
-// from both SFML and GLFW key codes via a translation table.
+// from GLFW key codes via a translation table.
 enum class KeyCode : int
 {
     Unknown = -1,

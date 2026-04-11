@@ -3,7 +3,7 @@
 #include <cstdint>
 #include <glm/vec2.hpp>
 
-// Axis-aligned rectangle (float).  Drop-in replacement for sf::FloatRect.
+// Axis-aligned rectangle (float).
 struct Rect
 {
     float x = 0.f;
@@ -28,7 +28,7 @@ struct Rect
     }
 };
 
-// Axis-aligned rectangle (int).  Drop-in replacement for sf::IntRect.
+// Axis-aligned rectangle (int).
 struct IntRect
 {
     int x = 0;
@@ -41,7 +41,7 @@ struct IntRect
         : x(x), y(y), width(w), height(h) {}
 };
 
-// RGBA color stored as bytes.  Drop-in replacement for sf::Color.
+// RGBA color stored as bytes.
 struct Color
 {
     uint8_t r = 255;

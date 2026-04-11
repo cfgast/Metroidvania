@@ -371,7 +371,7 @@ void GLRenderer::setView(float centerX, float centerY,
 
 void GLRenderer::resetView()
 {
-    // Top-left origin to match SFML convention
+    // Top-left origin (Y-down) for 2D screen-space drawing
     m_projection = glm::ortho(0.f, m_windowW, m_windowH, 0.f, -1.f, 1.f);
 }
 

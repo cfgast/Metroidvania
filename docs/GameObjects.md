@@ -8,9 +8,9 @@ The GameObject/Component system provides a flexible, data-driven way to compose 
 
 ```
 GameObject
- ├── position        (sf::Vector2f — shared world position)
+ ├── position        (glm::vec2 — shared world position)
  └── components[]
-      ├── RenderComponent    → owns the visual shape, draws it each frame
+      ├── RenderComponent    → draws a colored rectangle each frame
       └── MovementComponent  → reads input, applies velocity to position
 ```
 
@@ -21,7 +21,7 @@ Abstract base class. All components inherit from this.
 | Method | Purpose |
 |--------|---------|
 | `update(float dt)` | Called every frame with delta time |
-| `render(sf::RenderWindow&)` | Called every frame for drawing |
+| `render(Renderer&)` | Called every frame for drawing |
 | `setOwner(GameObject*)` | Set by `GameObject::addComponent` automatically |
 | `getOwner()` | Access the owning `GameObject` (e.g. to read/write position) |
 
@@ -47,23 +47,24 @@ Reads WASD and arrow-key input each frame, builds a velocity vector, and writes 
 
 ### RenderComponent (src/Components/RenderComponent.h / .cpp)
 
-Owns an `sf::RectangleShape`. Each frame it syncs the shape's position to the owner's `position` field, then draws it.
+Draws a colored rectangle via `Renderer::drawRect()`. Each frame it syncs the rectangle's position to the owner's `position` field.
 
 | Field | Purpose |
 |-------|---------|
-| `shape` | The SFML rectangle shape (colour, size, etc. configurable) |
+| `m_width`, `m_height` | Dimensions of the rectangle |
+| `m_r`, `m_g`, `m_b`, `m_a` | RGBA color values (0–1 floats) |
 
 ## Usage Example
 
 ```cpp
 GameObject player;
 player.position = { 400.f, 300.f };
-player.addComponent<RenderComponent>(sf::Vector2f(50.f, 50.f), sf::Color::Green);
+player.addComponent<RenderComponent>(50.f, 50.f, 0.f, 1.f, 0.f);  // green
 player.addComponent<MovementComponent>(300.f);
 
 // In the game loop:
 player.update(dt);
-player.render(window);
+player.render(renderer);
 ```
 
 ## Adding New Components

@@ -204,7 +204,7 @@ int main()
     float halfW = viewW / 2.f;
     float halfH = viewH / 2.f;
 
-    // Simple chrono-based clock (replaces the former sf::Clock usage)
+    // Simple chrono-based clock for frame timing
     struct GameClock {
         std::chrono::high_resolution_clock::time_point last =
             std::chrono::high_resolution_clock::now();

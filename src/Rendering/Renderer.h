@@ -7,7 +7,7 @@
 class InputSystem;
 
 // Pure-virtual rendering interface.
-// All game code draws through this API so the back-end (SFML, OpenGL, …)
+// All game code draws through this API so the back-end (e.g. OpenGL)
 // can be swapped without touching callers.
 class Renderer
 {

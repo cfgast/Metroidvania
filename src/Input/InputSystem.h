@@ -3,7 +3,7 @@
 #include "InputTypes.h"
 
 // Abstract input interface. Concrete implementations wrap a specific backend
-// (SFML, GLFW, …).  The Renderer that owns the window also owns the
+// (e.g. GLFW).  The Renderer that owns the window also owns the
 // InputSystem so that window-level events reach the input layer.
 class InputSystem
 {

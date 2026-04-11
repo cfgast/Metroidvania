@@ -22,8 +22,8 @@ A lightweight struct.
 
 | Field    | Type            | Purpose                          |
 |----------|-----------------|----------------------------------|
-| `bounds` | `sf::FloatRect` | World-space AABB of the surface  |
-| `color`  | `sf::Color`     | Debug / placeholder render color |
+| `bounds` | `Rect`  | World-space AABB of the surface  |
+| `color`  | `Color` | Debug / placeholder render color |
 
 ### TransitionZone (src/Map/TransitionZone.h)
 
@@ -32,7 +32,7 @@ Describes a trigger area that moves the player to another map.
 | Field         | Type            | Purpose                                     |
 |---------------|-----------------|---------------------------------------------|
 | `name`        | `std::string`   | Human-readable identifier                   |
-| `bounds`      | `sf::FloatRect` | World-space AABB trigger region              |
+| `bounds`      | `Rect`          | World-space AABB trigger region              |
 | `targetMap`   | `std::string`   | Relative path to the destination map JSON    |
 | `targetSpawn` | `std::string`   | Named spawn point in the destination map     |
 
@@ -70,7 +70,7 @@ Collision is handled by PhysX. Each platform is registered as a `PxRigidStatic` 
 
 ## Camera
 
-`main.cpp` uses an `sf::View` centred on the player each frame, clamped to `map.getBounds()` so the camera never shows outside the world.
+`main.cpp` uses a `Renderer::setView()` camera centred on the player each frame, clamped to `map.getBounds()` so the camera never shows outside the world.
 
 ## Room / Zone Transitions
 
