@@ -1,8 +1,6 @@
 #include "DebugMenu.h"
 #include "../UI/UIStyle.h"
 
-#include <SFML/Graphics/RenderWindow.hpp>
-
 #define WIN32_LEAN_AND_MEAN
 #include <windows.h>
 #include <commdlg.h>
@@ -12,69 +10,12 @@ static constexpr float k_panelH  = 150.f;
 static constexpr float k_btnW    = 220.f;
 static constexpr float k_btnH    =  44.f;
 
-DebugMenu::DebugMenu()
-{
-    m_fontLoaded = m_font.loadFromFile("C:\\Windows\\Fonts\\arial.ttf");
-
-    m_panel.setParameters({ k_panelW, k_panelH }, UIStyle::PANEL_CORNER_RADIUS);
-    m_panel.setFillColor(UIStyle::panelBg());
-    m_panel.setOutlineColor(UIStyle::panelBorder());
-    m_panel.setOutlineThickness(1.5f);
-
-    m_button.setParameters({ k_btnW, k_btnH }, UIStyle::CORNER_RADIUS);
-    m_button.setFillColor(UIStyle::itemBgSelected());
-    m_button.setOutlineColor(UIStyle::itemBorderSel());
-    m_button.setOutlineThickness(1.f);
-
-    if (m_fontLoaded)
-    {
-        m_titleText.setFont(m_font);
-        m_titleText.setString("Debug Menu");
-        m_titleText.setCharacterSize(20);
-        m_titleText.setFillColor(UIStyle::titleColor());
-
-        m_buttonText.setFont(m_font);
-        m_buttonText.setString("Open Map...");
-        m_buttonText.setCharacterSize(16);
-        m_buttonText.setFillColor(sf::Color::White);
-    }
-}
-
-// Position panel and children relative to current window size.
-void DebugMenu::layout(const sf::RenderWindow& window)
-{
-    const float winW = static_cast<float>(window.getSize().x);
-    const float winH = static_cast<float>(window.getSize().y);
-
-    const float px = (winW - k_panelW) * 0.5f;
-    const float py = (winH - k_panelH) * 0.5f;
-    m_panel.setPosition(px, py);
-
-    const float bx = px + (k_panelW - k_btnW) * 0.5f;
-    const float by = py + k_panelH - k_btnH - 24.f;
-    m_button.setPosition(bx, by);
-
-    if (m_fontLoaded)
-    {
-        const sf::FloatRect tb = m_titleText.getLocalBounds();
-        m_titleText.setPosition(px + (k_panelW - tb.width) * 0.5f, py + 16.f);
-
-        // Centre button label inside button
-        const sf::FloatRect bb = m_buttonText.getLocalBounds();
-        m_buttonText.setOrigin(bb.left + bb.width  * 0.5f,
-                               bb.top  + bb.height * 0.5f);
-        m_buttonText.setPosition(bx + k_btnW * 0.5f, by + k_btnH * 0.5f);
-    }
-}
-
-void DebugMenu::handleEvent(const sf::Event& event, const sf::RenderWindow& window)
+void DebugMenu::handleEvent(const sf::Event& event)
 {
     if (event.type == sf::Event::KeyPressed &&
         event.key.code == sf::Keyboard::F1)
     {
         m_open = !m_open;
-        if (m_open)
-            layout(window);
         return;
     }
 
@@ -84,9 +25,10 @@ void DebugMenu::handleEvent(const sf::Event& event, const sf::RenderWindow& wind
     if (event.type == sf::Event::MouseButtonPressed &&
         event.mouseButton.button == sf::Mouse::Left)
     {
-        const sf::Vector2f mouse(static_cast<float>(event.mouseButton.x),
-                                 static_cast<float>(event.mouseButton.y));
-        if (m_button.getGlobalBounds().contains(mouse))
+        float mx = static_cast<float>(event.mouseButton.x);
+        float my = static_cast<float>(event.mouseButton.y);
+        if (mx >= m_buttonLayout.x && mx <= m_buttonLayout.x + m_buttonLayout.w &&
+            my >= m_buttonLayout.y && my <= m_buttonLayout.y + m_buttonLayout.h)
             openFileDialog();
     }
 }
@@ -98,20 +40,67 @@ std::string DebugMenu::pollSelectedMap()
     return result;
 }
 
-void DebugMenu::render(sf::RenderWindow& window)
+void DebugMenu::render(Renderer& renderer)
 {
     if (!m_open)
         return;
 
-    layout(window);
+    // Lazy-load font on first render
+    if (m_font == 0)
+        m_font = renderer.loadFont("C:\\Windows\\Fonts\\arial.ttf");
 
-    window.draw(m_panel);
-    window.draw(m_button);
+    float winW, winH;
+    renderer.getWindowSize(winW, winH);
 
-    if (m_fontLoaded)
+    // Compute layout
+    const float px = (winW - k_panelW) * 0.5f;
+    const float py = (winH - k_panelH) * 0.5f;
+    const float bx = px + (k_panelW - k_btnW) * 0.5f;
+    const float by = py + k_panelH - k_btnH - 24.f;
+    m_buttonLayout = { bx, by, k_btnW, k_btnH };
+
+    // Panel
     {
-        window.draw(m_titleText);
-        window.draw(m_buttonText);
+        float r, g, b, a, br, bg2, bb, ba;
+        UIStyle::panelBg(r, g, b, a);
+        UIStyle::panelBorder(br, bg2, bb, ba);
+        renderer.drawRoundedRect(px, py, k_panelW, k_panelH,
+                                 UIStyle::PANEL_CORNER_RADIUS,
+                                 r, g, b, a, br, bg2, bb, ba, 1.5f);
+    }
+
+    // Button
+    {
+        float r, g, b, a, br, bg2, bb, ba;
+        UIStyle::itemBgSelected(r, g, b, a);
+        UIStyle::itemBorderSel(br, bg2, bb, ba);
+        renderer.drawRoundedRect(bx, by, k_btnW, k_btnH,
+                                 UIStyle::CORNER_RADIUS,
+                                 r, g, b, a, br, bg2, bb, ba, 1.f);
+    }
+
+    if (m_font)
+    {
+        // Title
+        {
+            float tR, tG, tB, tA;
+            UIStyle::titleColor(tR, tG, tB, tA);
+            float tw, th;
+            renderer.measureText(m_font, "Debug Menu", 20, tw, th);
+            renderer.drawText(m_font, "Debug Menu",
+                              px + (k_panelW - tw) * 0.5f, py + 16.f,
+                              20, tR, tG, tB, tA);
+        }
+
+        // Button text
+        {
+            float bw, bh;
+            renderer.measureText(m_font, "Open Map...", 16, bw, bh);
+            renderer.drawText(m_font, "Open Map...",
+                              bx + (k_btnW - bw) * 0.5f,
+                              by + (k_btnH - bh) * 0.5f - 2.f,
+                              16, 1.f, 1.f, 1.f, 1.f);
+        }
     }
 }
 

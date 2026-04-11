@@ -2,7 +2,7 @@
 
 #include <algorithm>
 
-#include <SFML/Graphics/RenderWindow.hpp>
+#include "../Rendering/Renderer.h"
 
 void TransitionManager::startTransition(const std::string& targetMap,
                                         const std::string& targetSpawn)
@@ -40,7 +40,7 @@ bool TransitionManager::update(float dt)
     return true;   // transition still active
 }
 
-void TransitionManager::render(sf::RenderWindow& window)
+void TransitionManager::render(Renderer& renderer)
 {
     if (m_state == State::Idle)
         return;
@@ -51,18 +51,10 @@ void TransitionManager::render(sf::RenderWindow& window)
     else if (m_state == State::FadingIn)
         alpha = 1.f - std::min(m_timer / m_fadeDuration, 1.f);
 
-    sf::Vector2f size(static_cast<float>(window.getSize().x),
-                      static_cast<float>(window.getSize().y));
-    m_overlay.setSize(size);
-    m_overlay.setPosition(0.f, 0.f);
-    m_overlay.setFillColor(sf::Color(0, 0, 0, static_cast<sf::Uint8>(alpha * 255.f)));
+    float winW, winH;
+    renderer.getWindowSize(winW, winH);
 
-    // Draw in default (screen-space) view so it covers the whole window.
-    sf::View prev = window.getView();
-    sf::View uiView(sf::FloatRect(0.f, 0.f,
-                                   static_cast<float>(window.getSize().x),
-                                   static_cast<float>(window.getSize().y)));
-    window.setView(uiView);
-    window.draw(m_overlay);
-    window.setView(prev);
+    // Draw in screen space so the overlay covers the whole window.
+    renderer.resetView();
+    renderer.drawRect(0.f, 0.f, winW, winH, 0.f, 0.f, 0.f, alpha);
 }

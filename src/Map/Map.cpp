@@ -1,7 +1,6 @@
 #include "Map.h"
 
-#include <SFML/Graphics/RectangleShape.hpp>
-#include <SFML/Graphics/RenderWindow.hpp>
+#include "../Rendering/Renderer.h"
 
 #include <algorithm>
 
@@ -80,25 +79,26 @@ void Map::registerPhysXStatics() const
     }
 }
 
-void Map::render(sf::RenderWindow& window) const
+void Map::render(Renderer& renderer) const
 {
     for (const auto& platform : m_platforms)
     {
-        sf::RectangleShape shape(sf::Vector2f(platform.bounds.width, platform.bounds.height));
-        shape.setPosition(platform.bounds.left, platform.bounds.top);
-        shape.setFillColor(platform.color);
-        window.draw(shape);
+        renderer.drawRect(platform.bounds.left, platform.bounds.top,
+                          platform.bounds.width, platform.bounds.height,
+                          platform.color.r / 255.f,
+                          platform.color.g / 255.f,
+                          platform.color.b / 255.f,
+                          platform.color.a / 255.f);
     }
 
     // Render ability pick-ups as bright coloured rectangles.
     for (const auto& pickup : m_abilityPickups)
     {
-        sf::RectangleShape shape(pickup.size);
-        shape.setOrigin(pickup.size.x * 0.5f, pickup.size.y * 0.5f);
-        shape.setPosition(pickup.position);
-        shape.setFillColor(sf::Color(255, 215, 0)); // gold
-        shape.setOutlineColor(sf::Color::White);
-        shape.setOutlineThickness(2.f);
-        window.draw(shape);
+        float px = pickup.position.x - pickup.size.x * 0.5f;
+        float py = pickup.position.y - pickup.size.y * 0.5f;
+        renderer.drawRectOutlined(px, py, pickup.size.x, pickup.size.y,
+                                  1.f, 215.f/255.f, 0.f, 1.f,   // gold fill
+                                  1.f, 1.f, 1.f, 1.f,            // white outline
+                                  2.f);
     }
 }

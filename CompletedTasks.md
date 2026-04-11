@@ -329,3 +329,7 @@ Implemented: true
 ==============================================================================
 Task: Migrate the Component base class and all Component subclasses to render through the Renderer interface instead of sf::RenderWindow.
 Implemented: true
+
+==============================================================================
+Task: Migrate the Map rendering, TransitionManager, and all UI classes to use the Renderer interface instead of sf::RenderWindow.
+Implemented: true

@@ -30,31 +30,6 @@ functions, stb_image loads textures, and FreeType renders text.
 The migration is ordered so the project builds and runs after every task.
 
 ==============================================================================
-Task: Migrate the Map rendering, TransitionManager, and all UI classes to use the Renderer interface instead of sf::RenderWindow.
-Implemented: false
-
-Details:
-- Files to modify: src/Map/Map.h, src/Map/Map.cpp, src/Map/TransitionManager.h, src/Map/TransitionManager.cpp, src/UI/UIStyle.h, src/UI/RoundedRectangleShape.h, src/UI/PauseMenu.h, src/UI/PauseMenu.cpp, src/UI/SaveSlotScreen.h, src/UI/SaveSlotScreen.cpp, src/UI/ControlsMenu.h, src/UI/ControlsMenu.cpp, src/Debug/DebugMenu.h, src/Debug/DebugMenu.cpp
-
-- Map::render(): change parameter to `Renderer&`. Replace sf::RectangleShape platform drawing with `renderer.drawRect()`. Replace pickup drawing with `renderer.drawRectOutlined()`. Remove SFML shape includes.
-
-- TransitionManager::render(): change parameter to `Renderer&`. The fade overlay should use `renderer.resetView()` to draw in screen space, then `renderer.drawRect()` for the black overlay. Replace `window.getSize()` with `renderer.getWindowSize()`. Remove the sf::RectangleShape member. Remove SFML includes.
-
-- UIStyle.h: This is the most complex file. Every helper function currently takes `sf::RenderWindow&` — change to `Renderer&`. Replace all sf::Color usage with inline float parameters or a small Color struct. Replace RoundedRectangleShape draws with `renderer.drawRoundedRect()`. Replace sf::Text draws with `renderer.drawText()` and `renderer.measureText()`. The sf::FloatRect return from drawMenuItem/drawMenuRow should become a simple struct {x, y, w, h}.
-
-- RoundedRectangleShape.h: This file can be deleted entirely once UIStyle.h uses renderer.drawRoundedRect() instead. Remove it from includes.
-
-- PauseMenu: replace sf::Font with Renderer::FontHandle. Remove sf::Text members — call renderer.drawText() directly. Replace sf::RectangleShape overlay with renderer.drawRect(). Replace layout() to use renderer.getWindowSize() instead of window.getSize(). The handleEvent() method still uses sf::Event — this is fine for now, it will be migrated in a later GLFW task. Change render() to take Renderer&. Remove SFML rendering includes (keep sf::Event, sf::Keyboard, sf::Joystick, sf::Mouse for now).
-
-- SaveSlotScreen: same pattern as PauseMenu. Replace all sf::Font, sf::Text, sf::RectangleShape rendering with Renderer calls. Keep sf::Event/input includes for now. Change render() and handleEvent() rendering portions to use Renderer.
-
-- ControlsMenu: same pattern as PauseMenu.
-
-- DebugMenu: same pattern. Replace sf::Font, sf::Text, RoundedRectangleShape rendering with Renderer calls. Keep the Windows file dialog code unchanged.
-
-- After all changes, the game code should exclusively call Renderer methods for drawing. No file outside src/Rendering/ should include SFML graphics headers (sf::Event, sf::Keyboard, sf::Joystick, sf::Mouse are still allowed temporarily).
-
-==============================================================================
 Task: Wire up the SFMLRenderer in main.cpp so the game runs through the Renderer abstraction end to end.
 Implemented: false
 

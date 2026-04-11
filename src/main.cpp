@@ -348,7 +348,7 @@ int main()
                 continue;
             }
 
-            debugMenu.handleEvent(event, window);
+            debugMenu.handleEvent(event);
         }
 
         if (!window.isOpen())
@@ -362,18 +362,18 @@ int main()
         // --- Controls menu rendering ---
         if (controlsMenu.isOpen())
         {
-            window.clear(sf::Color(15, 15, 30));
-            controlsMenu.render(window);
-            window.display();
+            renderer.clear(15/255.f, 15/255.f, 30/255.f);
+            controlsMenu.render(renderer);
+            renderer.display();
             continue;
         }
 
         // --- Save-slot screen rendering ---
         if (saveSlotScreen.isOpen())
         {
-            window.clear(sf::Color(15, 15, 30));
-            saveSlotScreen.render(window);
-            window.display();
+            renderer.clear(15/255.f, 15/255.f, 30/255.f);
+            saveSlotScreen.render(renderer);
+            renderer.display();
             continue;
         }
 
@@ -429,15 +429,15 @@ int main()
 
             window.setView(gameView);
             window.clear(sf::Color(30, 30, 50));
-            map.render(window);
+            map.render(renderer);
             player.render(renderer);
 
-            transitionMgr.render(window);
+            transitionMgr.render(renderer);
 
             window.setView(sf::View(sf::FloatRect(0.f, 0.f,
                 static_cast<float>(window.getSize().x),
                 static_cast<float>(window.getSize().y))));
-            debugMenu.render(window);
+            debugMenu.render(renderer);
             window.display();
             continue;
         }
@@ -548,7 +548,7 @@ int main()
 
         window.setView(gameView);
         window.clear(sf::Color(30, 30, 50));
-        map.render(window);
+        map.render(renderer);
 
         for (auto& enemy : enemies)
         {
@@ -571,13 +571,13 @@ int main()
 
         player.render(renderer);
 
-        transitionMgr.render(window);
+        transitionMgr.render(renderer);
 
         window.setView(sf::View(sf::FloatRect(0.f, 0.f,
             static_cast<float>(window.getSize().x),
             static_cast<float>(window.getSize().y))));
-        pauseMenu.render(window);
-        debugMenu.render(window);
+        pauseMenu.render(renderer);
+        debugMenu.render(renderer);
         window.display();
     }
 

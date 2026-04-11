@@ -1,8 +1,6 @@
 #include "ControlsMenu.h"
 #include "UIStyle.h"
 
-#include <SFML/Graphics/RenderWindow.hpp>
-
 #include "../Core/InputBindings.h"
 
 // Row action labels (left column)
@@ -23,45 +21,6 @@ static const char* ROW_ACTIONS[] = {
 
 ControlsMenu::ControlsMenu()
 {
-    m_fontLoaded = m_font.loadFromFile("C:\\Windows\\Fonts\\arial.ttf");
-
-    m_background.setFillColor(UIStyle::panelBg());
-
-    if (m_fontLoaded)
-    {
-        m_titleText.setFont(m_font);
-        m_titleText.setString("Controls");
-        m_titleText.setCharacterSize(30);
-        m_titleText.setFillColor(UIStyle::titleColor());
-
-        m_sectionKb.setFont(m_font);
-        m_sectionKb.setString("Keyboard");
-        m_sectionKb.setCharacterSize(16);
-        m_sectionKb.setFillColor(UIStyle::sectionColor());
-
-        m_sectionCtrl.setFont(m_font);
-        m_sectionCtrl.setString("Controller");
-        m_sectionCtrl.setCharacterSize(16);
-        m_sectionCtrl.setFillColor(UIStyle::sectionColor());
-
-        m_instructionText.setFont(m_font);
-        m_instructionText.setCharacterSize(14);
-        m_instructionText.setFillColor(UIStyle::hintColor());
-
-        for (int i = 0; i < ROW_COUNT; ++i)
-        {
-            m_rows[i].box.setParameters({ 500.f, 48.f }, UIStyle::CORNER_RADIUS);
-            m_rows[i].box.setOutlineThickness(1.f);
-
-            m_rows[i].actionLabel.setFont(m_font);
-            m_rows[i].actionLabel.setCharacterSize(17);
-            m_rows[i].actionLabel.setString(ROW_ACTIONS[i]);
-
-            m_rows[i].bindingLabel.setFont(m_font);
-            m_rows[i].bindingLabel.setCharacterSize(17);
-        }
-    }
-
     refreshLabels();
 }
 
@@ -88,42 +47,31 @@ void ControlsMenu::close()
 
 void ControlsMenu::refreshLabels()
 {
-    if (!m_fontLoaded)
-        return;
-
     auto& b = InputBindings::instance();
 
-    auto setBinding = [&](int row, const std::string& text) {
-        m_rows[row].bindingLabel.setString(text);
-    };
+    m_bindingLabels[MoveLeftKey]      = InputBindings::keyToString(b.moveLeftKey);
+    m_bindingLabels[MoveLeftAltKey]   = InputBindings::keyToString(b.moveLeftAlt);
+    m_bindingLabels[MoveRightKey]     = InputBindings::keyToString(b.moveRightKey);
+    m_bindingLabels[MoveRightAltKey]  = InputBindings::keyToString(b.moveRightAlt);
+    m_bindingLabels[JumpKey]          = InputBindings::keyToString(b.jumpKey);
+    m_bindingLabels[DashKey]          = InputBindings::keyToString(b.dashKey);
+    m_bindingLabels[AttackKey]        = InputBindings::keyToString(b.attackKey);
+    m_bindingLabels[ControllerJump]   = InputBindings::buttonToString(b.controllerJumpButton);
+    m_bindingLabels[ControllerDash]   = InputBindings::buttonToString(b.controllerDashButton);
+    m_bindingLabels[ControllerAttack] = InputBindings::buttonToString(b.controllerAttackButton);
+    m_bindingLabels[ResetDefaults]    = "";
+    m_bindingLabels[Back]             = "";
 
-    setBinding(MoveLeftKey,     InputBindings::keyToString(b.moveLeftKey));
-    setBinding(MoveLeftAltKey,  InputBindings::keyToString(b.moveLeftAlt));
-    setBinding(MoveRightKey,    InputBindings::keyToString(b.moveRightKey));
-    setBinding(MoveRightAltKey, InputBindings::keyToString(b.moveRightAlt));
-    setBinding(JumpKey,         InputBindings::keyToString(b.jumpKey));
-    setBinding(DashKey,         InputBindings::keyToString(b.dashKey));
-    setBinding(AttackKey,       InputBindings::keyToString(b.attackKey));
-    setBinding(ControllerJump,  InputBindings::buttonToString(b.controllerJumpButton));
-    setBinding(ControllerDash,  InputBindings::buttonToString(b.controllerDashButton));
-    setBinding(ControllerAttack, InputBindings::buttonToString(b.controllerAttackButton));
-
-    // Non-binding rows have no right-side text
-    setBinding(ResetDefaults, "");
-    setBinding(Back, "");
-
-    // Update instruction text based on state
     if (m_rebinding)
     {
         if (isControllerRow(m_selected))
-            m_instructionText.setString("Press a controller button to bind...");
+            m_instructionStr = "Press a controller button to bind...";
         else
-            m_instructionText.setString("Press a key to bind...");
+            m_instructionStr = "Press a key to bind...";
     }
     else
     {
-        m_instructionText.setString(
-            "Up/Down: navigate  |  Enter/A: rebind  |  Esc/B: back");
+        m_instructionStr = "Up/Down: navigate  |  Enter/A: rebind  |  Esc/B: back";
     }
 }
 
@@ -139,7 +87,6 @@ void ControlsMenu::handleEvent(const sf::Event& event)
     {
         if (isControllerRow(m_selected))
         {
-            // Waiting for a controller button press
             if (event.type == sf::Event::JoystickButtonPressed)
             {
                 unsigned int btn = event.joystickButton.button;
@@ -154,7 +101,6 @@ void ControlsMenu::handleEvent(const sf::Event& event)
                 m_rebinding = false;
                 refreshLabels();
             }
-            // Allow Escape to cancel
             if (event.type == sf::Event::KeyPressed
                 && event.key.code == sf::Keyboard::Escape)
             {
@@ -164,12 +110,10 @@ void ControlsMenu::handleEvent(const sf::Event& event)
         }
         else
         {
-            // Waiting for a keyboard key press
             if (event.type == sf::Event::KeyPressed)
             {
                 sf::Keyboard::Key newKey = event.key.code;
 
-                // Escape cancels the rebind
                 if (newKey == sf::Keyboard::Escape)
                 {
                     m_rebinding = false;
@@ -193,7 +137,7 @@ void ControlsMenu::handleEvent(const sf::Event& event)
                 refreshLabels();
             }
         }
-        return; // Don't process navigation while rebinding
+        return;
     }
 
     // --- Normal navigation ---
@@ -201,11 +145,13 @@ void ControlsMenu::handleEvent(const sf::Event& event)
     // Mouse hover – highlight row under cursor
     if (event.type == sf::Event::MouseMoved)
     {
-        sf::Vector2f mouse(static_cast<float>(event.mouseMove.x),
-                           static_cast<float>(event.mouseMove.y));
+        float mx = static_cast<float>(event.mouseMove.x);
+        float my = static_cast<float>(event.mouseMove.y);
         for (int i = 0; i < ROW_COUNT; ++i)
         {
-            if (m_rows[i].box.getGlobalBounds().contains(mouse))
+            auto& il = m_rowLayouts[i];
+            if (mx >= il.x && mx <= il.x + il.w &&
+                my >= il.y && my <= il.y + il.h)
             {
                 m_selected = i;
                 break;
@@ -217,11 +163,13 @@ void ControlsMenu::handleEvent(const sf::Event& event)
     if (event.type == sf::Event::MouseButtonPressed &&
         event.mouseButton.button == sf::Mouse::Left)
     {
-        sf::Vector2f mouse(static_cast<float>(event.mouseButton.x),
-                           static_cast<float>(event.mouseButton.y));
+        float mx = static_cast<float>(event.mouseButton.x);
+        float my = static_cast<float>(event.mouseButton.y);
         for (int i = 0; i < ROW_COUNT; ++i)
         {
-            if (m_rows[i].box.getGlobalBounds().contains(mouse))
+            auto& il = m_rowLayouts[i];
+            if (mx >= il.x && mx <= il.x + il.w &&
+                my >= il.y && my <= il.y + il.h)
             {
                 m_selected = i;
                 if (i == Back)
@@ -283,7 +231,7 @@ void ControlsMenu::handleEvent(const sf::Event& event)
     if (event.type == sf::Event::JoystickButtonPressed)
     {
         unsigned int btn = event.joystickButton.button;
-        if (btn == 0) // A button
+        if (btn == 0)
         {
             if (m_selected == Back)
             {
@@ -303,7 +251,7 @@ void ControlsMenu::handleEvent(const sf::Event& event)
                 refreshLabels();
             }
         }
-        else if (btn == 1) // B button
+        else if (btn == 1)
         {
             close();
             return;
@@ -347,144 +295,176 @@ void ControlsMenu::handleEvent(const sf::Event& event)
     }
 }
 
-void ControlsMenu::layout(const sf::RenderWindow& window)
+void ControlsMenu::layout(Renderer& renderer)
 {
-    const float winW = static_cast<float>(window.getSize().x);
-    const float winH = static_cast<float>(window.getSize().y);
-
-    m_background.setSize({ winW, winH });
-    m_background.setPosition(0.f, 0.f);
+    float winW, winH;
+    renderer.getWindowSize(winW, winH);
 
     const float rowW   = 500.f;
     const float rowH   = 48.f;
     const float gap    = 10.f;
     const float sectionGap = 28.f;
 
-    // Vertical layout: title, section header, keyboard rows, section header,
-    // controller rows, gap, reset, back
-    float totalH = 60.f              // title area
-               + 24.f                // keyboard section label
-               + 7 * (rowH + gap)    // 7 keyboard rows (through attack)
+    float totalH = 60.f
+               + 24.f
+               + 7 * (rowH + gap)
                + sectionGap
-               + 24.f                // controller section label
-               + 3 * (rowH + gap)    // 3 controller rows (jump + dash + attack)
+               + 24.f
+               + 3 * (rowH + gap)
                + sectionGap
-               + 2 * (rowH + gap);   // reset + back
+               + 2 * (rowH + gap);
     float startY = (winH - totalH) * 0.5f;
     float cx     = (winW - rowW) * 0.5f;
 
-    // Title
-    if (m_fontLoaded)
-    {
-        const sf::FloatRect tb = m_titleText.getLocalBounds();
-        m_titleText.setPosition((winW - tb.width) * 0.5f, startY);
-    }
     float y = startY + 60.f;
 
-    // Keyboard section label
-    if (m_fontLoaded)
-    {
-        const sf::FloatRect sb = m_sectionKb.getLocalBounds();
-        m_sectionKb.setPosition((winW - sb.width) * 0.5f, y);
-    }
+    // Keyboard section label position
     y += 28.f;
 
-    // Keyboard rows: MoveLeftKey .. JumpKey (indices 0-4)
+    // Keyboard rows
     for (int i = MoveLeftKey; i <= AttackKey; ++i)
     {
-        auto& rw = m_rows[i];
-        rw.box.setParameters({ rowW, rowH }, UIStyle::CORNER_RADIUS);
-        rw.box.setPosition(cx, y);
+        m_rowLayouts[i] = { cx, y, rowW, rowH };
         y += rowH + gap;
     }
 
     // Controller section
     y += sectionGap - gap;
-    if (m_fontLoaded)
-    {
-        const sf::FloatRect sb = m_sectionCtrl.getLocalBounds();
-        m_sectionCtrl.setPosition((winW - sb.width) * 0.5f, y);
-    }
     y += 28.f;
 
-    // Controller jump and dash rows
     for (int i = ControllerJump; i <= ControllerAttack; ++i)
     {
-        auto& rw = m_rows[i];
-        rw.box.setParameters({ rowW, rowH }, UIStyle::CORNER_RADIUS);
-        rw.box.setPosition(cx, y);
+        m_rowLayouts[i] = { cx, y, rowW, rowH };
         y += rowH + gap;
     }
 
     // Gap before Reset/Back
     y += sectionGap - gap;
 
-    // Reset Defaults and Back
     for (int i = ResetDefaults; i <= Back; ++i)
     {
-        auto& rw = m_rows[i];
-        rw.box.setParameters({ rowW, rowH }, UIStyle::CORNER_RADIUS);
-        rw.box.setPosition(cx, y);
+        m_rowLayouts[i] = { cx, y, rowW, rowH };
         y += rowH + gap;
-    }
-
-    // Instruction text at bottom
-    if (m_fontLoaded)
-    {
-        const sf::FloatRect ib = m_instructionText.getLocalBounds();
-        m_instructionText.setPosition((winW - ib.width) * 0.5f, winH - 50.f);
     }
 }
 
-void ControlsMenu::render(sf::RenderWindow& window)
+void ControlsMenu::render(Renderer& renderer)
 {
     if (!m_open)
         return;
 
-    layout(window);
+    // Lazy-load font on first render
+    if (m_font == 0)
+        m_font = renderer.loadFont("C:\\Windows\\Fonts\\arial.ttf");
 
-    sf::View prev = window.getView();
-    sf::View uiView(sf::FloatRect(0.f, 0.f,
-                                   static_cast<float>(window.getSize().x),
-                                   static_cast<float>(window.getSize().y)));
-    window.setView(uiView);
+    layout(renderer);
 
-    window.draw(m_background);
+    float winW, winH;
+    renderer.getWindowSize(winW, winH);
 
-    if (m_fontLoaded)
+    renderer.resetView();
+
+    // Full-screen background
     {
-        window.draw(m_titleText);
-        window.draw(m_sectionKb);
-        window.draw(m_sectionCtrl);
-
-        const float rowW = 500.f;
-        const float rowH = 48.f;
-
-        // Binding rows (keyboard + controller)
-        for (int i = MoveLeftKey; i <= ControllerAttack; ++i)
-        {
-            bool sel = (i == m_selected);
-            bool rebindThis = (m_rebinding && i == m_selected);
-            sf::Vector2f pos = m_rows[i].box.getPosition();
-            UIStyle::drawMenuRow(window, m_rows[i].box,
-                                 m_rows[i].actionLabel,
-                                 &m_rows[i].bindingLabel,
-                                 pos.x, pos.y, rowW, rowH,
-                                 sel, rebindThis);
-        }
-
-        // Reset Defaults and Back (centered text, no right label)
-        for (int i = ResetDefaults; i <= Back; ++i)
-        {
-            bool sel = (i == m_selected);
-            sf::Vector2f pos = m_rows[i].box.getPosition();
-            UIStyle::drawMenuItem(window, m_rows[i].box,
-                                  m_rows[i].actionLabel,
-                                  pos.x, pos.y, rowW, rowH, sel);
-        }
-
-        window.draw(m_instructionText);
+        float r, g, b, a;
+        UIStyle::panelBg(r, g, b, a);
+        renderer.drawRect(0.f, 0.f, winW, winH, r, g, b, a);
     }
 
-    window.setView(prev);
+    if (!m_font)
+        return;
+
+    // Recompute positions for section labels and title
+    const float rowW   = 500.f;
+    const float rowH   = 48.f;
+    const float gap    = 10.f;
+    const float sectionGap = 28.f;
+
+    float totalH = 60.f + 24.f + 7 * (rowH + gap) + sectionGap
+                 + 24.f + 3 * (rowH + gap) + sectionGap + 2 * (rowH + gap);
+    float startY = (winH - totalH) * 0.5f;
+
+    // Title
+    {
+        float tR, tG, tB, tA;
+        UIStyle::titleColor(tR, tG, tB, tA);
+        float tw, th;
+        renderer.measureText(m_font, "Controls", 30, tw, th);
+        renderer.drawText(m_font, "Controls",
+                          (winW - tw) * 0.5f, startY,
+                          30, tR, tG, tB, tA);
+    }
+
+    float y = startY + 60.f;
+
+    // Keyboard section label
+    {
+        float sR, sG, sB, sA;
+        UIStyle::sectionColor(sR, sG, sB, sA);
+        float sw, sh;
+        renderer.measureText(m_font, "Keyboard", 16, sw, sh);
+        renderer.drawText(m_font, "Keyboard",
+                          (winW - sw) * 0.5f, y,
+                          16, sR, sG, sB, sA);
+    }
+    y += 28.f;
+
+    // Keyboard binding rows
+    for (int i = MoveLeftKey; i <= AttackKey; ++i)
+    {
+        bool sel = (i == m_selected);
+        bool rebindThis = (m_rebinding && i == m_selected);
+        UIStyle::drawMenuRow(renderer, m_font,
+                             ROW_ACTIONS[i],
+                             &m_bindingLabels[i],
+                             m_rowLayouts[i].x, m_rowLayouts[i].y, rowW, rowH,
+                             17, sel, rebindThis);
+        y += rowH + gap;
+    }
+
+    // Controller section
+    y += sectionGap - gap;
+    {
+        float sR, sG, sB, sA;
+        UIStyle::sectionColor(sR, sG, sB, sA);
+        float sw, sh;
+        renderer.measureText(m_font, "Controller", 16, sw, sh);
+        renderer.drawText(m_font, "Controller",
+                          (winW - sw) * 0.5f, y,
+                          16, sR, sG, sB, sA);
+    }
+    y += 28.f;
+
+    // Controller binding rows
+    for (int i = ControllerJump; i <= ControllerAttack; ++i)
+    {
+        bool sel = (i == m_selected);
+        bool rebindThis = (m_rebinding && i == m_selected);
+        UIStyle::drawMenuRow(renderer, m_font,
+                             ROW_ACTIONS[i],
+                             &m_bindingLabels[i],
+                             m_rowLayouts[i].x, m_rowLayouts[i].y, rowW, rowH,
+                             17, sel, rebindThis);
+    }
+
+    // Reset Defaults and Back (centered text, no right label)
+    for (int i = ResetDefaults; i <= Back; ++i)
+    {
+        bool sel = (i == m_selected);
+        std::string action = ROW_ACTIONS[i];
+        UIStyle::drawMenuItem(renderer, m_font, action,
+                              m_rowLayouts[i].x, m_rowLayouts[i].y, rowW, rowH,
+                              17, sel);
+    }
+
+    // Instruction text at bottom
+    {
+        float hR, hG, hB, hA;
+        UIStyle::hintColor(hR, hG, hB, hA);
+        float iw, ih;
+        renderer.measureText(m_font, m_instructionStr, 14, iw, ih);
+        renderer.drawText(m_font, m_instructionStr,
+                          (winW - iw) * 0.5f, winH - 50.f,
+                          14, hR, hG, hB, hA);
+    }
 }

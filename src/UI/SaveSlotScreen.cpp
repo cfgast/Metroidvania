@@ -8,34 +8,6 @@
 
 SaveSlotScreen::SaveSlotScreen()
 {
-    m_fontLoaded = m_font.loadFromFile("C:\\Windows\\Fonts\\arial.ttf");
-
-    if (m_fontLoaded)
-    {
-        m_titleText.setFont(m_font);
-        m_titleText.setString("Select Save Slot");
-        m_titleText.setCharacterSize(30);
-        m_titleText.setFillColor(UIStyle::titleColor());
-
-        m_instructionText.setFont(m_font);
-        m_instructionText.setString("Up/Down select  |  Enter load/start  |  Del erase  |  Left/Right change resolution  |  Controls: rebind keys");
-        m_instructionText.setCharacterSize(14);
-        m_instructionText.setFillColor(UIStyle::hintColor());
-
-        m_resWidget.box.setParameters({ 440.f, 52.f }, UIStyle::CORNER_RADIUS);
-        m_resWidget.box.setOutlineThickness(1.f);
-        m_resWidget.label.setFont(m_font);
-        m_resWidget.label.setCharacterSize(18);
-
-        m_controlsWidget.box.setParameters({ 440.f, 52.f }, UIStyle::CORNER_RADIUS);
-        m_controlsWidget.box.setOutlineThickness(1.f);
-        m_controlsWidget.label.setFont(m_font);
-        m_controlsWidget.label.setString("Controls");
-        m_controlsWidget.label.setCharacterSize(18);
-    }
-
-    m_background.setFillColor(UIStyle::panelBg());
-
     populateResolutions();
     updateResolutionLabel();
 }
@@ -75,14 +47,13 @@ void SaveSlotScreen::populateResolutions()
 
 void SaveSlotScreen::updateResolutionLabel()
 {
-    if (!m_fontLoaded || m_resolutions.empty())
+    if (m_resolutions.empty())
         return;
 
     const auto& res = m_resolutions[m_resolutionIndex];
-    std::string text = "Resolution:   <  "
-                     + std::to_string(res.width) + " x " + std::to_string(res.height)
-                     + "  >";
-    m_resWidget.label.setString(text);
+    m_resLabel = "Resolution:   <  "
+               + std::to_string(res.width) + " x " + std::to_string(res.height)
+               + "  >";
 }
 
 void SaveSlotScreen::applyResolution(sf::RenderWindow& window)
@@ -128,86 +99,58 @@ void SaveSlotScreen::open()
 void SaveSlotScreen::refreshSlots()
 {
     m_slots = SaveSystem::querySlotsInfo();
-    m_widgets.resize(m_slots.size());
+    m_slotLabels.resize(m_slots.size());
 
     for (size_t i = 0; i < m_slots.size(); ++i)
     {
-        auto& w = m_widgets[i];
-        w.box.setParameters({ 440.f, 62.f }, UIStyle::CORNER_RADIUS);
-        w.box.setOutlineThickness(1.f);
-
-        if (m_fontLoaded)
+        if (m_slots[i].exists)
         {
-            w.label.setFont(m_font);
-            w.label.setCharacterSize(18);
-
-            if (m_slots[i].exists)
-            {
-                std::ostringstream oss;
-                oss << "Slot " << m_slots[i].slot << "  |  "
-                    << m_slots[i].mapFile << "  |  HP: "
-                    << std::fixed << std::setprecision(0) << m_slots[i].hp;
-                w.label.setString(oss.str());
-            }
-            else
-            {
-                w.label.setString("Slot " + std::to_string(m_slots[i].slot) + "  -  Empty (New Game)");
-            }
+            std::ostringstream oss;
+            oss << "Slot " << m_slots[i].slot << "  |  "
+                << m_slots[i].mapFile << "  |  HP: "
+                << std::fixed << std::setprecision(0) << m_slots[i].hp;
+            m_slotLabels[i] = oss.str();
+        }
+        else
+        {
+            m_slotLabels[i] = "Slot " + std::to_string(m_slots[i].slot) + "  -  Empty (New Game)";
         }
     }
 }
 
-void SaveSlotScreen::layout(const sf::RenderWindow& window)
+void SaveSlotScreen::layout(Renderer& renderer)
 {
-    const float winW = static_cast<float>(window.getSize().x);
-    const float winH = static_cast<float>(window.getSize().y);
-
-    m_background.setSize({ winW, winH });
-    m_background.setPosition(0.f, 0.f);
-
-    if (m_fontLoaded)
-    {
-        const sf::FloatRect tb = m_titleText.getLocalBounds();
-        m_titleText.setPosition((winW - tb.width) * 0.5f, 70.f);
-    }
+    float winW, winH;
+    renderer.getWindowSize(winW, winH);
 
     const float slotW   = 440.f;
     const float slotH   = 62.f;
     const float resH    = 52.f;
     const float ctrlH   = 52.f;
     const float gap     = 16.f;
-    const float totalH  = static_cast<float>(m_widgets.size()) * (slotH + gap) + resH + gap + ctrlH;
+    const float totalH  = static_cast<float>(m_slots.size()) * (slotH + gap) + resH + gap + ctrlH;
     float startY        = (winH - totalH) * 0.5f + 20.f;
 
-    for (size_t i = 0; i < m_widgets.size(); ++i)
+    m_slotLayouts.resize(m_slots.size());
+    for (size_t i = 0; i < m_slots.size(); ++i)
     {
-        auto& w = m_widgets[i];
         float x = (winW - slotW) * 0.5f;
         float y = startY + static_cast<float>(i) * (slotH + gap);
-        w.box.setParameters({ slotW, slotH }, UIStyle::CORNER_RADIUS);
-        w.box.setPosition(x, y);
+        m_slotLayouts[i] = { x, y, slotW, slotH };
     }
 
     // Resolution combo box
     {
         float x = (winW - slotW) * 0.5f;
-        float y = startY + static_cast<float>(m_widgets.size()) * (slotH + gap);
-        m_resWidget.box.setParameters({ slotW, resH }, UIStyle::CORNER_RADIUS);
-        m_resWidget.box.setPosition(x, y);
+        float y = startY + static_cast<float>(m_slots.size()) * (slotH + gap);
+        m_resLayout = { x, y, slotW, resH };
     }
 
     // Controls button
     {
         float x = (winW - slotW) * 0.5f;
-        float y = startY + static_cast<float>(m_widgets.size()) * (slotH + gap) + resH + gap;
-        m_controlsWidget.box.setParameters({ slotW, ctrlH }, UIStyle::CORNER_RADIUS);
-        m_controlsWidget.box.setPosition(x, y);
-    }
-
-    if (m_fontLoaded)
-    {
-        const sf::FloatRect ib = m_instructionText.getLocalBounds();
-        m_instructionText.setPosition((winW - ib.width) * 0.5f, winH - 60.f);
+        float y = startY + static_cast<float>(m_slots.size()) * (slotH + gap) + resH + gap;
+        m_controlsLayout = { x, y, slotW, ctrlH };
     }
 }
 
@@ -274,19 +217,23 @@ SaveSlotResult SaveSlotScreen::handleEvent(const sf::Event& event,
     // Mouse hover – highlight item under cursor
     if (event.type == sf::Event::MouseMoved)
     {
-        sf::Vector2f mouse(static_cast<float>(event.mouseMove.x),
-                           static_cast<float>(event.mouseMove.y));
-        for (int i = 0; i < static_cast<int>(m_widgets.size()); ++i)
+        float mx = static_cast<float>(event.mouseMove.x);
+        float my = static_cast<float>(event.mouseMove.y);
+        for (int i = 0; i < static_cast<int>(m_slotLayouts.size()); ++i)
         {
-            if (m_widgets[i].box.getGlobalBounds().contains(mouse))
+            auto& il = m_slotLayouts[i];
+            if (mx >= il.x && mx <= il.x + il.w &&
+                my >= il.y && my <= il.y + il.h)
             {
                 m_selectedIndex = i;
                 break;
             }
         }
-        if (m_resWidget.box.getGlobalBounds().contains(mouse))
+        if (mx >= m_resLayout.x && mx <= m_resLayout.x + m_resLayout.w &&
+            my >= m_resLayout.y && my <= m_resLayout.y + m_resLayout.h)
             m_selectedIndex = static_cast<int>(m_slots.size());
-        if (m_controlsWidget.box.getGlobalBounds().contains(mouse))
+        if (mx >= m_controlsLayout.x && mx <= m_controlsLayout.x + m_controlsLayout.w &&
+            my >= m_controlsLayout.y && my <= m_controlsLayout.y + m_controlsLayout.h)
             m_selectedIndex = static_cast<int>(m_slots.size()) + 1;
     }
 
@@ -294,13 +241,15 @@ SaveSlotResult SaveSlotScreen::handleEvent(const sf::Event& event,
     if (event.type == sf::Event::MouseButtonPressed &&
         event.mouseButton.button == sf::Mouse::Left)
     {
-        sf::Vector2f mouse(static_cast<float>(event.mouseButton.x),
-                           static_cast<float>(event.mouseButton.y));
+        float mx = static_cast<float>(event.mouseButton.x);
+        float my = static_cast<float>(event.mouseButton.y);
 
         // Check slot widgets
-        for (int i = 0; i < static_cast<int>(m_widgets.size()); ++i)
+        for (int i = 0; i < static_cast<int>(m_slotLayouts.size()); ++i)
         {
-            if (m_widgets[i].box.getGlobalBounds().contains(mouse))
+            auto& il = m_slotLayouts[i];
+            if (mx >= il.x && mx <= il.x + il.w &&
+                my >= il.y && my <= il.y + il.h)
             {
                 m_selectedIndex = i;
                 int slot = m_slots[i].slot;
@@ -319,18 +268,18 @@ SaveSlotResult SaveSlotScreen::handleEvent(const sf::Event& event,
         }
 
         // Check resolution widget – left third decreases, right third increases
-        if (m_resWidget.box.getGlobalBounds().contains(mouse))
+        if (mx >= m_resLayout.x && mx <= m_resLayout.x + m_resLayout.w &&
+            my >= m_resLayout.y && my <= m_resLayout.y + m_resLayout.h)
         {
             m_selectedIndex = static_cast<int>(m_slots.size());
-            sf::FloatRect bounds = m_resWidget.box.getGlobalBounds();
-            float third = bounds.width / 3.f;
-            if (mouse.x < bounds.left + third)
+            float third = m_resLayout.w / 3.f;
+            if (mx < m_resLayout.x + third)
             {
                 m_resolutionIndex = (m_resolutionIndex - 1 + static_cast<int>(m_resolutions.size()))
                                     % static_cast<int>(m_resolutions.size());
                 applyResolution(window);
             }
-            else if (mouse.x > bounds.left + 2.f * third)
+            else if (mx > m_resLayout.x + 2.f * third)
             {
                 m_resolutionIndex = (m_resolutionIndex + 1)
                                     % static_cast<int>(m_resolutions.size());
@@ -339,7 +288,8 @@ SaveSlotResult SaveSlotScreen::handleEvent(const sf::Event& event,
         }
 
         // Check controls widget
-        if (m_controlsWidget.box.getGlobalBounds().contains(mouse))
+        if (mx >= m_controlsLayout.x && mx <= m_controlsLayout.x + m_controlsLayout.w &&
+            my >= m_controlsLayout.y && my <= m_controlsLayout.y + m_controlsLayout.h)
         {
             m_selectedIndex = static_cast<int>(m_slots.size()) + 1;
             result.action = SaveSlotResult::Controls;
@@ -453,56 +403,80 @@ SaveSlotResult SaveSlotScreen::handleEvent(const sf::Event& event,
     return result;
 }
 
-void SaveSlotScreen::render(sf::RenderWindow& window)
+void SaveSlotScreen::render(Renderer& renderer)
 {
     if (!m_open)
         return;
 
-    layout(window);
+    // Lazy-load font on first render
+    if (m_font == 0)
+        m_font = renderer.loadFont("C:\\Windows\\Fonts\\arial.ttf");
 
-    sf::View prev = window.getView();
-    sf::View uiView(sf::FloatRect(0.f, 0.f,
-                                   static_cast<float>(window.getSize().x),
-                                   static_cast<float>(window.getSize().y)));
-    window.setView(uiView);
+    layout(renderer);
 
-    window.draw(m_background);
+    float winW, winH;
+    renderer.getWindowSize(winW, winH);
 
-    if (m_fontLoaded)
-        window.draw(m_titleText);
+    renderer.resetView();
+
+    // Full-screen background
+    {
+        float r, g, b, a;
+        UIStyle::panelBg(r, g, b, a);
+        renderer.drawRect(0.f, 0.f, winW, winH, r, g, b, a);
+    }
+
+    // Title
+    if (m_font)
+    {
+        float tR, tG, tB, tA;
+        UIStyle::titleColor(tR, tG, tB, tA);
+        float tw, th;
+        renderer.measureText(m_font, "Select Save Slot", 30, tw, th);
+        renderer.drawText(m_font, "Select Save Slot",
+                          (winW - tw) * 0.5f, 70.f,
+                          30, tR, tG, tB, tA);
+    }
 
     const float slotW = 440.f;
     const float slotH = 62.f;
     const float resH  = 52.f;
     const float ctrlH = 52.f;
 
-    for (int i = 0; i < static_cast<int>(m_widgets.size()); ++i)
+    for (int i = 0; i < static_cast<int>(m_slotLayouts.size()); ++i)
     {
-        auto& w = m_widgets[i];
         bool selected = (i == m_selectedIndex);
-        sf::Vector2f pos = w.box.getPosition();
-        UIStyle::drawMenuRow(window, w.box, w.label, nullptr,
-                             pos.x, pos.y, slotW, slotH, selected);
+        auto& il = m_slotLayouts[i];
+        UIStyle::drawMenuRow(renderer, m_font, m_slotLabels[i], nullptr,
+                             il.x, il.y, slotW, slotH, 18, selected);
     }
 
     // Draw resolution combo box
     {
         bool selected = isOnResolutionRow();
-        sf::Vector2f pos = m_resWidget.box.getPosition();
-        UIStyle::drawMenuRow(window, m_resWidget.box, m_resWidget.label, nullptr,
-                             pos.x, pos.y, slotW, resH, selected);
+        UIStyle::drawMenuRow(renderer, m_font, m_resLabel, nullptr,
+                             m_resLayout.x, m_resLayout.y, slotW, resH, 18, selected);
     }
 
     // Draw controls button
     {
         bool selected = isOnControlsRow();
-        sf::Vector2f pos = m_controlsWidget.box.getPosition();
-        UIStyle::drawMenuItem(window, m_controlsWidget.box, m_controlsWidget.label,
-                              pos.x, pos.y, slotW, ctrlH, selected);
+        std::string controlsStr = "Controls";
+        UIStyle::drawMenuItem(renderer, m_font, controlsStr,
+                              m_controlsLayout.x, m_controlsLayout.y, slotW, ctrlH,
+                              18, selected);
     }
 
-    if (m_fontLoaded)
-        window.draw(m_instructionText);
-
-    window.setView(prev);
+    // Instruction text
+    if (m_font)
+    {
+        float hR, hG, hB, hA;
+        UIStyle::hintColor(hR, hG, hB, hA);
+        std::string hint = "Up/Down select  |  Enter load/start  |  Del erase  |  Left/Right change resolution  |  Controls: rebind keys";
+        float hw, hh;
+        renderer.measureText(m_font, hint, 14, hw, hh);
+        renderer.drawText(m_font, hint,
+                          (winW - hw) * 0.5f, winH - 60.f,
+                          14, hR, hG, hB, hA);
+    }
 }

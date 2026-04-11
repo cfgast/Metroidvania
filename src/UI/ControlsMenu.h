@@ -1,11 +1,10 @@
 #pragma once
 
-#include <SFML/Graphics/Font.hpp>
-#include <SFML/Graphics/RectangleShape.hpp>
-#include <SFML/Graphics/Text.hpp>
+#include <string>
+
 #include <SFML/Window/Event.hpp>
 
-#include "RoundedRectangleShape.h"
+#include "../Rendering/Renderer.h"
 
 namespace sf { class RenderWindow; }
 
@@ -22,10 +21,10 @@ public:
     // Process one event. Call each frame while open.
     void handleEvent(const sf::Event& event);
 
-    void render(sf::RenderWindow& window);
+    void render(Renderer& renderer);
 
 private:
-    void layout(const sf::RenderWindow& window);
+    void layout(Renderer& renderer);
     void refreshLabels();
 
     bool m_open     = false;
@@ -61,19 +60,15 @@ private:
     // True if the row is a rebindable binding (keyboard or controller).
     bool isBindingRow(int row) const;
 
-    sf::Font           m_font;
-    bool               m_fontLoaded = false;
-    sf::Text           m_titleText;
-    sf::Text           m_sectionKb;
-    sf::Text           m_sectionCtrl;
-    sf::Text           m_instructionText;
-    sf::RectangleShape m_background;
+    Renderer::FontHandle m_font = 0;
 
-    struct RowWidget
-    {
-        RoundedRectangleShape box;
-        sf::Text              actionLabel;
-        sf::Text              bindingLabel;
-    };
-    RowWidget m_rows[ROW_COUNT];
+    // Row labels (action name on the left, binding text on the right)
+    std::string m_bindingLabels[ROW_COUNT];
+
+    // Instruction text (changes when rebinding)
+    std::string m_instructionStr;
+
+    // Layout cache for hit-testing
+    struct ItemLayout { float x, y, w, h; };
+    ItemLayout m_rowLayouts[ROW_COUNT] = {};
 };

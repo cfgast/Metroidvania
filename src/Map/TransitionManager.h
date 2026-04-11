@@ -3,11 +3,8 @@
 #include <string>
 #include <functional>
 
-#include <SFML/Graphics/RectangleShape.hpp>
-#include <SFML/System/Vector2.hpp>
-
+class Renderer;
 class Map;
-namespace sf { class RenderWindow; }
 
 // Manages fade-to-black room transitions.
 // Call update() every frame; when a transition is active it drives the fade
@@ -30,7 +27,7 @@ public:
     bool update(float dt);
 
     // Draw the fade overlay in screen space.
-    void render(sf::RenderWindow& window);
+    void render(Renderer& renderer);
 
     bool isActive() const { return m_state != State::Idle; }
 
@@ -44,5 +41,4 @@ private:
     std::string m_pendingSpawn;
 
     LoadCallback       m_loadCallback;
-    sf::RectangleShape m_overlay;
 };

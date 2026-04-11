@@ -122,7 +122,7 @@ A back-end–agnostic rendering abstraction that isolates all draw calls behind 
 | `Renderer.h` | Pure-virtual interface. Covers lifecycle (`clear`/`display`), camera/view, primitives (rect, circle, rounded-rect), textured sprites via opaque `TextureHandle`, text via `FontHandle`, and raw vertex-colored geometry (`drawTriangleStrip`/`drawLines`). No SFML types in the public API. |
 | `SFMLRenderer.h/.cpp` | SFML 2.6 implementation. Owns `sf::RenderWindow` and internal `handle → sf::Texture / sf::Font` maps. Constructor takes title, width, height, FPS cap. Exposes `getWindow()` for legacy code that still touches SFML directly during migration. |
 
-**Migration status:** All Component subclasses (`RenderComponent`, `AnimationComponent`, `HealthComponent`, `CombatComponent`, `SlimeAttackComponent`) now render exclusively through `Renderer&`. `main.cpp` creates an `SFMLRenderer` and passes it to `GameObject::render()`. Map, UI, and transition rendering still use `sf::RenderWindow&` directly — those will be migrated in subsequent tasks.
+**Migration status:** All Component subclasses, Map, TransitionManager, UI menus (PauseMenu, SaveSlotScreen, ControlsMenu), and DebugMenu now render exclusively through `Renderer&`. `main.cpp` creates an `SFMLRenderer` and passes it to all `render()` methods. The only remaining SFML graphics usage outside `src/Rendering/` is `main.cpp`'s window loop (`sf::RenderWindow`, `sf::View`, `sf::Color`, `sf::RectangleShape` for dash ghosts) and SFML math types (`sf::Vector2f`, `sf::FloatRect`, `sf::Color`) used as data types in Map/Platform/TransitionZone structs — these will be migrated in subsequent tasks.
 
 ---
 
@@ -130,17 +130,16 @@ A back-end–agnostic rendering abstraction that isolates all draw calls behind 
 
 | File | Role |
 |---|---|
-| `UIStyle.h` | Shared dark-theme palette and drawing helpers (`drawMenuItem`, `drawMenuRow`, `drawGlow`, `drawAccentBar`). |
-| `RoundedRectangleShape.h` | Custom `sf::ConvexShape` with configurable corner radius. |
-| `SaveSlotScreen.h/.cpp` | Startup screen: 3 save slots, resolution selector, controls button. |
-| `PauseMenu.h/.cpp` | In-game pause: Resume / Save / Quit. Keyboard + controller + mouse. |
-| `ControlsMenu.h/.cpp` | Full-screen rebinding UI. Enter rebind mode → press new key → saved via `InputBindings`. |
+| `UIStyle.h` | Shared dark-theme palette and drawing helpers (`drawMenuItem`, `drawMenuRow`, `drawGlow`, `drawAccentBar`). All helpers take `Renderer&` and use float RGBA colors. Returns `UIBounds` struct instead of `sf::FloatRect`. |
+| `SaveSlotScreen.h/.cpp` | Startup screen: 3 save slots, resolution selector, controls button. Renders via `Renderer&`; lazy-loads font via `Renderer::loadFont()`. Still takes `sf::RenderWindow&` in `handleEvent()` for resolution resize. |
+| `PauseMenu.h/.cpp` | In-game pause: Resume / Save / Quit. Keyboard + controller + mouse. Renders via `Renderer&`. |
+| `ControlsMenu.h/.cpp` | Full-screen rebinding UI. Enter rebind mode → press new key → saved via `InputBindings`. Renders via `Renderer&`. |
 
 ---
 
 ## Debug (`src/Debug/`)
 
-`DebugMenu` — F1-toggled overlay with "Open Map…" button that launches a Windows native file dialog to hot-load any map JSON.
+`DebugMenu` — F1-toggled overlay with "Open Map…" button that launches a Windows native file dialog to hot-load any map JSON. Renders via `Renderer&`; `handleEvent()` no longer needs the window reference.
 
 ---
 

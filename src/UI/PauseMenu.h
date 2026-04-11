@@ -1,13 +1,11 @@
 #pragma once
 
 #include <functional>
+#include <string>
 
-#include <SFML/Graphics/Font.hpp>
-#include <SFML/Graphics/RectangleShape.hpp>
-#include <SFML/Graphics/Text.hpp>
 #include <SFML/Window/Event.hpp>
 
-#include "RoundedRectangleShape.h"
+#include "../Rendering/Renderer.h"
 
 namespace sf { class RenderWindow; }
 
@@ -27,10 +25,10 @@ public:
     // Process a single event.  Returns an action when the player picks one.
     Action handleEvent(const sf::Event& event);
 
-    void render(sf::RenderWindow& window);
+    void render(Renderer& renderer);
 
 private:
-    void layout(const sf::RenderWindow& window);
+    void layout(Renderer& renderer);
 
     bool m_open = false;
     int  m_selectedIndex = 0;
@@ -43,16 +41,9 @@ private:
     static constexpr const char* LABELS[ITEM_COUNT] = { "Resume", "Save Game", "Quit" };
     static constexpr Action ACTIONS[ITEM_COUNT]      = { Resume, Save, Quit };
 
-    sf::Font                m_font;
-    bool                    m_fontLoaded = false;
-    sf::Text                m_titleText;
-    sf::RectangleShape      m_overlay;
-    RoundedRectangleShape   m_panel;
+    Renderer::FontHandle m_font = 0;
 
-    struct MenuItem
-    {
-        RoundedRectangleShape box;
-        sf::Text              label;
-    };
-    MenuItem m_items[ITEM_COUNT];
+    // Layout cache (set by layout(), used for hit-testing in handleEvent)
+    struct ItemLayout { float x, y, w, h; };
+    ItemLayout m_itemLayouts[ITEM_COUNT] = {};
 };

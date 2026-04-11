@@ -12,7 +12,7 @@
 #include "TransitionZone.h"
 #include "AbilityPickupDefinition.h"
 
-namespace sf { class RenderWindow; }
+class Renderer;
 
 class Map
 {
@@ -53,7 +53,7 @@ public:
     // Register every platform as a PhysX static rigid body.
     void registerPhysXStatics() const;
 
-    void render(sf::RenderWindow& window) const;
+    void render(Renderer& renderer) const;
 
 private:
     std::vector<Platform>                m_platforms;

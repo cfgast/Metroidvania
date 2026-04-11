@@ -1,36 +1,8 @@
 #include "PauseMenu.h"
 #include "UIStyle.h"
 
-#include <SFML/Graphics/RenderWindow.hpp>
-
 PauseMenu::PauseMenu()
 {
-    m_fontLoaded = m_font.loadFromFile("C:\\Windows\\Fonts\\arial.ttf");
-
-    m_overlay.setFillColor(UIStyle::overlayColor());
-
-    m_panel.setParameters({ 320.f, 260.f }, UIStyle::PANEL_CORNER_RADIUS);
-    m_panel.setFillColor(UIStyle::panelBg());
-    m_panel.setOutlineColor(UIStyle::panelBorder());
-    m_panel.setOutlineThickness(1.5f);
-
-    if (m_fontLoaded)
-    {
-        m_titleText.setFont(m_font);
-        m_titleText.setString("Paused");
-        m_titleText.setCharacterSize(28);
-        m_titleText.setFillColor(UIStyle::titleColor());
-
-        for (int i = 0; i < ITEM_COUNT; ++i)
-        {
-            m_items[i].box.setParameters({ 240.f, 48.f }, UIStyle::CORNER_RADIUS);
-            m_items[i].box.setOutlineThickness(1.f);
-
-            m_items[i].label.setFont(m_font);
-            m_items[i].label.setString(LABELS[i]);
-            m_items[i].label.setCharacterSize(18);
-        }
-    }
 }
 
 void PauseMenu::open()
@@ -41,37 +13,25 @@ void PauseMenu::open()
     m_joyDownHeld = false;
 }
 
-void PauseMenu::layout(const sf::RenderWindow& window)
+void PauseMenu::layout(Renderer& renderer)
 {
-    const float winW = static_cast<float>(window.getSize().x);
-    const float winH = static_cast<float>(window.getSize().y);
-
-    m_overlay.setSize({ winW, winH });
-    m_overlay.setPosition(0.f, 0.f);
+    float winW, winH;
+    renderer.getWindowSize(winW, winH);
 
     const float panelW = 320.f;
     const float itemW  = 240.f;
     const float itemH  = 48.f;
     const float gap    = 14.f;
     const float panelH = 80.f + ITEM_COUNT * (itemH + gap);
-    m_panel.setParameters({ panelW, panelH }, UIStyle::PANEL_CORNER_RADIUS);
     float px = (winW - panelW) * 0.5f;
     float py = (winH - panelH) * 0.5f;
-    m_panel.setPosition(px, py);
-
-    if (m_fontLoaded)
-    {
-        const sf::FloatRect tb = m_titleText.getLocalBounds();
-        m_titleText.setPosition(px + (panelW - tb.width) * 0.5f, py + 18.f);
-    }
 
     float startY = py + 70.f;
     for (int i = 0; i < ITEM_COUNT; ++i)
     {
         float ix = px + (panelW - itemW) * 0.5f;
         float iy = startY + static_cast<float>(i) * (itemH + gap);
-        m_items[i].box.setParameters({ itemW, itemH }, UIStyle::CORNER_RADIUS);
-        m_items[i].box.setPosition(ix, iy);
+        m_itemLayouts[i] = { ix, iy, itemW, itemH };
     }
 }
 
@@ -121,11 +81,13 @@ PauseMenu::Action PauseMenu::handleEvent(const sf::Event& event)
     // Mouse hover – update highlighted item
     if (event.type == sf::Event::MouseMoved)
     {
-        sf::Vector2f mouse(static_cast<float>(event.mouseMove.x),
-                           static_cast<float>(event.mouseMove.y));
+        float mx = static_cast<float>(event.mouseMove.x);
+        float my = static_cast<float>(event.mouseMove.y);
         for (int i = 0; i < ITEM_COUNT; ++i)
         {
-            if (m_items[i].box.getGlobalBounds().contains(mouse))
+            auto& il = m_itemLayouts[i];
+            if (mx >= il.x && mx <= il.x + il.w &&
+                my >= il.y && my <= il.y + il.h)
             {
                 m_selectedIndex = i;
                 break;
@@ -137,11 +99,13 @@ PauseMenu::Action PauseMenu::handleEvent(const sf::Event& event)
     if (event.type == sf::Event::MouseButtonPressed &&
         event.mouseButton.button == sf::Mouse::Left)
     {
-        sf::Vector2f mouse(static_cast<float>(event.mouseButton.x),
-                           static_cast<float>(event.mouseButton.y));
+        float mx = static_cast<float>(event.mouseButton.x);
+        float my = static_cast<float>(event.mouseButton.y);
         for (int i = 0; i < ITEM_COUNT; ++i)
         {
-            if (m_items[i].box.getGlobalBounds().contains(mouse))
+            auto& il = m_itemLayouts[i];
+            if (mx >= il.x && mx <= il.x + il.w &&
+                my >= il.y && my <= il.y + il.h)
             {
                 m_selectedIndex = i;
                 Action a = ACTIONS[m_selectedIndex];
@@ -163,7 +127,6 @@ PauseMenu::Action PauseMenu::handleEvent(const sf::Event& event)
 
         if (isStickY || isPovY)
         {
-            // Stick Y: negative=up, positive=down. PovY: positive=up, negative=down.
             bool up   = isStickY ? (pos < -threshold) : (pos > threshold);
             bool down = isStickY ? (pos > threshold)  : (pos < -threshold);
 
@@ -192,37 +155,66 @@ PauseMenu::Action PauseMenu::handleEvent(const sf::Event& event)
     return None;
 }
 
-void PauseMenu::render(sf::RenderWindow& window)
+void PauseMenu::render(Renderer& renderer)
 {
     if (!m_open)
         return;
 
-    layout(window);
+    // Lazy-load font on first render
+    if (m_font == 0)
+        m_font = renderer.loadFont("C:\\Windows\\Fonts\\arial.ttf");
 
-    sf::View prev = window.getView();
-    sf::View uiView(sf::FloatRect(0.f, 0.f,
-                                   static_cast<float>(window.getSize().x),
-                                   static_cast<float>(window.getSize().y)));
-    window.setView(uiView);
+    layout(renderer);
 
-    window.draw(m_overlay);
-    window.draw(m_panel);
+    float winW, winH;
+    renderer.getWindowSize(winW, winH);
 
-    if (m_fontLoaded)
+    renderer.resetView();
+
+    // Semi-transparent overlay
     {
-        window.draw(m_titleText);
+        float r, g, b, a;
+        UIStyle::overlayColor(r, g, b, a);
+        renderer.drawRect(0.f, 0.f, winW, winH, r, g, b, a);
+    }
 
+    // Panel background
+    const float panelW = 320.f;
+    const float itemH  = 48.f;
+    const float gap    = 14.f;
+    const float panelH = 80.f + ITEM_COUNT * (itemH + gap);
+    float px = (winW - panelW) * 0.5f;
+    float py = (winH - panelH) * 0.5f;
+
+    {
+        float r, g, b, a, br, bg2, bb, ba;
+        UIStyle::panelBg(r, g, b, a);
+        UIStyle::panelBorder(br, bg2, bb, ba);
+        renderer.drawRoundedRect(px, py, panelW, panelH,
+                                 UIStyle::PANEL_CORNER_RADIUS,
+                                 r, g, b, a, br, bg2, bb, ba, 1.5f);
+    }
+
+    // Title
+    if (m_font)
+    {
+        float tR, tG, tB, tA;
+        UIStyle::titleColor(tR, tG, tB, tA);
+        float tw, th;
+        renderer.measureText(m_font, "Paused", 28, tw, th);
+        renderer.drawText(m_font, "Paused",
+                          px + (panelW - tw) * 0.5f, py + 18.f,
+                          28, tR, tG, tB, tA);
+
+        // Menu items
         const float itemW = 240.f;
-        const float itemH = 48.f;
-
         for (int i = 0; i < ITEM_COUNT; ++i)
         {
             bool sel = (i == m_selectedIndex);
-            sf::Vector2f pos = m_items[i].box.getPosition();
-            UIStyle::drawMenuItem(window, m_items[i].box, m_items[i].label,
-                                  pos.x, pos.y, itemW, itemH, sel);
+            auto& il = m_itemLayouts[i];
+            UIStyle::drawMenuItem(renderer, m_font, LABELS[i],
+                                  il.x, il.y, itemW, itemH,
+                                  18, sel);
         }
     }
-
-    window.setView(prev);
 }

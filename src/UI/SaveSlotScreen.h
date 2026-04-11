@@ -3,14 +3,11 @@
 #include <vector>
 #include <string>
 
-#include <SFML/Graphics/Font.hpp>
-#include <SFML/Graphics/RectangleShape.hpp>
-#include <SFML/Graphics/Text.hpp>
 #include <SFML/Window/Event.hpp>
 #include <SFML/Window/VideoMode.hpp>
 
 #include "../Core/SaveSystem.h"
-#include "RoundedRectangleShape.h"
+#include "../Rendering/Renderer.h"
 
 namespace sf { class RenderWindow; }
 
@@ -36,14 +33,14 @@ public:
     // Window is non-const so the resolution selector can resize it.
     SaveSlotResult handleEvent(const sf::Event& event, sf::RenderWindow& window);
 
-    void render(sf::RenderWindow& window);
+    void render(Renderer& renderer);
 
 private:
     void refreshSlots();
     void populateResolutions();
     void updateResolutionLabel();
     void applyResolution(sf::RenderWindow& window);
-    void layout(const sf::RenderWindow& window);
+    void layout(Renderer& renderer);
 
     int  totalItemCount() const;
     bool isOnResolutionRow() const;
@@ -65,22 +62,17 @@ private:
     bool m_joyLeftHeld  = false;
     bool m_joyRightHeld = false;
 
-    sf::Font           m_font;
-    bool               m_fontLoaded = false;
-    sf::Text           m_titleText;
-    sf::Text           m_instructionText;
-    sf::RectangleShape m_background;
+    Renderer::FontHandle m_font = 0;
 
-    struct SlotWidget
-    {
-        RoundedRectangleShape box;
-        sf::Text              label;
-    };
-    std::vector<SlotWidget> m_widgets;
+    // Slot labels (rebuilt on refreshSlots)
+    std::vector<std::string> m_slotLabels;
 
-    // Resolution combo box widget
-    SlotWidget m_resWidget;
+    // Resolution combo label
+    std::string m_resLabel;
 
-    // Controls button widget
-    SlotWidget m_controlsWidget;
+    // Layout cache for hit-testing
+    struct ItemLayout { float x, y, w, h; };
+    std::vector<ItemLayout> m_slotLayouts;
+    ItemLayout m_resLayout = {};
+    ItemLayout m_controlsLayout = {};
 };
