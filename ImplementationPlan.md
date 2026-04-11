@@ -64,49 +64,6 @@ Details:
 - Add GLRenderer.cpp and Shader.cpp to CMakeLists.txt sources.
 - Do NOT switch main.cpp to use GLRenderer yet. Just verify it compiles and the class can be instantiated.
 
-==============================================================================
-Task: Switch the game from SFMLRenderer to GLRenderer and from SFMLInput to GLFWInput. Remove all SFML dependencies.
-Implemented: false
-
-Details:
-- Files to modify: src/main.cpp, CMakeLists.txt
-
-- In main.cpp:
-    1. Replace `#include "Rendering/SFMLRenderer.h"` with `#include "Rendering/GLRenderer.h"`.
-    2. Replace `SFMLRenderer renderer(...)` with `GLRenderer renderer("Metroidvania", 800, 600, 60)`.
-    3. Replace any remaining sf::Clock usage with a GLFW-based timer: use glfwGetTime() to compute dt. Create a small helper or inline the logic. Alternatively, add a getTime() method to Renderer that wraps glfwGetTime().
-    4. The rest of main.cpp should work unchanged since it already goes through the Renderer and InputSystem abstractions.
-
-- In CMakeLists.txt:
-    1. Remove the SFML FetchContent block entirely (FetchContent_Declare for SFML, FetchContent_MakeAvailable).
-    2. Remove sfml-graphics, sfml-window, sfml-system from target_link_libraries.
-    3. Remove the SFML DLL copy post-build command.
-    4. Remove SFMLRenderer.cpp and SFMLInput.cpp from the source list.
-    5. Delete src/Rendering/SFMLRenderer.h, src/Rendering/SFMLRenderer.cpp, src/Input/SFMLInput.h, src/Input/SFMLInput.cpp.
-    6. Verify no file in the project includes any SFML header. Run a search for `#include.*SFML` to confirm.
-
-- The file dialog in DebugMenu uses Windows API (comdlg32) directly — this should still work without SFML.
-
-- Update the sf::VideoMode::getDesktopMode() calls in SaveSlotScreen to use GLFW:
-    - glfwGetPrimaryMonitor() + glfwGetVideoMode() to get desktop resolution.
-    - Window resize: glfwSetWindowSize() instead of window.setSize().
-    - Window reposition: glfwSetWindowPos() instead of window.setPosition().
-
-- Build and run the game end-to-end. Verify:
-    1. Window opens at 800x600 with "Metroidvania" title
-    2. Save slot screen renders correctly with text, rounded rects, glow effects
-    3. Game loads and renders platforms, player sprite, enemies with animations
-    4. HP bars render above entities
-    5. Combat arc VFX renders correctly
-    6. Slime particles render as circles
-    7. Dash ghost trail renders
-    8. Room transitions fade to black and back
-    9. Pause menu renders with rounded rect styling
-    10. Controls menu renders and rebinding works
-    11. Debug menu F1 works with file dialog
-    12. Controller input works
-    13. Window resize shows more of the map (not zoom)
-    14. Mouse cursor shows/hides appropriately
 
 ==============================================================================
 Task: Clean up the codebase post-migration. Remove dead SFML code, update documentation, and verify the build is clean.

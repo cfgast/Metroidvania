@@ -6,7 +6,7 @@
 
 #include <glm/vec2.hpp>
 
-#include "Rendering/SFMLRenderer.h"
+#include "Rendering/GLRenderer.h"
 #include "Input/InputSystem.h"
 #include "Core/GameObject.h"
 #include "Core/PlayerState.h"
@@ -34,7 +34,7 @@ int main()
     PhysXWorld::instance().init();
     InputBindings::instance().load();
 
-    SFMLRenderer renderer("Metroidvania", 800, 600, 60);
+    GLRenderer renderer("Metroidvania", 800, 600, 60);
     renderer.setMouseCursorVisible(false);
 
     // --- Game state ---

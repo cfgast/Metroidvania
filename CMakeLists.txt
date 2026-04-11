@@ -6,14 +6,6 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
 include(FetchContent)
 
-FetchContent_Declare(
-    SFML
-    GIT_REPOSITORY https://github.com/SFML/SFML.git
-    GIT_TAG        2.6.1
-    GIT_SHALLOW    TRUE
-)
-FetchContent_MakeAvailable(SFML)
-
 set(JSON_BuildTests OFF CACHE INTERNAL "")
 set(JSON_Install    OFF CACHE INTERNAL "")
 FetchContent_Declare(
@@ -80,10 +72,8 @@ add_executable(Metroidvania
     src/UI/SaveSlotScreen.cpp
     src/UI/PauseMenu.cpp
     src/UI/ControlsMenu.cpp
-    src/Rendering/SFMLRenderer.cpp
     src/Rendering/GLRenderer.cpp
     src/Rendering/Shader.cpp
-    src/Input/SFMLInput.cpp
     src/Input/GLFWInput.cpp
     third_party/glad/src/gl.c
     third_party/stb/stb_image_impl.cpp
@@ -97,9 +87,6 @@ target_include_directories(Metroidvania PRIVATE
 
 target_link_libraries(Metroidvania
     PRIVATE
-        sfml-graphics
-        sfml-window
-        sfml-system
         nlohmann_json::nlohmann_json
         glm::glm
         glfw
@@ -114,14 +101,8 @@ target_link_libraries(Metroidvania
         ${PHYSX_LIB_DIR}/PhysXPvdSDK_static.lib
 )
 
-# Copy SFML and PhysX DLLs next to the executable on Windows
+# Copy PhysX DLLs next to the executable on Windows
 if(WIN32)
-    add_custom_command(TARGET Metroidvania POST_BUILD
-        COMMAND ${CMAKE_COMMAND} -E copy_if_different
-            $<TARGET_RUNTIME_DLLS:Metroidvania>
-            $<TARGET_FILE_DIR:Metroidvania>
-        COMMAND_EXPAND_LISTS
-    )
     add_custom_command(TARGET Metroidvania POST_BUILD
         COMMAND ${CMAKE_COMMAND} -E copy_if_different
             "${PHYSX_LIB_DIR}/PhysX.dll"
