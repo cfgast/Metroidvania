@@ -325,3 +325,7 @@ Implemented: true
 ==============================================================================
 Task: All of the current enemies on the map should get turned into slimes. They should be animated green blobs and have the same behavior they do now. infrequently they should rapidly jitter and shoot out particles that can damage the player.
 Implemented: true
+
+==============================================================================
+Task: Migrate the Component base class and all Component subclasses to render through the Renderer interface instead of sf::RenderWindow.
+Implemented: true

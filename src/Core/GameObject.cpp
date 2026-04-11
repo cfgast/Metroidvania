@@ -1,15 +1,13 @@
 #include "GameObject.h"
 
-#include <SFML/Graphics/RenderWindow.hpp>
-
 void GameObject::update(float dt)
 {
     for (auto& component : m_components)
         component->update(dt);
 }
 
-void GameObject::render(sf::RenderWindow& window)
+void GameObject::render(Renderer& renderer)
 {
     for (auto& component : m_components)
-        component->render(window);
+        component->render(renderer);
 }

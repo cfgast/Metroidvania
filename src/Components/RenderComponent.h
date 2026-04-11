@@ -1,18 +1,20 @@
 #pragma once
 
-#include <SFML/Graphics/RectangleShape.hpp>
-#include <SFML/Graphics/Color.hpp>
-#include <SFML/System/Vector2.hpp>
-
 #include "../Core/Component.h"
+
+class Renderer;
 
 class RenderComponent : public Component
 {
 public:
-    RenderComponent(sf::Vector2f size, sf::Color color = sf::Color::White);
+    RenderComponent(float width, float height,
+                    float r = 1.f, float g = 1.f, float b = 1.f, float a = 1.f);
 
     void update(float dt) override;
-    void render(sf::RenderWindow& window) override;
+    void render(Renderer& renderer) override;
 
-    sf::RectangleShape shape;
+private:
+    float m_width;
+    float m_height;
+    float m_r, m_g, m_b, m_a;
 };

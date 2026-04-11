@@ -6,8 +6,7 @@
 #include "HealthComponent.h"
 
 #include "../Core/GameObject.h"
-
-#include <SFML/Graphics/RenderWindow.hpp>
+#include "../Rendering/Renderer.h"
 
 #include <cmath>
 #include <cstdlib>
@@ -165,23 +164,19 @@ void SlimeAttackComponent::updateParticles(float dt)
         m_particles.end());
 }
 
-void SlimeAttackComponent::render(sf::RenderWindow& window)
+void SlimeAttackComponent::render(Renderer& renderer)
 {
-    sf::CircleShape shape(PARTICLE_RADIUS);
-    shape.setOrigin(PARTICLE_RADIUS, PARTICLE_RADIUS);
-
     for (const auto& p : m_particles)
     {
         if (p.hitPlayer)
             continue;
 
         float alpha = 1.f - (p.lifetime / p.maxLifetime);
-        sf::Uint8 a = static_cast<sf::Uint8>(alpha * 220.f);
+        float a = alpha * (220.f / 255.f);
 
-        shape.setPosition(p.position);
-        shape.setFillColor(sf::Color(80, 255, 80, a));
-        shape.setOutlineColor(sf::Color(30, 150, 30, a));
-        shape.setOutlineThickness(1.f);
-        window.draw(shape);
+        renderer.drawCircle(p.position.x, p.position.y, PARTICLE_RADIUS,
+                            80.f / 255.f, 1.f, 80.f / 255.f, a,
+                            30.f / 255.f, 150.f / 255.f, 30.f / 255.f, a,
+                            1.f);
     }
 }

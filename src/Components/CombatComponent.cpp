@@ -3,9 +3,7 @@
 #include "PhysicsComponent.h"
 #include "HealthComponent.h"
 #include "../Core/GameObject.h"
-
-#include <SFML/Graphics/RenderWindow.hpp>
-#include <SFML/Graphics/VertexArray.hpp>
+#include "../Rendering/Renderer.h"
 
 #include <cmath>
 #include <algorithm>
@@ -108,7 +106,7 @@ void CombatComponent::checkHits()
     }
 }
 
-void CombatComponent::render(sf::RenderWindow& window)
+void CombatComponent::render(Renderer& renderer)
 {
     if (!m_attacking || !getOwner())
         return;
@@ -124,22 +122,22 @@ void CombatComponent::render(sf::RenderWindow& window)
     const int   segments   = 20;
     const float innerR     = 12.f;
     const float outerR     = m_reach;
-    const float startAngle = -1.3f;   // above horizontal (~-75°)
-    const float totalSweep = 2.6f;    // full arc span (~149°)
+    const float startAngle = -1.3f;
+    const float totalSweep = 2.6f;
 
-    // Sweep grows quickly then holds
     float sweepProgress = std::min(progress * 2.0f, 1.0f);
     float currentSweep  = totalSweep * sweepProgress;
 
-    // Fade out during the last 40% of the attack
-    float baseAlpha = 220.f;
+    float baseAlpha = 220.f / 255.f;
     if (progress > 0.6f)
         baseAlpha *= (1.f - (progress - 0.6f) / 0.4f);
 
-    sf::Vector2f center = getOwner()->position;
+    float cx = getOwner()->position.x;
+    float cy = getOwner()->position.y;
 
     // Main arc as a TriangleStrip with per-vertex trail fade
-    sf::VertexArray arc(sf::TrianglesStrip);
+    std::vector<Renderer::Vertex> arcVerts;
+    arcVerts.reserve(static_cast<size_t>((segments + 1) * 2));
 
     for (int i = 0; i <= segments; ++i)
     {
@@ -147,9 +145,8 @@ void CombatComponent::render(sf::RenderWindow& window)
         float angle = startAngle + currentSweep * t;
 
         float trailAlpha = 0.3f + 0.7f * t;
-        sf::Uint8 a = static_cast<sf::Uint8>(
-            std::max(0.f, std::min(255.f, baseAlpha * trailAlpha)));
-        sf::Color color(220, 240, 255, a);
+        float a = std::max(0.f, std::min(1.f, baseAlpha * trailAlpha));
+        float cr = 220.f / 255.f, cg = 240.f / 255.f, cb = 1.f;
 
         float cosA = std::cos(angle);
         float sinA = std::sin(angle);
@@ -161,11 +158,11 @@ void CombatComponent::render(sf::RenderWindow& window)
 
         if (!right) { ix = -ix; ox = -ox; }
 
-        arc.append(sf::Vertex(sf::Vector2f(center.x + ix, center.y + iy), color));
-        arc.append(sf::Vertex(sf::Vector2f(center.x + ox, center.y + oy), color));
+        arcVerts.push_back({cx + ix, cy + iy, cr, cg, cb, a});
+        arcVerts.push_back({cx + ox, cy + oy, cr, cg, cb, a});
     }
 
-    window.draw(arc);
+    renderer.drawTriangleStrip(arcVerts);
 
     // Bright leading-edge line
     if (currentSweep > 0.1f)
@@ -181,16 +178,12 @@ void CombatComponent::render(sf::RenderWindow& window)
 
         if (!right) { eix = -eix; eox = -eox; }
 
-        sf::Uint8 ea = static_cast<sf::Uint8>(
-            std::max(0.f, std::min(255.f, baseAlpha)));
+        float ea = std::max(0.f, std::min(1.f, baseAlpha));
 
-        sf::VertexArray edge(sf::Lines, 2);
-        edge[0] = sf::Vertex(
-            sf::Vector2f(center.x + eix, center.y + eiy),
-            sf::Color(255, 255, 255, ea));
-        edge[1] = sf::Vertex(
-            sf::Vector2f(center.x + eox, center.y + eoy),
-            sf::Color(255, 255, 255, ea));
-        window.draw(edge);
+        std::vector<Renderer::Vertex> edgeVerts = {
+            {cx + eix, cy + eiy, 1.f, 1.f, 1.f, ea},
+            {cx + eox, cy + eoy, 1.f, 1.f, 1.f, ea}
+        };
+        renderer.drawLines(edgeVerts);
     }
 }

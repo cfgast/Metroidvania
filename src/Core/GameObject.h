@@ -8,7 +8,7 @@
 
 #include "Component.h"
 
-namespace sf { class RenderWindow; }
+class Renderer;
 
 class GameObject
 {
@@ -38,7 +38,7 @@ public:
     }
 
     void update(float dt);
-    void render(sf::RenderWindow& window);
+    void render(Renderer& renderer);
 
 private:
     std::vector<std::unique_ptr<Component>> m_components;

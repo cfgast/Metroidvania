@@ -15,7 +15,7 @@ public:
                     float attackCooldown = 0.2f, float reach = 45.f);
 
     void update(float dt) override;
-    void render(sf::RenderWindow& window) override;
+    void render(Renderer& renderer) override;
 
     bool isAttacking() const { return m_attacking; }
 

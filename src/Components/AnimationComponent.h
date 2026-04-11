@@ -3,19 +3,20 @@
 #include <string>
 #include <vector>
 #include <unordered_map>
-
-#include <SFML/Graphics/Sprite.hpp>
-#include <SFML/Graphics/Texture.hpp>
-#include <SFML/Graphics/Rect.hpp>
+#include <cstdint>
 
 #include "../Core/Component.h"
+
+class Renderer;
 
 class AnimationComponent : public Component
 {
 public:
+    struct FrameRect { int x, y, w, h; };
+
     void addAnimation(const std::string& name,
                       const std::string& texturePath,
-                      const std::vector<sf::IntRect>& frames,
+                      const std::vector<FrameRect>& frames,
                       float frameDuration,
                       bool loop = true);
 
@@ -23,25 +24,24 @@ public:
     void stop();
 
     void update(float dt) override;
-    void render(sf::RenderWindow& window) override;
+    void render(Renderer& renderer) override;
 
     const std::string& currentAnimation() const { return m_current; }
     bool isPlaying() const { return m_playing; }
 
 private:
+    using TextureHandle = uint64_t;
+
     struct Animation
     {
         std::string texturePath;
-        std::vector<sf::IntRect> frames;
+        std::vector<FrameRect> frames;
         float frameDuration = 0.1f;
         bool loop = true;
+        mutable TextureHandle textureHandle = 0;
     };
 
-    sf::Texture& loadTexture(const std::string& path);
-
     std::unordered_map<std::string, Animation> m_animations;
-    std::unordered_map<std::string, sf::Texture> m_textures;
-    sf::Sprite m_sprite;
 
     std::string m_current;
     int m_frameIndex = 0;

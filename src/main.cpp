@@ -5,6 +5,7 @@
 
 #include <SFML/Graphics.hpp>
 
+#include "Rendering/SFMLRenderer.h"
 #include "Core/GameObject.h"
 #include "Core/PlayerState.h"
 #include "Core/SaveSystem.h"
@@ -30,8 +31,8 @@ int main()
     PhysXWorld::instance().init();
     InputBindings::instance().load();
 
-    sf::RenderWindow window(sf::VideoMode(800, 600), "Metroidvania");
-    window.setFramerateLimit(60);
+    SFMLRenderer renderer("Metroidvania", 800, 600, 60);
+    sf::RenderWindow& window = renderer.getWindow();
     window.setMouseCursorVisible(false);
 
     // --- Game state ---
@@ -73,7 +74,7 @@ int main()
 
     auto setupPlayer = [&]() {
         player.addComponent<InputComponent>();
-        player.addComponent<RenderComponent>(playerSize, sf::Color::Green);
+        player.addComponent<RenderComponent>(playerSize.x, playerSize.y, 0.f, 1.f, 0.f);
         player.addComponent<PhysicsComponent>(map, playerSize, 300.f);
         if (auto* physics = player.getComponent<PhysicsComponent>())
             physics->setPlayerState(&playerState);
@@ -94,9 +95,9 @@ int main()
             const std::string atlas = "assets/player_spritesheet.png";
             const int fw = 50, fh = 50;
             auto makeFrames = [&](int row, int count) {
-                std::vector<sf::IntRect> frames;
+                std::vector<AnimationComponent::FrameRect> frames;
                 for (int i = 0; i < count; ++i)
-                    frames.emplace_back(i * fw, row * fh, fw, fh);
+                    frames.push_back({i * fw, row * fh, fw, fh});
                 return frames;
             };
             anim->addAnimation("idle",      atlas, makeFrames(0, 4), 0.20f);
@@ -122,7 +123,7 @@ int main()
             enemy->addComponent<EnemyAIComponent>(p, def.waypointA, def.waypointB,
                                                   def.damage, 0.5f);
             enemy->addComponent<InputComponent>();
-            enemy->addComponent<RenderComponent>(def.size, sf::Color::Green);
+            enemy->addComponent<RenderComponent>(def.size.x, def.size.y, 0.f, 1.f, 0.f);
             enemy->addComponent<PhysicsComponent>(m, def.size, def.speed);
             enemy->addComponent<HealthComponent>(def.hp);
             enemy->addComponent<SlimeAttackComponent>(p, 5.f);
@@ -132,9 +133,9 @@ int main()
                 const std::string atlas = "assets/slime_spritesheet.png";
                 const int fw = 40, fh = 40;
                 auto makeFrames = [&](int row, int count) {
-                    std::vector<sf::IntRect> frames;
+                    std::vector<AnimationComponent::FrameRect> frames;
                     for (int i = 0; i < count; ++i)
-                        frames.emplace_back(i * fw, row * fh, fw, fh);
+                        frames.push_back({i * fw, row * fh, fw, fh});
                     return frames;
                 };
                 anim->addAnimation("idle",       atlas, makeFrames(0, 4), 0.25f);
@@ -429,7 +430,7 @@ int main()
             window.setView(gameView);
             window.clear(sf::Color(30, 30, 50));
             map.render(window);
-            player.render(window);
+            player.render(renderer);
 
             transitionMgr.render(window);
 
@@ -554,7 +555,7 @@ int main()
             auto* hp = enemy->getComponent<HealthComponent>();
             if (hp && hp->isDead())
                 continue;
-            enemy->render(window);
+            enemy->render(renderer);
         }
 
         // --- Render dash trail ghosts ---
@@ -568,7 +569,7 @@ int main()
             window.draw(trail);
         }
 
-        player.render(window);
+        player.render(renderer);
 
         transitionMgr.render(window);
 

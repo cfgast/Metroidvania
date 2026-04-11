@@ -30,21 +30,6 @@ functions, stb_image loads textures, and FreeType renders text.
 The migration is ordered so the project builds and runs after every task.
 
 ==============================================================================
-Task: Migrate the Component base classand all Component subclasses to render through the Renderer interface instead of sf::RenderWindow.
-Implemented: false
-
-Details:
-- Files to modify: src/Core/Component.h, src/Core/GameObject.h, src/Core/GameObject.cpp, src/Components/RenderComponent.h, src/Components/RenderComponent.cpp, src/Components/AnimationComponent.h, src/Components/AnimationComponent.cpp, src/Components/HealthComponent.h, src/Components/HealthComponent.cpp, src/Components/CombatComponent.h, src/Components/CombatComponent.cpp, src/Components/SlimeAttackComponent.h, src/Components/SlimeAttackComponent.cpp
-- In Component.h: forward-declare `class Renderer;` (from src/Rendering/Renderer.h). Change the virtual render signature from `virtual void render(sf::RenderWindow& window)` to `virtual void render(Renderer& renderer)`. Remove the sf::RenderWindow forward declaration.
-- In GameObject.h/.cpp: change `void render(sf::RenderWindow&)` to `void render(Renderer&)`. Add the Renderer forward-declare / include.
-- RenderComponent: replace `window.draw(shape)` with `renderer.drawRect()`. The shape's position, size, and fill color should be passed as floats. Remove sf::RectangleShape member — store position/size/color as plain floats or a small struct. Remove SFML includes.
-- AnimationComponent: store texture handles (Renderer::TextureHandle) instead of sf::Texture. Replace `window.draw(m_sprite)` with `renderer.drawSprite(handle, ...)`. Remove sf::Sprite member. The frame rects (sf::IntRect) should become plain {x,y,w,h} structs. Remove SFML includes.
-- HealthComponent: replace the two sf::RectangleShape members (bar background + fill) with direct `renderer.drawRect()` / `renderer.drawRectOutlined()` calls. Remove SFML includes.
-- CombatComponent: replace the sf::VertexArray arc rendering with `renderer.drawTriangleStrip()` and `renderer.drawLines()` using Renderer::Vertex. Remove SFML includes from the .cpp.
-- SlimeAttackComponent: replace sf::CircleShape particle rendering with `renderer.drawCircle()`. Remove SFML includes.
-- After all changes, verify the project builds. The game will not run yet until main.cpp is updated (next task).
-
-==============================================================================
 Task: Migrate the Map rendering, TransitionManager, and all UI classes to use the Renderer interface instead of sf::RenderWindow.
 Implemented: false
 

@@ -35,7 +35,7 @@ The game uses a **Component-Based Entity System**.
 
 | File | Role |
 |---|---|
-| `Component.h` | Abstract base — virtual `update(dt)` and `render(window)`. Stores owner `GameObject*`. |
+| `Component.h` | Abstract base — virtual `update(dt)` and `render(Renderer&)`. Stores owner `GameObject*`. |
 | `GameObject.h/.cpp` | Entity container. Holds `sf::Vector2f position` and a `vector<unique_ptr<Component>>`. Provides `addComponent<T>()` / `getComponent<T>()` templates. |
 | `Ability.h` | Enum `{DoubleJump, WallSlide, Dash}` with string serialization helpers. |
 | `PlayerState.h` | Persistent progression: `set<Ability> unlockedAbilities`, `set<string> consumedPickups`. Carried across room transitions. |
@@ -52,12 +52,12 @@ Each component adds one slice of behavior to a `GameObject`.
 |---|---|---|
 | `InputComponent` | Polls keyboard/gamepad, exposes `InputState` bools (`moveLeft`, `moveRight`, `jump`, `dash`, `attack`). AI can inject input via `setInputState()`. | `InputBindings` |
 | `PhysicsComponent` | Platformer physics: gravity (980), jumping (-520), wall-slide, dash, double-jump, ceiling/floor collision, fall-death respawn. Reads abilities from `PlayerState`. | `InputComponent`, `PlayerState`, `Map`, `PhysXWorld` |
-| `RenderComponent` | Draws a colored `sf::RectangleShape`; skips draw if `AnimationComponent` is present. | — |
-| `AnimationComponent` | Frame-based sprite animation from sprite sheets. Caches textures. Magenta fallback on missing files. | — |
-| `HealthComponent` | HP pool with `takeDamage` / `heal`. Renders green→red HP bar. Fires `onDeath` callback. | — |
-| `CombatComponent` | Player melee: AABB hitbox in front of player, animated arc VFX, per-swing hit tracking. | `InputComponent`, `PhysicsComponent`, `HealthComponent` (enemies) |
+| `RenderComponent` | Draws a colored rectangle via `Renderer::drawRect()`; skips draw if `AnimationComponent` is present. Stores size/color as plain floats. | `Renderer` |
+| `AnimationComponent` | Frame-based sprite animation from sprite sheets. Uses `Renderer::TextureHandle` for lazy-loaded textures. Frame rects stored as plain `{x,y,w,h}` structs. | `Renderer` |
+| `HealthComponent` | HP pool with `takeDamage` / `heal`. Renders green→red HP bar via `Renderer::drawRect()` / `drawRectOutlined()`. Fires `onDeath` callback. | `Renderer` |
+| `CombatComponent` | Player melee: AABB hitbox in front of player, animated arc VFX via `Renderer::drawTriangleStrip()` / `drawLines()`, per-swing hit tracking. | `InputComponent`, `PhysicsComponent`, `HealthComponent` (enemies), `Renderer` |
 | `EnemyAIComponent` | Patrol between two waypoints. Contact damage on AABB overlap with player. Stuck detection reverses direction. | `InputComponent`, `PhysicsComponent`, `HealthComponent` |
-| `SlimeAttackComponent` | Slime-specific ranged attack: jitter → 8-particle radial spray → per-particle AABB hit check. 4–8 s cooldown. | `EnemyAIComponent`, `AnimationComponent`, `HealthComponent` (player) |
+| `SlimeAttackComponent` | Slime-specific ranged attack: jitter → 8-particle radial spray → per-particle AABB hit check. Renders particles via `Renderer::drawCircle()`. 4–8 s cooldown. | `EnemyAIComponent`, `AnimationComponent`, `HealthComponent` (player), `Renderer` |
 
 ### Component wiring (typical player)
 
@@ -122,7 +122,7 @@ A back-end–agnostic rendering abstraction that isolates all draw calls behind 
 | `Renderer.h` | Pure-virtual interface. Covers lifecycle (`clear`/`display`), camera/view, primitives (rect, circle, rounded-rect), textured sprites via opaque `TextureHandle`, text via `FontHandle`, and raw vertex-colored geometry (`drawTriangleStrip`/`drawLines`). No SFML types in the public API. |
 | `SFMLRenderer.h/.cpp` | SFML 2.6 implementation. Owns `sf::RenderWindow` and internal `handle → sf::Texture / sf::Font` maps. Constructor takes title, width, height, FPS cap. Exposes `getWindow()` for legacy code that still touches SFML directly during migration. |
 
-**Note:** Existing game code has not yet been migrated to use `Renderer`. Components and UI still render via `sf::RenderWindow&`. Subsequent tasks will migrate each subsystem to the new interface.
+**Migration status:** All Component subclasses (`RenderComponent`, `AnimationComponent`, `HealthComponent`, `CombatComponent`, `SlimeAttackComponent`) now render exclusively through `Renderer&`. `main.cpp` creates an `SFMLRenderer` and passes it to `GameObject::render()`. Map, UI, and transition rendering still use `sf::RenderWindow&` directly — those will be migrated in subsequent tasks.
 
 ---
 
@@ -150,7 +150,7 @@ A back-end–agnostic rendering abstraction that isolates all draw calls behind 
  ┌─ Init ──────────────────────────────────────┐
  │  PhysXWorld::init()                         │
  │  InputBindings::load()                      │
- │  Create SFML window (800×600, 60 FPS)       │
+ │  Create SFMLRenderer (800×600, 60 FPS)      │
  │  Show SaveSlotScreen → new/load game        │
  └─────────────────────────────────────────────┘
            │

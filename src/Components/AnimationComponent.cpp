@@ -1,13 +1,11 @@
 #include "AnimationComponent.h"
 
-#include <SFML/Graphics/RenderWindow.hpp>
-#include <SFML/Graphics/Image.hpp>
-
 #include "../Core/GameObject.h"
+#include "../Rendering/Renderer.h"
 
 void AnimationComponent::addAnimation(const std::string& name,
                                        const std::string& texturePath,
-                                       const std::vector<sf::IntRect>& frames,
+                                       const std::vector<FrameRect>& frames,
                                        float frameDuration,
                                        bool loop)
 {
@@ -17,23 +15,6 @@ void AnimationComponent::addAnimation(const std::string& name,
     anim.frameDuration = frameDuration;
     anim.loop         = loop;
     m_animations[name] = std::move(anim);
-}
-
-sf::Texture& AnimationComponent::loadTexture(const std::string& path)
-{
-    auto it = m_textures.find(path);
-    if (it != m_textures.end())
-        return it->second;
-
-    sf::Texture& tex = m_textures[path];
-    if (!tex.loadFromFile(path))
-    {
-        // Fallback: create a solid magenta texture so missing art is obvious.
-        sf::Image img;
-        img.create(256, 256, sf::Color::Magenta);
-        tex.loadFromImage(img);
-    }
-    return tex;
 }
 
 void AnimationComponent::play(const std::string& name)
@@ -50,16 +31,6 @@ void AnimationComponent::play(const std::string& name)
     m_frameIndex = 0;
     m_elapsed    = 0.f;
     m_playing    = true;
-
-    const auto& anim = it->second;
-    sf::Texture& tex = loadTexture(anim.texturePath);
-    m_sprite.setTexture(tex, true);
-    if (!anim.frames.empty())
-    {
-        m_sprite.setTextureRect(anim.frames[0]);
-        m_sprite.setOrigin(anim.frames[0].width * 0.5f,
-                           anim.frames[0].height * 0.5f);
-    }
 }
 
 void AnimationComponent::stop()
@@ -99,20 +70,30 @@ void AnimationComponent::update(float dt)
             }
         }
     }
-
-    if (!anim.frames.empty())
-    {
-        m_sprite.setTextureRect(anim.frames[m_frameIndex]);
-        m_sprite.setOrigin(anim.frames[m_frameIndex].width * 0.5f,
-                           anim.frames[m_frameIndex].height * 0.5f);
-    }
-
-    if (getOwner())
-        m_sprite.setPosition(getOwner()->position);
 }
 
-void AnimationComponent::render(sf::RenderWindow& window)
+void AnimationComponent::render(Renderer& renderer)
 {
-    if (!m_current.empty())
-        window.draw(m_sprite);
+    if (m_current.empty())
+        return;
+
+    auto it = m_animations.find(m_current);
+    if (it == m_animations.end())
+        return;
+
+    const auto& anim = it->second;
+    if (anim.frames.empty())
+        return;
+
+    // Lazy-load texture handle on first render
+    if (anim.textureHandle == 0)
+        anim.textureHandle = renderer.loadTexture(anim.texturePath);
+
+    const auto& frame = anim.frames[m_frameIndex];
+    float x = getOwner() ? getOwner()->position.x : 0.f;
+    float y = getOwner() ? getOwner()->position.y : 0.f;
+
+    renderer.drawSprite(anim.textureHandle, x, y,
+                        frame.x, frame.y, frame.w, frame.h,
+                        frame.w * 0.5f, frame.h * 0.5f);
 }

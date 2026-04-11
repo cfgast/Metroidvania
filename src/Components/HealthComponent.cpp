@@ -2,23 +2,13 @@
 
 #include <algorithm>
 
-#include <SFML/Graphics/RenderWindow.hpp>
-
 #include "../Core/GameObject.h"
+#include "../Rendering/Renderer.h"
 
 HealthComponent::HealthComponent(float maxHp)
     : m_maxHp(maxHp)
     , m_currentHp(maxHp)
 {
-    m_barBackground.setSize({ BAR_WIDTH, BAR_HEIGHT });
-    m_barBackground.setFillColor(sf::Color(60, 60, 60));
-    m_barBackground.setOutlineColor(sf::Color::Black);
-    m_barBackground.setOutlineThickness(1.f);
-    m_barBackground.setOrigin(BAR_WIDTH * 0.5f, BAR_HEIGHT * 0.5f);
-
-    m_barFill.setSize({ BAR_WIDTH, BAR_HEIGHT });
-    m_barFill.setFillColor(sf::Color::Green);
-    m_barFill.setOrigin(BAR_WIDTH * 0.5f, BAR_HEIGHT * 0.5f);
 }
 
 void HealthComponent::takeDamage(float amount)
@@ -40,27 +30,25 @@ void HealthComponent::heal(float amount)
     m_currentHp = std::min(m_maxHp, m_currentHp + amount);
 }
 
-void HealthComponent::render(sf::RenderWindow& window)
+void HealthComponent::render(Renderer& renderer)
 {
     if (!getOwner())
         return;
 
-    sf::Vector2f barPos = getOwner()->position;
-    barPos.y += BAR_OFFSET_Y;
+    float barX = getOwner()->position.x - BAR_WIDTH * 0.5f;
+    float barY = getOwner()->position.y + BAR_OFFSET_Y - BAR_HEIGHT * 0.5f;
 
-    m_barBackground.setPosition(barPos);
-    window.draw(m_barBackground);
+    // Background with outline
+    renderer.drawRectOutlined(barX, barY, BAR_WIDTH, BAR_HEIGHT,
+                              60.f / 255.f, 60.f / 255.f, 60.f / 255.f, 1.f,
+                              0.f, 0.f, 0.f, 1.f,
+                              1.f);
 
+    // Fill bar — colour shifts from green to red as HP drops
     float ratio = (m_maxHp > 0.f) ? (m_currentHp / m_maxHp) : 0.f;
     float fillWidth = BAR_WIDTH * ratio;
-    m_barFill.setSize({ fillWidth, BAR_HEIGHT });
-    m_barFill.setOrigin(BAR_WIDTH * 0.5f, BAR_HEIGHT * 0.5f);
-    m_barFill.setPosition(barPos);
+    float r = 1.f - ratio;
+    float g = ratio;
 
-    // Colour shifts from green to red as HP drops
-    sf::Uint8 r = static_cast<sf::Uint8>((1.f - ratio) * 255);
-    sf::Uint8 g = static_cast<sf::Uint8>(ratio * 255);
-    m_barFill.setFillColor(sf::Color(r, g, 0));
-
-    window.draw(m_barFill);
+    renderer.drawRect(barX, barY, fillWidth, BAR_HEIGHT, r, g, 0.f, 1.f);
 }

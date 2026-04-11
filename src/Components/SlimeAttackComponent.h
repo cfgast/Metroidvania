@@ -3,11 +3,11 @@
 #include <vector>
 
 #include <SFML/System/Vector2.hpp>
-#include <SFML/Graphics/CircleShape.hpp>
 
 #include "../Core/Component.h"
 
 class GameObject;
+class Renderer;
 
 class SlimeAttackComponent : public Component
 {
@@ -15,7 +15,7 @@ public:
     SlimeAttackComponent(GameObject& player, float damage = 5.f);
 
     void update(float dt) override;
-    void render(sf::RenderWindow& window) override;
+    void render(Renderer& renderer) override;
 
     bool isJittering() const { return m_jittering; }
 
