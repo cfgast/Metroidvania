@@ -65,38 +65,6 @@ Details:
 - Do NOT switch main.cpp to use GLRenderer yet. Just verify it compiles and the class can be instantiated.
 
 ==============================================================================
-Task: Implement GLFWInput (the GLFW-backed InputSystem) so the game can receive input without SFML.
-Implemented: false
-
-Details:
-- Create src/Input/GLFWInput.h and src/Input/GLFWInput.cpp implementing the InputSystem interface using GLFW callbacks.
-
-- GLFW uses callbacks for input, not polling-then-queue like SFML. The implementation should:
-    1. Register GLFW callbacks: glfwSetKeyCallback, glfwSetMouseButtonCallback, glfwSetCursorPosCallback, glfwSetWindowSizeCallback, glfwSetWindowCloseCallback, glfwSetJoystickCallback.
-    2. Each callback pushes an InputEvent into an internal std::queue<InputEvent>.
-    3. pollEvent() pops from the queue. Before popping, call glfwPollEvents() if the queue is empty.
-
-- Implement isKeyPressed(): use glfwGetKey(window, glfwKeyCode). Create a mapping function from KeyCode enum → GLFW key constant.
-- Implement isGamepadConnected(): use glfwJoystickPresent().
-- Implement getGamepadAxis(): use glfwGetGamepadState() (GLFW 3.3+ gamepad API) or glfwGetJoystickAxes().
-- Implement isGamepadButtonPressed(): use glfwGetGamepadState() or glfwGetJoystickButtons().
-- Implement setMouseCursorVisible(): use glfwSetInputMode(window, GLFW_CURSOR, GLFW_CURSOR_NORMAL / GLFW_CURSOR_HIDDEN).
-
-- Map GLFW key codes to the KeyCode enum. GLFW uses GLFW_KEY_A, GLFW_KEY_SPACE, etc. Create a bidirectional mapping table.
-
-- Map GLFW gamepad buttons to GamepadButton enum. GLFW uses GLFW_GAMEPAD_BUTTON_A, etc.
-
-- Map GLFW gamepad axes to GamepadAxis enum. GLFW_GAMEPAD_AXIS_LEFT_X, etc.
-
-- The GLRenderer should create and own a GLFWInput instance (since it owns the GLFWwindow). Pass the GLFWwindow* to GLFWInput's constructor.
-
-- Wire up the WindowResized callback to also update GLRenderer's internal window size and glViewport.
-- Wire up WindowClosed to set a flag that GLRenderer::isOpen() checks.
-
-- Add GLFWInput.cpp to CMakeLists.txt sources.
-- Do NOT switch to GLFWInput yet — just verify it compiles.
-
-==============================================================================
 Task: Switch the game from SFMLRenderer to GLRenderer and from SFMLInput to GLFWInput. Remove all SFML dependencies.
 Implemented: false
 

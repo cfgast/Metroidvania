@@ -1,5 +1,5 @@
 #include "GLRenderer.h"
-#include "../Input/InputSystem.h"
+#include "../Input/GLFWInput.h"
 
 #include <glm/gtc/matrix_transform.hpp>
 #include <stb_image.h>
@@ -203,10 +203,16 @@ GLRenderer::GLRenderer(const std::string& title, unsigned int width,
 
     // Default projection: top-left origin
     resetView();
+
+    // Create the GLFW-backed input system (must be after window + user pointer setup)
+    m_glfwInput = std::make_unique<GLFWInput>(m_window, *this);
 }
 
 GLRenderer::~GLRenderer()
 {
+    // Destroy input system before the window it depends on
+    m_glfwInput.reset();
+
     if (m_quadVAO) glDeleteVertexArrays(1, &m_quadVAO);
     if (m_quadVBO) glDeleteBuffers(1, &m_quadVBO);
     if (m_spriteVAO) glDeleteVertexArrays(1, &m_spriteVAO);
@@ -273,14 +279,30 @@ void GLRenderer::initQuadVAO()
     glBindVertexArray(0);
 }
 
-// ── Input (stub — GLFWInput will be added in a later task) ────────────────────
+// ── Input ─────────────────────────────────────────────────────────────────────
 
 InputSystem& GLRenderer::getInput()
 {
-    // Will be replaced with a GLFWInput instance in a later task.
-    // For now return the global current() so the build succeeds if something
-    // has set it; this path is never reached until the switchover task.
-    return InputSystem::current();
+    return *m_glfwInput;
+}
+
+InputSystem* GLRenderer::getInputPtr() const
+{
+    return m_glfwInput.get();
+}
+
+// ── Window helpers for GLFWInput callbacks ────────────────────────────────────
+
+void GLRenderer::handleWindowResize(int width, int height)
+{
+    m_windowW = static_cast<float>(width);
+    m_windowH = static_cast<float>(height);
+    glViewport(0, 0, width, height);
+}
+
+void GLRenderer::handleWindowClose()
+{
+    m_open = false;
 }
 
 // ── Window operations ─────────────────────────────────────────────────────────

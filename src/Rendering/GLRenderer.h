@@ -16,6 +16,7 @@
 #include <string>
 
 class InputSystem;
+class GLFWInput;
 
 // OpenGL 3.3 Core implementation of the Renderer interface.
 // Owns the GLFWwindow, shaders, and persistent GPU resources.
@@ -121,6 +122,11 @@ public:
 
     GLFWwindow* getWindow() const { return m_window; }
 
+    // Used by GLFWInput callbacks to reach the input instance and update state
+    InputSystem* getInputPtr() const;
+    void handleWindowResize(int width, int height);
+    void handleWindowClose();
+
 private:
     void initQuadVAO();
     void initSpriteVAO();
@@ -138,6 +144,9 @@ private:
     float       m_windowW = 0.f;
     float       m_windowH = 0.f;
     bool        m_open = true;
+
+    // GLFW-backed input system (owns the instance)
+    std::unique_ptr<GLFWInput> m_glfwInput;
 
     // Flat-color shader and persistent quad VAO
     std::unique_ptr<Shader> m_flatShader;
