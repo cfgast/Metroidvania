@@ -60,32 +60,6 @@ Task 3: Lighting compositing pass
 Implemented: true
 
 ==============================================================================
-Task 5: LightComponent for player dynamic light
-==============================================================================
-Implemented: false
-
-Replace the hardcoded player light in main.cpp with a proper component.
-
-Create src/Components/LightComponent.h / .cpp:
-  class LightComponent : public Component {
-      Light m_light;
-  public:
-      LightComponent(GameObject& owner);
-      void setLight(const Light& l) { m_light = l; }
-      Light getLight() const;  // returns m_light with position = owner.position
-      void update(float dt) override; // optional: animate flicker
-  };
-
-Update main.cpp:
-- Attach a LightComponent to the player with warm white settings
-- In the render section, get the player's LightComponent and addLight()
-- Remove hardcoded player light code
-
-Register the component in the component system if needed. The player should
-have a visible subtle glow that follows them as before, but now via the
-component system.
-
-==============================================================================
 Task 6: Map editor - Place Light tool
 ==============================================================================
 Implemented: false

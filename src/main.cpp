@@ -21,6 +21,7 @@
 #include "Components/EnemyAIComponent.h"
 #include "Components/CombatComponent.h"
 #include "Components/SlimeAttackComponent.h"
+#include "Components/LightComponent.h"
 #include "Map/MapLoader.h"
 #include "Map/TransitionManager.h"
 #include "Debug/DebugMenu.h"
@@ -94,6 +95,18 @@ int main()
         auto* anim = player.addComponent<AnimationComponent>();
         auto* combat = player.addComponent<CombatComponent>(17.f, 0.3f, 0.2f, 45.f);
         combat->setEnemies(&enemies);
+
+        // Warm white dynamic glow that follows the player.
+        {
+            auto* lightComp = player.addComponent<LightComponent>();
+            Light playerLight;
+            playerLight.color     = {1.0f, 0.95f, 0.8f};
+            playerLight.intensity = 0.6f;
+            playerLight.radius    = 300.f;
+            playerLight.z         = 80.f;
+            playerLight.type      = LightType::Point;
+            lightComp->setLight(playerLight);
+        }
         {
             const std::string atlas = "assets/player_spritesheet.png";
             const int fw = 50, fh = 50;
@@ -479,17 +492,9 @@ int main()
             renderer.beginFrame();
             renderer.clearLights();
 
-            // Test player light: warm white glow that follows the player
-            {
-                Light playerLight;
-                playerLight.position  = player.position;
-                playerLight.color     = {1.0f, 0.95f, 0.8f};
-                playerLight.intensity = 0.6f;
-                playerLight.radius    = 300.f;
-                playerLight.z         = 80.f;
-                playerLight.type      = LightType::Point;
-                renderer.addLight(playerLight);
-            }
+            // Player dynamic light via component.
+            if (auto* lc = player.getComponent<LightComponent>())
+                renderer.addLight(lc->getLight());
 
             // Add map-defined lights.
             for (const auto& ld : map.getLights())
@@ -618,17 +623,9 @@ int main()
         renderer.beginFrame();
         renderer.clearLights();
 
-        // Test player light: warm white glow that follows the player
-        {
-            Light playerLight;
-            playerLight.position  = player.position;
-            playerLight.color     = {1.0f, 0.95f, 0.8f};
-            playerLight.intensity = 0.6f;
-            playerLight.radius    = 300.f;
-            playerLight.z         = 80.f;
-            playerLight.type      = LightType::Point;
-            renderer.addLight(playerLight);
-        }
+        // Player dynamic light via component.
+        if (auto* lc = player.getComponent<LightComponent>())
+            renderer.addLight(lc->getLight());
 
         // Add map-defined lights.
         for (const auto& ld : map.getLights())

@@ -59,6 +59,7 @@ Each component adds one slice of behavior to a `GameObject`.
 | `CombatComponent` | Player melee: AABB hitbox in front of player, animated arc VFX via `Renderer::drawTriangleStrip()` / `drawLines()`, per-swing hit tracking. | `InputComponent`, `PhysicsComponent`, `HealthComponent` (enemies), `Renderer` |
 | `EnemyAIComponent` | Patrol between two waypoints. Contact damage on AABB overlap with player. Stuck detection reverses direction. | `InputComponent`, `PhysicsComponent`, `HealthComponent` |
 | `SlimeAttackComponent` | Slime-specific ranged attack: jitter → 8-particle radial spray → per-particle AABB hit check. Renders particles via `Renderer::drawCircle()`. 4–8 s cooldown. | `EnemyAIComponent`, `AnimationComponent`, `HealthComponent` (player), `Renderer` |
+| `LightComponent` | Attaches a `Light` to a `GameObject`. `getLight()` returns the light with position synced to the owner. Used on the player for a warm dynamic glow; registered before draw calls so all geometry receives the light. | `Light` |
 
 ### Component wiring (typical player)
 
@@ -68,6 +69,8 @@ InputComponent ──► PhysicsComponent ──► RenderComponent / AnimationC
                     CombatComponent
                          │
                    HealthComponent
+                         │
+                   LightComponent
 ```
 
 Enemies replace `CombatComponent` with `EnemyAIComponent` (+ optional `SlimeAttackComponent`).
@@ -266,7 +269,7 @@ A back-end–agnostic input abstraction that isolates all input polling and even
 
 ### Entity setup
 
-- **Player**: `InputComponent` → `PhysicsComponent` → `RenderComponent` → `AnimationComponent` → `HealthComponent` → `CombatComponent`. Death callback teleports to spawn and refills HP.
+- **Player**: `InputComponent` → `PhysicsComponent` → `RenderComponent` → `AnimationComponent` → `HealthComponent` → `CombatComponent` → `LightComponent`. Death callback teleports to spawn and refills HP. LightComponent provides the player's dynamic light (warm white point light, registered before draw calls).
 - **Enemy**: `InputComponent` → `PhysicsComponent` → `RenderComponent` → `AnimationComponent` → `HealthComponent` → `EnemyAIComponent` → (optional) `SlimeAttackComponent`. Death callback erases enemy from list.
 
 ---
