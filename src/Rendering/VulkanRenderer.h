@@ -1,6 +1,7 @@
 #pragma once
 
 #include "Renderer.h"
+#include "Light.h"
 
 #include <vulkan/vulkan.h>
 #include <vk_mem_alloc.h>
@@ -137,6 +138,7 @@ private:
 
     // ── Sprite/lighting resource helpers ──────────────────────────────
     void createLightingResources();
+    void uploadLightingData();
     void createFlatNormalTexture();
     VkDescriptorSet getOrCreateTextureDescriptorSet(TextureHandle diffuse,
                                                      TextureHandle normal);
@@ -323,11 +325,21 @@ private:
 
     static constexpr uint32_t MAX_TEXTURE_DESCRIPTOR_SETS = 256;
 
-    // ── Dummy lighting UBO (placeholder until lighting is ported) ─────
-    VkBuffer         m_lightingUBO              = VK_NULL_HANDLE;
-    VmaAllocation    m_lightingUBOAllocation    = VK_NULL_HANDLE;
-    VkDescriptorPool m_lightingDescriptorPool   = VK_NULL_HANDLE;
-    VkDescriptorSet  m_lightingDescriptorSet    = VK_NULL_HANDLE;
+    // ── Per-frame lighting UBOs ──────────────────────────────────────
+    static constexpr uint32_t MAX_LIGHTS = 32;
+
+    struct FrameLightingUBO {
+        VkBuffer      buffer     = VK_NULL_HANDLE;
+        VmaAllocation allocation = VK_NULL_HANDLE;
+        void*         mapped     = nullptr;
+        VkDescriptorSet descriptorSet = VK_NULL_HANDLE;
+    };
+    std::array<FrameLightingUBO, MAX_FRAMES_IN_FLIGHT> m_lightingUBOs{};
+    VkDescriptorPool m_lightingDescriptorPool = VK_NULL_HANDLE;
+
+    // CPU-side lighting state
+    std::vector<Light> m_lights;
+    glm::vec3          m_ambientColor{0.f, 0.f, 0.f};
 
     // ── Default flat normal texture ──────────────────────────────────
     TextureHandle m_flatNormalTexture = 0;

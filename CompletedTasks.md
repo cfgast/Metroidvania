@@ -1617,3 +1617,34 @@ Store the off-screen image, view, sampler, and VMA allocation as members.
 Clean up in destructor and before recreation on resize.
 
 ==============================================================================
+==============================================================================
+Task 16: Lighting uniform buffer
+==============================================================================
+Implemented: true
+
+Create a per-frame uniform buffer (UBO) for lighting data:
+
+Layout (matching the GLSL lighting.glsl struct):
+  struct LightUBO {
+      vec3 ambientColor;       // 12 bytes + 4 padding
+      int  numLights;          // 4 bytes
+      Light lights[32];        // each Light: position(vec2), color(vec3),
+                               //   intensity(float), radius(float), z(float),
+                               //   direction(vec2), innerCone(float),
+                               //   outerCone(float), type(int)
+                               //   → pack to std140 alignment
+  };
+
+Use a host-visible, host-coherent buffer (VMA) per frame in flight.
+
+Implement addLight(const Light& light): append to CPU-side vector
+Implement clearLights(): clear the vector
+Implement setAmbientColor(r, g, b): store ambient color
+
+Before each draw that uses lighting (flat, textured), memcpy the light
+data to the mapped UBO and bind it to descriptor set 0, binding 0.
+
+When m_worldPass is false (UI rendering after endFrame), upload
+ambient=(1,1,1) and numLights=0 so UI renders at full brightness.
+
+==============================================================================

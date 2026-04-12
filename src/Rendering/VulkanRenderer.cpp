@@ -49,6 +49,32 @@ private:
     GLFWwindow* m_window;
 };
 
+// ── std140-aligned GPU lighting structs ──────────────────────────────────────
+
+struct GpuLight {
+    glm::vec2 position;     // offset  0   (8 bytes)
+    float     _pad0[2];     // offset  8   (8 bytes padding → align vec3 to 16)
+    glm::vec3 color;        // offset 16   (12 bytes)
+    float     intensity;    // offset 28   (4 bytes)
+    float     radius;       // offset 32   (4 bytes)
+    float     z;            // offset 36   (4 bytes)
+    glm::vec2 direction;    // offset 40   (8 bytes, aligned to 8)
+    float     innerCone;    // offset 48   (4 bytes)
+    float     outerCone;    // offset 52   (4 bytes)
+    int32_t   type;         // offset 56   (4 bytes)
+    float     _pad1;        // offset 60   (4 bytes → round to 64)
+};
+static_assert(sizeof(GpuLight) == 64, "GpuLight must be 64 bytes (std140)");
+
+struct GpuLightingUBO {
+    GpuLight  lights[32];       // offset    0  (2048 bytes)
+    int32_t   numLights;        // offset 2048  (4 bytes)
+    float     _pad2[3];         // offset 2052  (12 bytes → align vec3 to 16)
+    glm::vec3 ambientColor;     // offset 2064  (12 bytes)
+    float     _pad3;            // offset 2076  (4 bytes → round to 2080)
+};
+static_assert(sizeof(GpuLightingUBO) == 2080, "GpuLightingUBO must be 2080 bytes (std140)");
+
 // ── GLFW resize callback ─────────────────────────────────────────────────────
 
 static void framebufferResizeCallback(GLFWwindow* window, int /*width*/, int /*height*/)
@@ -382,8 +408,12 @@ void VulkanRenderer::cleanupVulkan()
 
         if (m_lightingDescriptorPool != VK_NULL_HANDLE)
             vkDestroyDescriptorPool(m_device, m_lightingDescriptorPool, nullptr);
-        if (m_lightingUBO != VK_NULL_HANDLE)
-            vmaDestroyBuffer(m_allocator, m_lightingUBO, m_lightingUBOAllocation);
+        for (uint32_t i = 0; i < MAX_FRAMES_IN_FLIGHT; ++i)
+        {
+            if (m_lightingUBOs[i].buffer != VK_NULL_HANDLE)
+                vmaDestroyBuffer(m_allocator, m_lightingUBOs[i].buffer,
+                                 m_lightingUBOs[i].allocation);
+        }
 
         // ── Destroy VMA allocator ────────────────────────────────────
         if (m_allocator != VK_NULL_HANDLE)
@@ -1452,35 +1482,42 @@ void VulkanRenderer::cleanupTextureResources()
 
 void VulkanRenderer::createLightingResources()
 {
-    // Allocate a zeroed UBO large enough for the std140 LightingUBO block
-    static constexpr VkDeviceSize LIGHTING_UBO_SIZE = 4096;
+    // Allocate a host-visible, host-coherent UBO per frame in flight
+    static constexpr VkDeviceSize LIGHTING_UBO_SIZE = sizeof(GpuLightingUBO);
 
-    VkBufferCreateInfo bufInfo{};
-    bufInfo.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
-    bufInfo.size  = LIGHTING_UBO_SIZE;
-    bufInfo.usage = VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT;
+    for (uint32_t i = 0; i < MAX_FRAMES_IN_FLIGHT; ++i)
+    {
+        VkBufferCreateInfo bufInfo{};
+        bufInfo.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
+        bufInfo.size  = LIGHTING_UBO_SIZE;
+        bufInfo.usage = VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT;
 
-    VmaAllocationCreateInfo allocInfo{};
-    allocInfo.usage = VMA_MEMORY_USAGE_AUTO;
-    allocInfo.flags = VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT |
-                      VMA_ALLOCATION_CREATE_MAPPED_BIT;
+        VmaAllocationCreateInfo allocInfo{};
+        allocInfo.usage = VMA_MEMORY_USAGE_AUTO;
+        allocInfo.flags = VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT |
+                          VMA_ALLOCATION_CREATE_MAPPED_BIT;
 
-    VmaAllocationInfo allocationInfo{};
-    if (vmaCreateBuffer(m_allocator, &bufInfo, &allocInfo,
-                        &m_lightingUBO, &m_lightingUBOAllocation, &allocationInfo) != VK_SUCCESS)
-        throw std::runtime_error("VulkanRenderer: failed to create lighting UBO");
+        VmaAllocationInfo allocationInfo{};
+        if (vmaCreateBuffer(m_allocator, &bufInfo, &allocInfo,
+                            &m_lightingUBOs[i].buffer,
+                            &m_lightingUBOs[i].allocation,
+                            &allocationInfo) != VK_SUCCESS)
+            throw std::runtime_error("VulkanRenderer: failed to create lighting UBO");
 
-    // Zero out — no lights, black ambient
-    std::memset(allocationInfo.pMappedData, 0, LIGHTING_UBO_SIZE);
+        m_lightingUBOs[i].mapped = allocationInfo.pMappedData;
 
-    // Descriptor pool for one lighting set
+        // Zero out — no lights, black ambient
+        std::memset(m_lightingUBOs[i].mapped, 0, LIGHTING_UBO_SIZE);
+    }
+
+    // Descriptor pool for per-frame lighting sets
     VkDescriptorPoolSize poolSize{};
     poolSize.type            = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
-    poolSize.descriptorCount = 1;
+    poolSize.descriptorCount = MAX_FRAMES_IN_FLIGHT;
 
     VkDescriptorPoolCreateInfo poolInfo{};
     poolInfo.sType         = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO;
-    poolInfo.maxSets       = 1;
+    poolInfo.maxSets       = MAX_FRAMES_IN_FLIGHT;
     poolInfo.poolSizeCount = 1;
     poolInfo.pPoolSizes    = &poolSize;
 
@@ -1488,32 +1525,36 @@ void VulkanRenderer::createLightingResources()
                                &m_lightingDescriptorPool) != VK_SUCCESS)
         throw std::runtime_error("VulkanRenderer: failed to create lighting descriptor pool");
 
-    // Allocate and write descriptor set
-    VkDescriptorSetAllocateInfo setAllocInfo{};
-    setAllocInfo.sType              = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO;
-    setAllocInfo.descriptorPool     = m_lightingDescriptorPool;
-    setAllocInfo.descriptorSetCount = 1;
-    setAllocInfo.pSetLayouts        = &m_flatDescriptorSetLayout;
+    // Allocate and write descriptor sets — one per frame in flight
+    for (uint32_t i = 0; i < MAX_FRAMES_IN_FLIGHT; ++i)
+    {
+        VkDescriptorSetAllocateInfo setAllocInfo{};
+        setAllocInfo.sType              = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO;
+        setAllocInfo.descriptorPool     = m_lightingDescriptorPool;
+        setAllocInfo.descriptorSetCount = 1;
+        setAllocInfo.pSetLayouts        = &m_flatDescriptorSetLayout;
 
-    if (vkAllocateDescriptorSets(m_device, &setAllocInfo, &m_lightingDescriptorSet) != VK_SUCCESS)
-        throw std::runtime_error("VulkanRenderer: failed to allocate lighting descriptor set");
+        if (vkAllocateDescriptorSets(m_device, &setAllocInfo,
+                                     &m_lightingUBOs[i].descriptorSet) != VK_SUCCESS)
+            throw std::runtime_error("VulkanRenderer: failed to allocate lighting descriptor set");
 
-    VkDescriptorBufferInfo lightBufInfo{};
-    lightBufInfo.buffer = m_lightingUBO;
-    lightBufInfo.offset = 0;
-    lightBufInfo.range  = LIGHTING_UBO_SIZE;
+        VkDescriptorBufferInfo lightBufInfo{};
+        lightBufInfo.buffer = m_lightingUBOs[i].buffer;
+        lightBufInfo.offset = 0;
+        lightBufInfo.range  = LIGHTING_UBO_SIZE;
 
-    VkWriteDescriptorSet write{};
-    write.sType           = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
-    write.dstSet          = m_lightingDescriptorSet;
-    write.dstBinding      = 0;
-    write.descriptorCount = 1;
-    write.descriptorType  = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
-    write.pBufferInfo     = &lightBufInfo;
+        VkWriteDescriptorSet write{};
+        write.sType           = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+        write.dstSet          = m_lightingUBOs[i].descriptorSet;
+        write.dstBinding      = 0;
+        write.descriptorCount = 1;
+        write.descriptorType  = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
+        write.pBufferInfo     = &lightBufInfo;
 
-    vkUpdateDescriptorSets(m_device, 1, &write, 0, nullptr);
+        vkUpdateDescriptorSets(m_device, 1, &write, 0, nullptr);
+    }
 
-    std::cout << "[Vulkan] Lighting resources created (dummy UBO)\n";
+    std::cout << "[Vulkan] Lighting resources created (per-frame UBOs)\n";
 }
 
 void VulkanRenderer::createFlatNormalTexture()
@@ -2008,9 +2049,61 @@ void VulkanRenderer::beginFrame()
     vkCmdSetScissor(cmd, 0, 1, &scissor);
 }
 void VulkanRenderer::endFrame() {}
-void VulkanRenderer::addLight(const Light& /*light*/) {}
-void VulkanRenderer::clearLights() {}
-void VulkanRenderer::setAmbientColor(float /*r*/, float /*g*/, float /*b*/) {}
+
+void VulkanRenderer::addLight(const Light& light)
+{
+    if (m_lights.size() < MAX_LIGHTS)
+        m_lights.push_back(light);
+}
+
+void VulkanRenderer::clearLights()
+{
+    m_lights.clear();
+}
+
+void VulkanRenderer::setAmbientColor(float r, float g, float b)
+{
+    m_ambientColor = glm::vec3(r, g, b);
+}
+
+void VulkanRenderer::uploadLightingData()
+{
+    auto& frame = m_lightingUBOs[m_currentFrame];
+
+    GpuLightingUBO ubo{};
+
+    if (m_worldPass)
+    {
+        ubo.ambientColor = m_ambientColor;
+        ubo.numLights    = static_cast<int32_t>(m_lights.size());
+
+        for (size_t i = 0; i < m_lights.size() && i < MAX_LIGHTS; ++i)
+        {
+            const Light& src = m_lights[i];
+            GpuLight&    dst = ubo.lights[i];
+            dst.position  = src.position;
+            dst._pad0[0]  = 0.f;
+            dst._pad0[1]  = 0.f;
+            dst.color     = src.color;
+            dst.intensity = src.intensity;
+            dst.radius    = src.radius;
+            dst.z         = src.z;
+            dst.direction = src.direction;
+            dst.innerCone = src.innerCone;
+            dst.outerCone = src.outerCone;
+            dst.type      = static_cast<int32_t>(src.type);
+            dst._pad1     = 0.f;
+        }
+    }
+    else
+    {
+        // UI rendering: full brightness, no dynamic lights
+        ubo.ambientColor = glm::vec3(1.f, 1.f, 1.f);
+        ubo.numLights    = 0;
+    }
+
+    std::memcpy(frame.mapped, &ubo, sizeof(GpuLightingUBO));
+}
 
 // ── View / camera ────────────────────────────────────────────────────────────
 
@@ -2075,8 +2168,14 @@ void VulkanRenderer::drawRect(float x, float y, float w, float h,
 
     VkCommandBuffer cmd = m_commandBuffers[m_currentFrame];
 
-    // Bind the flat-color pipeline
+    // Upload lighting data and bind the lighting UBO (set 0)
+    uploadLightingData();
     vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, m_flatPipeline);
+
+    vkCmdBindDescriptorSets(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS,
+                            m_flatPipelineLayout, 0, 1,
+                            &m_lightingUBOs[m_currentFrame].descriptorSet,
+                            0, nullptr);
 
     // Set dynamic viewport
     VkViewport viewport{};
@@ -2808,10 +2907,12 @@ void VulkanRenderer::drawSprite(TextureHandle tex, float x, float y,
                        VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT,
                        0, sizeof(pushData), &pushData);
 
-    // Bind lighting UBO (set 0) — dummy placeholder
+    // Upload lighting data and bind lighting UBO (set 0)
+    uploadLightingData();
     vkCmdBindDescriptorSets(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS,
                             m_texturedPipelineLayout, 0, 1,
-                            &m_lightingDescriptorSet, 0, nullptr);
+                            &m_lightingUBOs[m_currentFrame].descriptorSet,
+                            0, nullptr);
 
     // Bind texture descriptor set (set 1): diffuse + normal map
     VkDescriptorSet texSet = getOrCreateTextureDescriptorSet(tex, normalHandle);
@@ -3254,10 +3355,12 @@ void VulkanRenderer::drawText(FontHandle font, const std::string& str,
                        VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT,
                        0, sizeof(pc), &pc);
 
-    // Bind lighting UBO (set 0) — required by pipeline layout
+    // Upload lighting data and bind lighting UBO (set 0)
+    uploadLightingData();
     vkCmdBindDescriptorSets(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS,
                             m_textPipelineLayout, 0, 1,
-                            &m_lightingDescriptorSet, 0, nullptr);
+                            &m_lightingUBOs[m_currentFrame].descriptorSet,
+                            0, nullptr);
 
     // Bind glyph atlas descriptor set (set 1)
     vkCmdBindDescriptorSets(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS,
