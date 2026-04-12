@@ -2131,6 +2131,7 @@ void VulkanRenderer::setWindowSize(unsigned int w, unsigned int h)
     glfwSetWindowSize(m_window, static_cast<int>(w), static_cast<int>(h));
     m_windowW = static_cast<float>(w);
     m_windowH = static_cast<float>(h);
+    m_framebufferResized = true;
 }
 
 void VulkanRenderer::setWindowPosition(int x, int y)

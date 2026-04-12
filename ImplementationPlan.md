@@ -76,33 +76,7 @@ The project should still compile and run with the OpenGL backend after this
 task. No rendering code changes — build system only.
 
 ==============================================================================
-Task 18: Window and input management
-==============================================================================
-Implemented: false
-
-Implement window management methods (mostly GLFW calls, same as GLRenderer):
-- isOpen(): return !glfwWindowShouldClose(m_window)
-- close(): glfwSetWindowShouldClose(m_window, GLFW_TRUE)
-- setMouseCursorVisible(bool): glfwSetInputMode cursor
-- setWindowSize(w, h): glfwSetWindowSize + trigger swap chain recreation
-- setWindowPosition(x, y): glfwSetWindowPos
-- getDesktopSize(&w, &h): glfwGetVideoMode(glfwGetPrimaryMonitor())
-- getWindowSize(&w, &h): return stored window dimensions
-
-Handle swap chain recreation on window resize:
-1. vkDeviceWaitIdle()
-2. Destroy old swap chain image views
-3. Destroy old off-screen render target (image, view, sampler)
-4. Recreate swap chain with new extents (vk-bootstrap)
-5. Recreate swap chain image views
-6. Recreate off-screen render target at new size
-7. Update stored window dimensions
-
-Register glfwSetFramebufferSizeCallback to trigger recreation.
-Handle minimization (width=0 or height=0) by skipping frames.
-
-==============================================================================
-Task 19: Camera and view system
+Task 19:Camera and view system
 ==============================================================================
 Implemented: false
 
