@@ -10,6 +10,64 @@
 
 // ── Shader sources ────────────────────────────────────────────────────────────
 
+// Shared GLSL lighting code injected into both flat and texture fragment shaders
+static const char* kLightingGLSL = R"(
+#define MAX_LIGHTS 32
+
+struct Light {
+    vec2  position;
+    vec3  color;
+    float intensity;
+    float radius;
+    float z;
+    vec2  direction;
+    float innerCone;
+    float outerCone;
+    int   type;   // 0 = point, 1 = spot
+};
+
+uniform Light uLights[MAX_LIGHTS];
+uniform int   uNumLights;
+uniform vec3  uAmbientColor;
+
+vec3 calcLighting(vec2 worldPos, vec3 normal)
+{
+    vec3 totalLight = uAmbientColor;
+
+    for (int i = 0; i < uNumLights; ++i)
+    {
+        vec2 toLight2D = uLights[i].position - worldPos;
+        float dist2D   = length(toLight2D);
+
+        if (dist2D >= uLights[i].radius)
+            continue;
+
+        // 3D light direction (light is above the 2D plane at height z)
+        vec3 lightDir = normalize(vec3(toLight2D, uLights[i].z));
+
+        // Quadratic attenuation fading to zero at radius
+        float atten = 1.0 - (dist2D / uLights[i].radius);
+        atten = atten * atten;
+
+        // Diffuse (Lambertian)
+        float diff = max(dot(normal, lightDir), 0.0);
+
+        // Spot light angular falloff
+        float spotFactor = 1.0;
+        if (uLights[i].type == 1)
+        {
+            vec2 spotDir = normalize(uLights[i].direction);
+            float cosAngle = dot(normalize(-toLight2D), spotDir);
+            spotFactor = smoothstep(uLights[i].outerCone, uLights[i].innerCone, cosAngle);
+        }
+
+        totalLight += uLights[i].color * uLights[i].intensity * atten * diff * spotFactor;
+    }
+
+    return totalLight;
+}
+)";
+
 static const char* kFlatVS = R"(
 #version 330 core
 layout (location = 0) in vec2 aPos;
@@ -17,21 +75,28 @@ layout (location = 0) in vec2 aPos;
 uniform mat4 uProjection;
 uniform mat4 uModel;
 
+out vec2 vWorldPos;
+
 void main()
 {
-    gl_Position = uProjection * uModel * vec4(aPos, 0.0, 1.0);
+    vec4 worldPos = uModel * vec4(aPos, 0.0, 1.0);
+    vWorldPos = worldPos.xy;
+    gl_Position = uProjection * worldPos;
 }
 )";
 
-static const char* kFlatFS = R"(
-#version 330 core
+// kFlatFS is built at runtime by prepending kLightingGLSL (see constructor)
+static const char* kFlatFS_body = R"(
+in vec2 vWorldPos;
 out vec4 FragColor;
 
 uniform vec4 uColor;
 
 void main()
 {
-    FragColor = uColor;
+    vec3 normal = vec3(0.0, 0.0, 1.0);
+    vec3 lighting = calcLighting(vWorldPos, normal);
+    FragColor = vec4(uColor.rgb * lighting, uColor.a);
 }
 )";
 
@@ -43,24 +108,45 @@ layout (location = 1) in vec2 aTexCoord;
 uniform mat4 uProjection;
 
 out vec2 vTexCoord;
+out vec2 vWorldPos;
 
 void main()
 {
     gl_Position = uProjection * vec4(aPos, 0.0, 1.0);
     vTexCoord = aTexCoord;
+    vWorldPos = aPos;
 }
 )";
 
-static const char* kTexFS = R"(
-#version 330 core
+// kTexFS is built at runtime by prepending kLightingGLSL
+static const char* kTexFS_body = R"(
 in vec2 vTexCoord;
+in vec2 vWorldPos;
 out vec4 FragColor;
 
 uniform sampler2D uTexture;
+uniform sampler2D uNormalMap;
+uniform bool uHasNormalMap;
 
 void main()
 {
-    FragColor = texture(uTexture, vTexCoord);
+    vec4 texColor = texture(uTexture, vTexCoord);
+
+    vec3 normal;
+    if (uHasNormalMap)
+    {
+        normal = texture(uNormalMap, vTexCoord).rgb;
+        normal = normal * 2.0 - 1.0;
+        normal.y = -normal.y;  // flip Y for Y-down coordinate system
+        normal = normalize(normal);
+    }
+    else
+    {
+        normal = vec3(0.0, 0.0, 1.0);
+    }
+
+    vec3 lighting = calcLighting(vWorldPos, normal);
+    FragColor = vec4(texColor.rgb * lighting, texColor.a);
 }
 )";
 
@@ -214,9 +300,11 @@ GLRenderer::GLRenderer(const std::string& title, unsigned int width,
     glfwSetWindowUserPointer(m_window, this);
     glfwSetFramebufferSizeCallback(m_window, framebufferSizeCallback);
 
-    // Build shaders
-    m_flatShader = std::make_unique<Shader>(kFlatVS, kFlatFS);
-    m_texShader  = std::make_unique<Shader>(kTexVS, kTexFS);
+    // Build shaders — flat and tex shaders get lighting code prepended
+    std::string flatFS = std::string("#version 330 core\n") + kLightingGLSL + kFlatFS_body;
+    std::string texFS  = std::string("#version 330 core\n") + kLightingGLSL + kTexFS_body;
+    m_flatShader = std::make_unique<Shader>(kFlatVS, flatFS);
+    m_texShader  = std::make_unique<Shader>(kTexVS, texFS);
     m_textShader = std::make_unique<Shader>(kTextVS, kTextFS);
     m_vertColorShader = std::make_unique<Shader>(kVertColorVS, kVertColorFS);
     m_blitShader = std::make_unique<Shader>(kBlitVS, kBlitFS);
@@ -269,6 +357,11 @@ GLRenderer::~GLRenderer()
     for (auto& [handle, info] : m_textures)
     {
         if (info.glId) glDeleteTextures(1, &info.glId);
+    }
+
+    for (auto& [path, normalId] : m_normalMaps)
+    {
+        if (normalId) glDeleteTextures(1, &normalId);
     }
 
     // Clean up font atlases and FreeType faces
@@ -448,6 +541,95 @@ void GLRenderer::clearLights()
     m_lights.clear();
 }
 
+void GLRenderer::setAmbientColor(float r, float g, float b)
+{
+    m_ambientColor = glm::vec3(r, g, b);
+}
+
+// ── Normal map loader ─────────────────────────────────────────────────────────
+
+GLuint GLRenderer::loadNormalMap(const std::string& diffusePath)
+{
+    auto it = m_normalMaps.find(diffusePath);
+    if (it != m_normalMaps.end())
+        return it->second;
+
+    // Build the _n.png path: "assets/foo.png" -> "assets/foo_n.png"
+    std::string normalPath;
+    auto dotPos = diffusePath.rfind('.');
+    if (dotPos != std::string::npos)
+        normalPath = diffusePath.substr(0, dotPos) + "_n" + diffusePath.substr(dotPos);
+    else
+        normalPath = diffusePath + "_n";
+
+    stbi_set_flip_vertically_on_load(0);
+    int w = 0, h = 0, channels = 0;
+    unsigned char* data = stbi_load(normalPath.c_str(), &w, &h, &channels, 4);
+
+    GLuint texId = 0;
+    if (data)
+    {
+        glGenTextures(1, &texId);
+        glBindTexture(GL_TEXTURE_2D, texId);
+        glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, w, h, 0,
+                     GL_RGBA, GL_UNSIGNED_BYTE, data);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+        glBindTexture(GL_TEXTURE_2D, 0);
+        stbi_image_free(data);
+    }
+
+    // Cache result (0 = not found, avoids re-trying)
+    m_normalMaps[diffusePath] = texId;
+    return texId;
+}
+
+// ── Light uniform upload ──────────────────────────────────────────────────────
+
+void GLRenderer::uploadLightUniforms(Shader& shader)
+{
+    shader.setVec3("uAmbientColor", m_ambientColor);
+
+    int count = static_cast<int>(m_lights.size());
+    if (count > 32) count = 32;
+    shader.setInt("uNumLights", count);
+
+    char buf[64];
+    for (int i = 0; i < count; ++i)
+    {
+        const Light& L = m_lights[i];
+
+        snprintf(buf, sizeof(buf), "uLights[%d].position", i);
+        shader.setVec2(buf, L.position);
+
+        snprintf(buf, sizeof(buf), "uLights[%d].color", i);
+        shader.setVec3(buf, L.color);
+
+        snprintf(buf, sizeof(buf), "uLights[%d].intensity", i);
+        shader.setFloat(buf, L.intensity);
+
+        snprintf(buf, sizeof(buf), "uLights[%d].radius", i);
+        shader.setFloat(buf, L.radius);
+
+        snprintf(buf, sizeof(buf), "uLights[%d].z", i);
+        shader.setFloat(buf, L.z);
+
+        snprintf(buf, sizeof(buf), "uLights[%d].direction", i);
+        shader.setVec2(buf, L.direction);
+
+        snprintf(buf, sizeof(buf), "uLights[%d].innerCone", i);
+        shader.setFloat(buf, L.innerCone);
+
+        snprintf(buf, sizeof(buf), "uLights[%d].outerCone", i);
+        shader.setFloat(buf, L.outerCone);
+
+        snprintf(buf, sizeof(buf), "uLights[%d].type", i);
+        shader.setInt(buf, static_cast<int>(L.type));
+    }
+}
+
 // ── FBO creation / destruction ────────────────────────────────────────────────
 
 void GLRenderer::createFBO(int width, int height)
@@ -566,6 +748,8 @@ void GLRenderer::drawQuad(float x, float y, float w, float h,
     m_flatShader->setMat4("uModel", model);
 
     m_flatShader->setVec4("uColor", glm::vec4(r, g, b, a));
+
+    uploadLightUniforms(*m_flatShader);
 
     glBindVertexArray(m_quadVAO);
     glDrawArrays(GL_TRIANGLES, 0, 6);
@@ -783,6 +967,8 @@ void GLRenderer::drawCircle(float cx, float cy, float radius,
     m_flatShader->setMat4("uModel", identity);
     m_flatShader->setVec4("uColor", glm::vec4(r, g, b, a));
 
+    uploadLightUniforms(*m_flatShader);
+
     glBindVertexArray(m_dynVAO);
     glBindBuffer(GL_ARRAY_BUFFER, m_dynVBO);
     glBufferData(GL_ARRAY_BUFFER,
@@ -893,6 +1079,8 @@ void GLRenderer::drawRoundedRect(float x, float y, float w, float h,
     glm::mat4 identity(1.f);
     m_flatShader->setMat4("uModel", identity);
     m_flatShader->setVec4("uColor", glm::vec4(r, g, b, a));
+
+    uploadLightUniforms(*m_flatShader);
 
     glBindVertexArray(m_dynVAO);
     glBindBuffer(GL_ARRAY_BUFFER, m_dynVBO);
@@ -1078,8 +1266,30 @@ void GLRenderer::drawSprite(TextureHandle tex, float x, float y,
     m_texShader->setMat4("uProjection", m_projection);
     m_texShader->setInt("uTexture", 0);
 
+    uploadLightUniforms(*m_texShader);
+
+    // Look up the normal map for this texture
+    GLuint normalMapId = 0;
+    {
+        // Find the diffuse path from the handle
+        for (auto& [path, handle] : m_texturePaths)
+        {
+            if (handle == tex)
+            {
+                normalMapId = loadNormalMap(path);
+                break;
+            }
+        }
+    }
+
+    m_texShader->setInt("uNormalMap", 1);
+    m_texShader->setInt("uHasNormalMap", normalMapId != 0 ? 1 : 0);
+
     glActiveTexture(GL_TEXTURE0);
     glBindTexture(GL_TEXTURE_2D, info.glId);
+
+    glActiveTexture(GL_TEXTURE1);
+    glBindTexture(GL_TEXTURE_2D, normalMapId);
 
     glBindVertexArray(m_spriteVAO);
     glBindBuffer(GL_ARRAY_BUFFER, m_spriteVBO);
@@ -1087,6 +1297,9 @@ void GLRenderer::drawSprite(TextureHandle tex, float x, float y,
     glDrawArrays(GL_TRIANGLES, 0, 6);
     glBindVertexArray(0);
 
+    glActiveTexture(GL_TEXTURE1);
+    glBindTexture(GL_TEXTURE_2D, 0);
+    glActiveTexture(GL_TEXTURE0);
     glBindTexture(GL_TEXTURE_2D, 0);
 }
 

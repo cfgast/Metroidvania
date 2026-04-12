@@ -82,6 +82,7 @@ public:
     void endFrame() override;
     void addLight(const Light& light) override;
     void clearLights() override;
+    void setAmbientColor(float r, float g, float b) override;
 
     // ── View / camera ─────────────────────────────────────────────────
     void setView(float centerX, float centerY,
@@ -148,6 +149,8 @@ private:
                   float r, float g, float b, float a);
     GLuint createMagentaTexture();
     GlyphAtlas& getOrBuildAtlas(FontData& font, unsigned int size);
+    GLuint loadNormalMap(const std::string& diffusePath);
+    void uploadLightUniforms(Shader& shader);
 
     static void framebufferSizeCallback(GLFWwindow* win, int w, int h);
 
@@ -214,4 +217,10 @@ private:
 
     // ── Lights ────────────────────────────────────────────────────────
     std::vector<Light> m_lights;
+    glm::vec3 m_ambientColor{0.8f, 0.8f, 0.9f};
+
+    // ── Normal map cache ─────────────────────────────────────────────
+    // Maps diffuse texture path -> GL texture id of the _n.png companion.
+    // 0 means "checked but not found" (avoids re-trying missing files).
+    std::unordered_map<std::string, GLuint> m_normalMaps;
 };

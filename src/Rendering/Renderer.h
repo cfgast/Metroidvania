@@ -35,6 +35,7 @@ public:
     virtual void endFrame() = 0;
     virtual void addLight(const Light& light) = 0;
     virtual void clearLights() = 0;
+    virtual void setAmbientColor(float r, float g, float b) = 0;
 
     // ── View / camera ─────────────────────────────────────────────────
     virtual void setView(float centerX, float centerY,
