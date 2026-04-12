@@ -331,7 +331,10 @@ GLRenderer::GLRenderer(const std::string& title, unsigned int width,
     resetView();
 
     // Create the GLFW-backed input system (must be after window + user pointer setup)
-    m_glfwInput = std::make_unique<GLFWInput>(m_window, *this);
+    m_glfwInput = std::make_unique<GLFWInput>(
+        m_window,
+        [this](int w, int h) { handleWindowResize(w, h); },
+        [this]()              { handleWindowClose(); });
 }
 
 GLRenderer::~GLRenderer()

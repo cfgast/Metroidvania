@@ -1736,3 +1736,25 @@ constants. The camera-follows-player behavior in main.cpp calls setView()
 each frame with the player's position — no changes needed in main.cpp.
 
 ==============================================================================
+
+==============================================================================
+Task 20: Input system integration
+==============================================================================
+Implemented: true
+
+GLFWInput depends on GLFWwindow* and GLFW callbacks, not on OpenGL. However,
+GLFWInput.h includes <glad/gl.h> which will be removed later.
+
+For this task:
+- Refactor GLFWInput.h to remove the #include <glad/gl.h> if it is not
+  actually needed (check if any GL types or functions are used — likely not,
+  since GLFWInput only uses GLFW functions)
+- If glad/gl.h is needed for a type, replace with a forward declaration or
+  the appropriate GLFW-only header
+- Have VulkanRenderer own a GLFWInput instance, same as GLRenderer does
+- Implement getInput(): return reference to the owned GLFWInput
+
+After this task, the input system (keyboard, mouse, gamepad) should work
+identically under both backends.
+
+==============================================================================

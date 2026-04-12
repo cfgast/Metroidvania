@@ -2,20 +2,24 @@
 
 #include "InputSystem.h"
 
-#include <glad/gl.h>
 #include <GLFW/glfw3.h>
+#include <functional>
 #include <queue>
-
-class GLRenderer;
 
 // GLFW-backed InputSystem. Uses GLFW callbacks to queue InputEvents and
 // GLFW polling functions for instantaneous key/gamepad state queries.
-// Owned by GLRenderer, which passes its GLFWwindow* at construction.
+// Owned by the active Renderer, which passes its GLFWwindow* at construction.
+// Optional callbacks decouple this class from any specific renderer backend.
 class GLFWInput : public InputSystem
 {
 public:
-    explicit GLFWInput(GLFWwindow* window, GLRenderer& renderer);
-    ~GLFWInput() override = default;
+    using ResizeCallback = std::function<void(int width, int height)>;
+    using CloseCallback  = std::function<void()>;
+
+    explicit GLFWInput(GLFWwindow* window,
+                       ResizeCallback onResize = {},
+                       CloseCallback  onClose  = {});
+    ~GLFWInput() override;
 
     GLFWInput(const GLFWInput&) = delete;
     GLFWInput& operator=(const GLFWInput&) = delete;
@@ -28,7 +32,7 @@ public:
     void  setMouseCursorVisible(bool visible) override;
 
 private:
-    // GLFW callback trampolines (static → instance via glfwGetWindowUserPointer)
+    // GLFW callback trampolines (static → instance via s_callbackInstance)
     static void keyCallback(GLFWwindow* win, int key, int scancode, int action, int mods);
     static void mouseButtonCallback(GLFWwindow* win, int button, int action, int mods);
     static void cursorPosCallback(GLFWwindow* win, double xpos, double ypos);
@@ -47,7 +51,8 @@ private:
     static GamepadAxis  toGlfwGamepadAxis(GamepadAxis axis);
 
     GLFWwindow*            m_window;
-    GLRenderer&            m_renderer;
+    ResizeCallback         m_onResize;
+    CloseCallback          m_onClose;
     std::queue<InputEvent> m_eventQueue;
 
     // Previous-frame gamepad state for edge detection
@@ -55,7 +60,6 @@ private:
     float m_prevAxes[6] = {}; // LeftX, LeftY, RightX, RightY, DPadX, DPadY
     bool  m_gamepadWasConnected = false;
 
-    // Static pointer so the joystick callback (which has no window param) can
-    // reach the instance.
-    static GLFWInput* s_joystickInstance;
+    // Static pointer so all GLFW callbacks can reach the instance.
+    static GLFWInput* s_callbackInstance;
 };

@@ -1,12 +1,11 @@
 #include "GLFWInput.h"
-#include "../Rendering/GLRenderer.h"
 
 #include <cmath>
 #include <cstring>
 
-// ── Static instance for joystick callback (no window pointer available) ──────
+// ── Static instance for all GLFW callbacks ───────────────────────────────────
 
-GLFWInput* GLFWInput::s_joystickInstance = nullptr;
+GLFWInput* GLFWInput::s_callbackInstance = nullptr;
 
 // ── KeyCode ↔ GLFW key mapping ───────────────────────────────────────────────
 
@@ -128,12 +127,15 @@ GamepadAxis GLFWInput::toGlfwGamepadAxis(GamepadAxis axis)
 
 // ── Constructor ──────────────────────────────────────────────────────────────
 
-GLFWInput::GLFWInput(GLFWwindow* window, GLRenderer& renderer)
+GLFWInput::GLFWInput(GLFWwindow* window,
+                     ResizeCallback onResize,
+                     CloseCallback  onClose)
     : m_window(window)
-    , m_renderer(renderer)
+    , m_onResize(std::move(onResize))
+    , m_onClose(std::move(onClose))
 {
     s_instance = this;
-    s_joystickInstance = this;
+    s_callbackInstance = this;
 
     glfwSetKeyCallback(m_window, keyCallback);
     glfwSetMouseButtonCallback(m_window, mouseButtonCallback);
@@ -141,6 +143,14 @@ GLFWInput::GLFWInput(GLFWwindow* window, GLRenderer& renderer)
     glfwSetWindowSizeCallback(m_window, windowSizeCallback);
     glfwSetWindowCloseCallback(m_window, windowCloseCallback);
     glfwSetJoystickCallback(joystickCallback);
+}
+
+GLFWInput::~GLFWInput()
+{
+    if (s_callbackInstance == this)
+        s_callbackInstance = nullptr;
+    if (s_instance == this)
+        s_instance = nullptr;
 }
 
 // ── pollEvent ────────────────────────────────────────────────────────────────
@@ -411,13 +421,13 @@ void GLFWInput::pollGamepadEvents()
 
 // ── GLFW callbacks ───────────────────────────────────────────────────────────
 
-void GLFWInput::keyCallback(GLFWwindow* win, int key, int /*scancode*/, int action, int /*mods*/)
+void GLFWInput::keyCallback(GLFWwindow* /*win*/, int key, int /*scancode*/, int action, int /*mods*/)
 {
     if (action == GLFW_REPEAT)
         return; // ignore key repeat; game uses isKeyPressed() for held keys
 
-    GLFWInput* self = static_cast<GLFWInput*>(
-        static_cast<GLRenderer*>(glfwGetWindowUserPointer(win))->getInputPtr());
+    GLFWInput* self = s_callbackInstance;
+    if (!self) return;
 
     InputEvent ev{};
     ev.type = (action == GLFW_PRESS) ? InputEventType::KeyPressed
@@ -428,8 +438,8 @@ void GLFWInput::keyCallback(GLFWwindow* win, int key, int /*scancode*/, int acti
 
 void GLFWInput::mouseButtonCallback(GLFWwindow* win, int button, int action, int /*mods*/)
 {
-    GLFWInput* self = static_cast<GLFWInput*>(
-        static_cast<GLRenderer*>(glfwGetWindowUserPointer(win))->getInputPtr());
+    GLFWInput* self = s_callbackInstance;
+    if (!self) return;
 
     double mx, my;
     glfwGetCursorPos(win, &mx, &my);
@@ -443,10 +453,10 @@ void GLFWInput::mouseButtonCallback(GLFWwindow* win, int button, int action, int
     self->m_eventQueue.push(ev);
 }
 
-void GLFWInput::cursorPosCallback(GLFWwindow* win, double xpos, double ypos)
+void GLFWInput::cursorPosCallback(GLFWwindow* /*win*/, double xpos, double ypos)
 {
-    GLFWInput* self = static_cast<GLFWInput*>(
-        static_cast<GLRenderer*>(glfwGetWindowUserPointer(win))->getInputPtr());
+    GLFWInput* self = s_callbackInstance;
+    if (!self) return;
 
     InputEvent ev{};
     ev.type   = InputEventType::MouseMoved;
@@ -455,13 +465,14 @@ void GLFWInput::cursorPosCallback(GLFWwindow* win, double xpos, double ypos)
     self->m_eventQueue.push(ev);
 }
 
-void GLFWInput::windowSizeCallback(GLFWwindow* win, int width, int height)
+void GLFWInput::windowSizeCallback(GLFWwindow* /*win*/, int width, int height)
 {
-    GLRenderer* renderer = static_cast<GLRenderer*>(glfwGetWindowUserPointer(win));
-    GLFWInput* self = static_cast<GLFWInput*>(renderer->getInputPtr());
+    GLFWInput* self = s_callbackInstance;
+    if (!self) return;
 
-    // Update GLRenderer's internal window size and viewport
-    renderer->handleWindowResize(width, height);
+    // Notify the renderer via the stored callback
+    if (self->m_onResize)
+        self->m_onResize(width, height);
 
     InputEvent ev{};
     ev.type   = InputEventType::WindowResized;
@@ -470,26 +481,22 @@ void GLFWInput::windowSizeCallback(GLFWwindow* win, int width, int height)
     self->m_eventQueue.push(ev);
 }
 
-void GLFWInput::windowCloseCallback(GLFWwindow* win)
+void GLFWInput::windowCloseCallback(GLFWwindow* /*win*/)
 {
-    GLRenderer* renderer = static_cast<GLRenderer*>(glfwGetWindowUserPointer(win));
-    GLFWInput* self = static_cast<GLFWInput*>(renderer->getInputPtr());
+    GLFWInput* self = s_callbackInstance;
+    if (!self) return;
 
-    renderer->handleWindowClose();
+    // Notify the renderer via the stored callback
+    if (self->m_onClose)
+        self->m_onClose();
 
     InputEvent ev{};
     ev.type = InputEventType::WindowClosed;
     self->m_eventQueue.push(ev);
 }
 
-void GLFWInput::joystickCallback(int jid, int event)
+void GLFWInput::joystickCallback(int /*jid*/, int /*event*/)
 {
-    if (!s_joystickInstance)
-        return;
-
-    // GLFW_CONNECTED / GLFW_DISCONNECTED — we can push a gamepad event
-    // but our InputEventType doesn't have a dedicated connected/disconnected
-    // type. The game polls isGamepadConnected() each frame, so this is fine.
-    (void)jid;
-    (void)event;
+    // GLFW_CONNECTED / GLFW_DISCONNECTED — the game polls
+    // isGamepadConnected() each frame, so no event is needed.
 }

@@ -1,4 +1,5 @@
 #include "VulkanRenderer.h"
+#include "../Input/GLFWInput.h"
 #include "../Input/InputSystem.h"
 
 #include <VkBootstrap.h>
@@ -11,43 +12,6 @@
 #include <fstream>
 #include <iostream>
 #include <stdexcept>
-
-// ── Stub InputSystem for the Vulkan backend ──────────────────────────────────
-
-class VulkanInput : public InputSystem
-{
-public:
-    explicit VulkanInput(GLFWwindow* window)
-        : m_window(window)
-    {
-        s_instance = this;
-    }
-
-    ~VulkanInput() override
-    {
-        if (s_instance == this)
-            s_instance = nullptr;
-    }
-
-    bool pollEvent(InputEvent& /*event*/) override
-    {
-        glfwPollEvents();
-        return false;
-    }
-
-    bool  isKeyPressed(KeyCode /*key*/) const override          { return false; }
-    bool  isGamepadConnected(int /*id*/) const override         { return false; }
-    float getGamepadAxis(int /*id*/, GamepadAxis /*a*/) const override { return 0.f; }
-    bool  isGamepadButtonPressed(int /*id*/, GamepadButton /*b*/) const override { return false; }
-    void  setMouseCursorVisible(bool visible) override
-    {
-        glfwSetInputMode(m_window, GLFW_CURSOR,
-                         visible ? GLFW_CURSOR_NORMAL : GLFW_CURSOR_HIDDEN);
-    }
-
-private:
-    GLFWwindow* m_window;
-};
 
 // ── std140-aligned GPU lighting structs ──────────────────────────────────────
 
@@ -2083,7 +2047,16 @@ VulkanRenderer::VulkanRenderer(const std::string& title, unsigned int width,
 
     initFreeType();
 
-    m_input = std::make_unique<VulkanInput>(m_window);
+    m_input = std::make_unique<GLFWInput>(
+        m_window,
+        [this](int w, int h) {
+            m_windowW = static_cast<float>(w);
+            m_windowH = static_cast<float>(h);
+            m_framebufferResized = true;
+        },
+        [this]() {
+            m_open = false;
+        });
 
     // Initialize default projection (screen-space, Y-down)
     m_projection = glm::ortho(0.f, m_windowW, m_windowH, 0.f, -1.f, 1.f);
