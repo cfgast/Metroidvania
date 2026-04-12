@@ -36,6 +36,10 @@ private:
     static void windowCloseCallback(GLFWwindow* win);
     static void joystickCallback(int jid, int event);
 
+    // Gamepad polling — synthesizes button/axis events by diffing against
+    // previous state (GLFW has no gamepad callbacks).
+    void pollGamepadEvents();
+
     // Mapping helpers
     static KeyCode      fromGlfwKey(int glfwKey);
     static int          toGlfwKey(KeyCode code);
@@ -45,6 +49,11 @@ private:
     GLFWwindow*            m_window;
     GLRenderer&            m_renderer;
     std::queue<InputEvent> m_eventQueue;
+
+    // Previous-frame gamepad state for edge detection
+    bool  m_prevButtons[static_cast<int>(GamepadButton::ButtonCount)] = {};
+    float m_prevAxes[6] = {}; // LeftX, LeftY, RightX, RightY, DPadX, DPadY
+    bool  m_gamepadWasConnected = false;
 
     // Static pointer so the joystick callback (which has no window param) can
     // reach the instance.

@@ -89,7 +89,8 @@ while ($true) {
     Write-Host "Task ${completed}: $task" -ForegroundColor Yellow
     Write-Host "---------------------------------------------" -ForegroundColor Cyan
 
-    $prompt = "Read the ReadMe.md and ImplementationPlan.md. Implement the next uncompleted task. The task is: $task -- After implementing, build the project to verify it compiles, mark the task as Implemented: true in ImplementationPlan.md, and commit and push the changes."
+    $safeTask = $task -replace '"', "'"
+    $prompt = "Read the ReadMe.md and ImplementationPlan.md. Implement the next uncompleted task. The task is: $safeTask -- After implementing, build the project to verify it compiles, mark the task as Implemented: true in ImplementationPlan.md, and commit and push the changes."
     Write-Host "  Launching copilot agent..." -ForegroundColor DarkGray
     copilot -p $prompt --yolo --autopilot --no-ask-user --max-autopilot-continues 50
     $exitCode = $LASTEXITCODE

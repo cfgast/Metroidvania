@@ -335,7 +335,7 @@ SaveSlotResult SaveSlotScreen::handleEvent(const InputEvent& event,
     // Controller: D-pad / left stick for navigation
     if (event.type == InputEventType::GamepadAxisMoved)
     {
-        constexpr float threshold = 50.f;
+        constexpr float threshold = 0.5f;
         float pos = event.axisPosition;
         const int total = totalItemCount();
 
@@ -346,9 +346,9 @@ SaveSlotResult SaveSlotScreen::handleEvent(const InputEvent& event,
 
         if (isStickY || isPovY)
         {
-            // Stick Y: negative=up, positive=down. PovY: positive=up, negative=down.
-            bool up   = isStickY ? (pos < -threshold) : (pos > threshold);
-            bool down = isStickY ? (pos > threshold)  : (pos < -threshold);
+            // Both stick Y and DPadY: negative=up, positive=down
+            bool up   = (pos < -threshold);
+            bool down = (pos >  threshold);
 
             if (up && !m_joyUpHeld)
             {

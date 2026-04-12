@@ -1,6 +1,7 @@
 #include "GLFWInput.h"
 #include "../Rendering/GLRenderer.h"
 
+#include <cmath>
 #include <cstring>
 
 // ── Static instance for joystick callback (no window pointer available) ──────
@@ -146,9 +147,13 @@ GLFWInput::GLFWInput(GLFWwindow* window, GLRenderer& renderer)
 
 bool GLFWInput::pollEvent(InputEvent& event)
 {
-    // If the queue is empty, pump GLFW events so callbacks can fill it.
+    // If the queue is empty, pump GLFW events so callbacks can fill it,
+    // then synthesize gamepad events by polling.
     if (m_eventQueue.empty())
+    {
         glfwPollEvents();
+        pollGamepadEvents();
+    }
 
     if (!m_eventQueue.empty())
     {
@@ -267,6 +272,141 @@ void GLFWInput::setMouseCursorVisible(bool visible)
 {
     glfwSetInputMode(m_window, GLFW_CURSOR,
                      visible ? GLFW_CURSOR_NORMAL : GLFW_CURSOR_HIDDEN);
+}
+
+// ── Gamepad event synthesis ───────────────────────────────────────────────────
+
+void GLFWInput::pollGamepadEvents()
+{
+    const int id = 0; // first gamepad
+    bool connected = glfwJoystickPresent(id) == GLFW_TRUE;
+
+    if (!connected)
+    {
+        m_gamepadWasConnected = false;
+        return;
+    }
+
+    GLFWgamepadstate state;
+    bool hasMapping = glfwGetGamepadState(id, &state);
+
+    if (!m_gamepadWasConnected)
+    {
+        // First frame with gamepad — initialize previous state, don't emit events
+        m_gamepadWasConnected = true;
+        if (hasMapping)
+        {
+            for (int b = 0; b < static_cast<int>(GamepadButton::ButtonCount); ++b)
+                m_prevButtons[b] = (b < 15) ? (state.buttons[b] == GLFW_PRESS) : false;
+
+            m_prevAxes[0] = state.axes[GLFW_GAMEPAD_AXIS_LEFT_X];
+            m_prevAxes[1] = state.axes[GLFW_GAMEPAD_AXIS_LEFT_Y];
+            m_prevAxes[2] = state.axes[GLFW_GAMEPAD_AXIS_RIGHT_X];
+            m_prevAxes[3] = state.axes[GLFW_GAMEPAD_AXIS_RIGHT_Y];
+
+            float dpadX = 0.f, dpadY = 0.f;
+            if (state.buttons[GLFW_GAMEPAD_BUTTON_DPAD_LEFT])  dpadX -= 1.f;
+            if (state.buttons[GLFW_GAMEPAD_BUTTON_DPAD_RIGHT]) dpadX += 1.f;
+            if (state.buttons[GLFW_GAMEPAD_BUTTON_DPAD_UP])    dpadY -= 1.f;
+            if (state.buttons[GLFW_GAMEPAD_BUTTON_DPAD_DOWN])  dpadY += 1.f;
+            m_prevAxes[4] = dpadX;
+            m_prevAxes[5] = dpadY;
+        }
+        return;
+    }
+
+    if (!hasMapping)
+        return;
+
+    // Button edge detection — map GLFW button indices to GamepadButton enum
+    struct BtnMap { int glfwIdx; GamepadButton btn; };
+    static const BtnMap BTN_MAP[] = {
+        { GLFW_GAMEPAD_BUTTON_A,            GamepadButton::A },
+        { GLFW_GAMEPAD_BUTTON_B,            GamepadButton::B },
+        { GLFW_GAMEPAD_BUTTON_X,            GamepadButton::X },
+        { GLFW_GAMEPAD_BUTTON_Y,            GamepadButton::Y },
+        { GLFW_GAMEPAD_BUTTON_LEFT_BUMPER,  GamepadButton::LB },
+        { GLFW_GAMEPAD_BUTTON_RIGHT_BUMPER, GamepadButton::RB },
+        { GLFW_GAMEPAD_BUTTON_BACK,         GamepadButton::Back },
+        { GLFW_GAMEPAD_BUTTON_START,        GamepadButton::Start },
+        { GLFW_GAMEPAD_BUTTON_LEFT_THUMB,   GamepadButton::LeftStick },
+        { GLFW_GAMEPAD_BUTTON_RIGHT_THUMB,  GamepadButton::RightStick },
+        { GLFW_GAMEPAD_BUTTON_DPAD_UP,      GamepadButton::DPadUp },
+        { GLFW_GAMEPAD_BUTTON_DPAD_DOWN,    GamepadButton::DPadDown },
+        { GLFW_GAMEPAD_BUTTON_DPAD_LEFT,    GamepadButton::DPadLeft },
+        { GLFW_GAMEPAD_BUTTON_DPAD_RIGHT,   GamepadButton::DPadRight },
+        { GLFW_GAMEPAD_BUTTON_GUIDE,        GamepadButton::Guide },
+    };
+
+    for (const auto& bm : BTN_MAP)
+    {
+        bool cur  = state.buttons[bm.glfwIdx] == GLFW_PRESS;
+        bool prev = m_prevButtons[static_cast<int>(bm.btn)];
+        if (cur != prev)
+        {
+            InputEvent ev{};
+            ev.type = cur ? InputEventType::GamepadButtonPressed
+                         : InputEventType::GamepadButtonReleased;
+            ev.gamepadId     = id;
+            ev.gamepadButton = bm.btn;
+            m_eventQueue.push(ev);
+            m_prevButtons[static_cast<int>(bm.btn)] = cur;
+        }
+    }
+
+    // Axis change detection
+    struct AxisInfo { GamepadAxis axis; int idx; };
+    static const AxisInfo AXIS_MAP[] = {
+        { GamepadAxis::LeftX,  0 },
+        { GamepadAxis::LeftY,  1 },
+        { GamepadAxis::RightX, 2 },
+        { GamepadAxis::RightY, 3 },
+    };
+
+    for (const auto& am : AXIS_MAP)
+    {
+        float cur  = state.axes[am.idx];
+        float prev = m_prevAxes[am.idx];
+        constexpr float threshold = 0.15f;
+        if (std::abs(cur - prev) > threshold)
+        {
+            InputEvent ev{};
+            ev.type         = InputEventType::GamepadAxisMoved;
+            ev.gamepadId    = id;
+            ev.gamepadAxis  = am.axis;
+            ev.axisPosition = cur;
+            m_eventQueue.push(ev);
+            m_prevAxes[am.idx] = cur;
+        }
+    }
+
+    // D-pad as synthesized axes
+    float dpadX = 0.f, dpadY = 0.f;
+    if (state.buttons[GLFW_GAMEPAD_BUTTON_DPAD_LEFT])  dpadX -= 1.f;
+    if (state.buttons[GLFW_GAMEPAD_BUTTON_DPAD_RIGHT]) dpadX += 1.f;
+    if (state.buttons[GLFW_GAMEPAD_BUTTON_DPAD_UP])    dpadY -= 1.f;
+    if (state.buttons[GLFW_GAMEPAD_BUTTON_DPAD_DOWN])  dpadY += 1.f;
+
+    if (dpadX != m_prevAxes[4])
+    {
+        InputEvent ev{};
+        ev.type         = InputEventType::GamepadAxisMoved;
+        ev.gamepadId    = id;
+        ev.gamepadAxis  = GamepadAxis::DPadX;
+        ev.axisPosition = dpadX;
+        m_eventQueue.push(ev);
+        m_prevAxes[4] = dpadX;
+    }
+    if (dpadY != m_prevAxes[5])
+    {
+        InputEvent ev{};
+        ev.type         = InputEventType::GamepadAxisMoved;
+        ev.gamepadId    = id;
+        ev.gamepadAxis  = GamepadAxis::DPadY;
+        ev.axisPosition = dpadY;
+        m_eventQueue.push(ev);
+        m_prevAxes[5] = dpadY;
+    }
 }
 
 // ── GLFW callbacks ───────────────────────────────────────────────────────────

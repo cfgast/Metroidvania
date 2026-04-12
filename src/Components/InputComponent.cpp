@@ -25,7 +25,7 @@ void InputComponent::update(float /*dt*/)
     // Controller / gamepad input (first connected joystick)
     if (input.isGamepadConnected(0))
     {
-        constexpr float deadZone = 25.f;
+        constexpr float deadZone = 0.25f;
 
         // Left stick horizontal
         float stickX = input.getGamepadAxis(0, GamepadAxis::LeftX);

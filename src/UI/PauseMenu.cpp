@@ -119,7 +119,7 @@ PauseMenu::Action PauseMenu::handleEvent(const InputEvent& event)
     // Controller: D-pad / left stick vertical for menu navigation
     if (event.type == InputEventType::GamepadAxisMoved)
     {
-        constexpr float threshold = 50.f;
+        constexpr float threshold = 0.5f;
         float pos = event.axisPosition;
 
         bool isStickY = (event.gamepadAxis == GamepadAxis::LeftY);
@@ -127,8 +127,8 @@ PauseMenu::Action PauseMenu::handleEvent(const InputEvent& event)
 
         if (isStickY || isPovY)
         {
-            bool up   = isStickY ? (pos < -threshold) : (pos > threshold);
-            bool down = isStickY ? (pos > threshold)  : (pos < -threshold);
+            bool up   = (pos < -threshold);
+            bool down = (pos >  threshold);
 
             if (up && !m_joyUpHeld)
             {
