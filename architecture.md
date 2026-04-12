@@ -149,6 +149,21 @@ Auto-generated transitions are **display-only** — they cannot be selected, mov
 
 When saving, `NormalizeTransitionPaths()` converts absolute `targetMap` paths in transitions to relative paths (e.g., `maps/world_02.json`) for compatibility with the game runtime's `MapLoader`. Single-map files opened outside a world do not generate transitions (the `RegenerateTransitions` guard requires ≥2 maps).
 
+### World Management UI
+
+`MainForm` includes a "WORLD MAPS" panel in the left sidebar (below the dynamic property panels) with an owner-drawn `ListBox` and three buttons:
+
+| Control | Purpose |
+|---|---|
+| Maps ListBox | Shows all `EditorMap` entries with map name, file path, and dirty indicator (`*`). Active map rendered in bold cyan. Clicking an entry calls `SetActiveMap()`. |
+| "Add…" button | Opens a file dialog, loads an existing `.json` map, places it to the right of the rightmost map, calls `RegenerateTransitions()` and `FitToView()`. |
+| "New" button | Prompts for a save path, creates a blank map (default bounds + floor platform), saves it immediately, adds to world. |
+| "Remove" button | Removes the active map from the world (does not delete the file). Confirms if the map has unsaved changes. Switches to next available map. |
+
+These actions are also available via the File menu ("Add Map to World…", "New Map in World…", "Remove Map from World").
+
+**Dirty tracking** is world-level: `_isDirty` tracks per-edit changes, `_worldStructureDirty` tracks maps added/removed/repositioned, and each `EditorMap.IsDirty` tracks per-map changes. `ConfirmDiscard()` and `UpdateTitle()` check all three. The title bar shows an asterisk (`*`) if any source of dirty state is set. `WriteWorldFile` clears all dirty flags after a successful save.
+
 ---
 
 ## Physics (`src/Physics/`)

@@ -57,6 +57,13 @@ public sealed class MainForm : Form
     private TextBox  _txtPickupW = null!, _txtPickupH = null!;
     private ComboBox _cboPickupAbility = null!;
 
+    // ── Maps panel controls ──────────────────────────────────────────────────
+    private ListBox _lstMaps    = null!;
+    private Button  _btnAddMap  = null!;
+    private Button  _btnNewMap  = null!;
+    private Button  _btnRemMap  = null!;
+    private bool    _worldStructureDirty;  // maps added/removed/repositioned
+
     // ── Toolbar buttons ───────────────────────────────────────────────────────
     private ToolStripButton _btnSelect = null!, _btnDraw = null!, _btnDrawEnemy = null!, _btnDrawPickup = null!, _btnDrawSpawn = null!, _btnMoveMap = null!, _btnSnap = null!;
 
@@ -129,6 +136,10 @@ public sealed class MainForm : Form
         file.DropDownItems.Add("Open W&orld…\tCtrl+Shift+O",    null, (_, _) => OpenWorld());
         file.DropDownItems.Add("Save Wo&rld\tCtrl+Shift+S",     null, (_, _) => SaveWorld());
         file.DropDownItems.Add("Save World As…",                null, (_, _) => SaveWorldAs());
+        file.DropDownItems.Add(new ToolStripSeparator());
+        file.DropDownItems.Add("&Add Map to World…",     null, (_, _) => AddMapToWorld());
+        file.DropDownItems.Add("New Map in Worl&d…",     null, (_, _) => NewMapInWorld());
+        file.DropDownItems.Add("&Remove Map from World", null, (_, _) => RemoveMapFromWorld());
         file.DropDownItems.Add(new ToolStripSeparator());
         file.DropDownItems.Add("E&xit",             null, (_, _) => Close());
 
@@ -366,6 +377,40 @@ public sealed class MainForm : Form
         _pnlPickup.Controls.AddRange(new Control[] { btnPickupApply, btnPickupDel });
         _pnlPickup.Height  = pky;
 
+        // ── Maps panel (below dynamic panels) ────────────────────────────────
+        // Position it below the highest dynamic panel bottom. We use a fixed
+        // Y that is below the dynamic area — the parent panel scrolls.
+        int mapsY = dynamicY + 320;
+        panel.Controls.Add(new Label { Height = 1, Location = new(4, mapsY - 8), Width = pw, BackColor = Color.FromArgb(70, 70, 80) });
+        panel.Controls.Add(SectionLabel("WORLD MAPS", 4, mapsY, pw)); mapsY += 22;
+
+        _lstMaps = new ListBox
+        {
+            Location      = new(4, mapsY),
+            Size          = new(pw, 100),
+            BackColor     = Color.FromArgb(58, 58, 65),
+            ForeColor     = Color.WhiteSmoke,
+            BorderStyle   = BorderStyle.FixedSingle,
+            Font          = new Font("Consolas", 8.5f),
+            DrawMode      = DrawMode.OwnerDrawFixed,
+            ItemHeight    = 18
+        };
+        _lstMaps.DrawItem           += OnMapsListDrawItem;
+        _lstMaps.SelectedIndexChanged += OnMapsListSelected;
+        panel.Controls.Add(_lstMaps);
+        mapsY += 104;
+
+        int btnThird = (pw - 8) / 3;
+        _btnAddMap = DarkBtn("Add…",   4,                  mapsY, btnThird);
+        _btnNewMap = DarkBtn("New",    4 + btnThird + 4,   mapsY, btnThird);
+        _btnRemMap = DarkBtn("Remove", 4 + (btnThird + 4) * 2, mapsY, btnThird, Color.FromArgb(130, 55, 55));
+        mapsY += 28;
+
+        _btnAddMap.Click += (_, _) => AddMapToWorld();
+        _btnNewMap.Click += (_, _) => NewMapInWorld();
+        _btnRemMap.Click += (_, _) => RemoveMapFromWorld();
+        panel.Controls.AddRange(new Control[] { _btnAddMap, _btnNewMap, _btnRemMap });
+
         return panel;
     }
 
@@ -484,8 +529,10 @@ public sealed class MainForm : Form
         };
         _filePath = null;
         _isDirty  = false;
+        _worldStructureDirty = false;
         _canvas.LoadMap(map);
         SyncMapFields(map);
+        RefreshMapsList();
         UpdateTitle();
         SetStatus("New map created.");
     }
@@ -518,6 +565,7 @@ public sealed class MainForm : Form
             };
             _canvas.LoadWorld(new List<EditorMap> { editorMap });
             SyncMapFields(map);
+            RefreshMapsList();
 
             // Auto-create a single-map world
             _worldData = new WorldData();
@@ -568,7 +616,10 @@ public sealed class MainForm : Form
         NormalizeTransitionPaths(_canvas.Map, MapsDir());
         WriteFileForMap(path, _canvas.Map);
         _isDirty = false;
+        if (_canvas.ActiveMap != null)
+            _canvas.ActiveMap.IsDirty = false;
         UpdateTitle();
+        RefreshMapsList();
         SetStatus($"Saved: {Path.GetFileName(path)}");
     }
 
@@ -652,6 +703,7 @@ public sealed class MainForm : Form
         _worldFilePath = null;
         _filePath      = null;
         _isDirty       = false;
+        _worldStructureDirty = false;
 
         var map = new MapData
         {
@@ -665,6 +717,7 @@ public sealed class MainForm : Form
         };
         _canvas.LoadMap(map);
         SyncMapFields(map);
+        RefreshMapsList();
         UpdateTitle();
         SetStatus("New empty world created.");
     }
@@ -729,9 +782,11 @@ public sealed class MainForm : Form
             _worldFilePath = worldPath;
             _filePath      = editorMaps[0].FilePath;
             _isDirty       = false;
+            _worldStructureDirty = false;
 
             _canvas.LoadWorld(editorMaps);
             SyncMapFields(editorMaps[0].Map);
+            RefreshMapsList();
             UpdateTitle();
             SetStatus($"Opened world: {Path.GetFileName(worldPath)} ({editorMaps.Count} map(s))");
         }
@@ -817,7 +872,11 @@ public sealed class MainForm : Form
             File.WriteAllText(worldPath, worldJson);
 
             _isDirty = false;
+            _worldStructureDirty = false;
+            foreach (var em in _canvas.EditorMaps)
+                em.IsDirty = false;
             UpdateTitle();
+            RefreshMapsList();
             SetStatus($"World saved: {Path.GetFileName(worldPath)}");
         }
         catch (Exception ex)
@@ -1155,6 +1214,7 @@ public sealed class MainForm : Form
         // Sync the map settings panel with the new active map
         if (_canvas.Map != null)
             SyncMapFields(_canvas.Map);
+        RefreshMapsList();
         UpdateStatus();
     }
 
@@ -1210,8 +1270,9 @@ public sealed class MainForm : Form
 
     private void MarkDirty()
     {
-        if (_isDirty) return;
         _isDirty = true;
+        if (_canvas.ActiveMap != null)
+            _canvas.ActiveMap.IsDirty = true;
         UpdateTitle();
         UpdateStatus();
     }
@@ -1225,7 +1286,12 @@ public sealed class MainForm : Form
             name = Path.GetFileName(_filePath);
         else
             name = "Untitled";
-        Text = $"Map Editor — {name}{(_isDirty ? " *" : "")}";
+
+        bool anyDirty = _isDirty || _worldStructureDirty;
+        foreach (var em in _canvas.EditorMaps)
+            if (em.IsDirty) anyDirty = true;
+
+        Text = $"Map Editor — {name}{(anyDirty ? " *" : "")}";
     }
 
     // ── UI sync ───────────────────────────────────────────────────────────────
@@ -1289,6 +1355,206 @@ public sealed class MainForm : Form
         }
     }
 
+    // ── World management UI ──────────────────────────────────────────────────
+    private void RefreshMapsList()
+    {
+        _syncingUI = true;
+        _lstMaps.Items.Clear();
+        foreach (var em in _canvas.EditorMaps)
+            _lstMaps.Items.Add(em);
+        if (_canvas.ActiveMap != null)
+            _lstMaps.SelectedItem = _canvas.ActiveMap;
+        _syncingUI = false;
+    }
+
+    private void OnMapsListDrawItem(object? sender, DrawItemEventArgs e)
+    {
+        if (e.Index < 0) return;
+        e.DrawBackground();
+        var em = (EditorMap)_lstMaps.Items[e.Index];
+        bool isActive = em == _canvas.ActiveMap;
+        string label = em.Map.Name;
+        if (!string.IsNullOrEmpty(em.FilePath))
+            label += $"  ({Path.GetFileName(em.FilePath)})";
+        if (em.IsDirty)
+            label += " *";
+
+        var font = isActive
+            ? new Font(e.Font ?? _lstMaps.Font, FontStyle.Bold)
+            : e.Font ?? _lstMaps.Font;
+        var brush = (e.State & DrawItemState.Selected) != 0
+            ? SystemBrushes.HighlightText
+            : (isActive ? Brushes.Cyan : Brushes.WhiteSmoke);
+
+        e.Graphics.DrawString(label, font, brush, e.Bounds.X + 2, e.Bounds.Y + 1);
+        if (isActive) font.Dispose();
+        e.DrawFocusRectangle();
+    }
+
+    private void OnMapsListSelected(object? sender, EventArgs e)
+    {
+        if (_syncingUI) return;
+        if (_lstMaps.SelectedItem is EditorMap em)
+            _canvas.SetActiveMap(em);
+    }
+
+    private void AddMapToWorld()
+    {
+        using var dlg = new OpenFileDialog
+        {
+            Title            = "Add Map to World",
+            Filter           = "JSON map files (*.json)|*.json|All files (*.*)|*.*",
+            InitialDirectory = MapsDir()
+        };
+        if (dlg.ShowDialog(this) != DialogResult.OK) return;
+        try
+        {
+            var json = File.ReadAllText(dlg.FileName);
+            var opts = new JsonSerializerOptions { PropertyNameCaseInsensitive = true };
+            var map  = JsonSerializer.Deserialize<MapData>(json, opts)
+                       ?? throw new InvalidDataException("Failed to parse map file.");
+
+            // Default position: right of the rightmost existing map
+            float newX = 0, newY = 0;
+            if (_canvas.EditorMaps.Count > 0)
+            {
+                float maxRight = float.MinValue;
+                float topY = float.MaxValue;
+                foreach (var em in _canvas.EditorMaps)
+                {
+                    float right = em.WorldX + em.Map.Bounds.X + em.Map.Bounds.Width;
+                    if (right > maxRight) { maxRight = right; topY = em.WorldY; }
+                }
+                newX = maxRight - map.Bounds.X;
+                newY = topY;
+            }
+
+            var editorMap = new EditorMap
+            {
+                Map      = map,
+                WorldX   = newX,
+                WorldY   = newY,
+                FilePath = dlg.FileName
+            };
+            _canvas.EditorMaps.Add(editorMap);
+            _canvas.SetActiveMap(editorMap);
+
+            // Ensure we have a world data model
+            if (_worldData == null)
+                _worldData = new WorldData();
+
+            MarkWorldStructureDirty();
+            _canvas.RegenerateTransitions();
+            _canvas.FitToView();
+            RefreshMapsList();
+            SyncMapFields(map);
+            SetStatus($"Added map: {map.Name}");
+        }
+        catch (Exception ex)
+        {
+            MessageBox.Show(this, $"Could not add map:\n{ex.Message}",
+                "Add Map Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
+        }
+    }
+
+    private void NewMapInWorld()
+    {
+        using var dlg = new SaveFileDialog
+        {
+            Title            = "Save New Map As",
+            Filter           = "JSON map files (*.json)|*.json|All files (*.*)|*.*",
+            FileName         = "new_map.json",
+            InitialDirectory = MapsDir()
+        };
+        if (dlg.ShowDialog(this) != DialogResult.OK) return;
+
+        var map = new MapData
+        {
+            Name       = Path.GetFileNameWithoutExtension(dlg.FileName),
+            Bounds     = new() { X = -200, Y = -500, Width = 3600, Height = 1200 },
+            SpawnPoint = new() { X = 150, Y = 475 },
+            Platforms  = new()
+            {
+                new() { X = -200, Y = 500, Width = 3600, Height = 40, R = 80, G = 80, B = 80 }
+            }
+        };
+
+        // Save the new map file immediately
+        WriteFileForMap(dlg.FileName, map);
+
+        // Default position: right of the rightmost existing map
+        float newX = 0, newY = 0;
+        if (_canvas.EditorMaps.Count > 0)
+        {
+            float maxRight = float.MinValue;
+            float topY = float.MaxValue;
+            foreach (var em in _canvas.EditorMaps)
+            {
+                float right = em.WorldX + em.Map.Bounds.X + em.Map.Bounds.Width;
+                if (right > maxRight) { maxRight = right; topY = em.WorldY; }
+            }
+            newX = maxRight - map.Bounds.X;
+            newY = topY;
+        }
+
+        var editorMap = new EditorMap
+        {
+            Map      = map,
+            WorldX   = newX,
+            WorldY   = newY,
+            FilePath = dlg.FileName
+        };
+        _canvas.EditorMaps.Add(editorMap);
+        _canvas.SetActiveMap(editorMap);
+
+        if (_worldData == null)
+            _worldData = new WorldData();
+
+        MarkWorldStructureDirty();
+        _canvas.RegenerateTransitions();
+        _canvas.FitToView();
+        RefreshMapsList();
+        SyncMapFields(map);
+        SetStatus($"Created new map: {map.Name}");
+    }
+
+    private void RemoveMapFromWorld()
+    {
+        var active = _canvas.ActiveMap;
+        if (active == null) { Warn("No active map to remove."); return; }
+
+        if (active.IsDirty)
+        {
+            var result = MessageBox.Show(this,
+                $"Map \"{active.Map.Name}\" has unsaved changes.\nRemove it from the world anyway?",
+                "Unsaved Changes", MessageBoxButtons.YesNo, MessageBoxIcon.Warning);
+            if (result != DialogResult.Yes) return;
+        }
+
+        _canvas.EditorMaps.Remove(active);
+
+        // Switch to the next available map
+        if (_canvas.EditorMaps.Count > 0)
+            _canvas.SetActiveMap(_canvas.EditorMaps[0]);
+        else
+            _canvas.SetActiveMap(null);
+
+        MarkWorldStructureDirty();
+        _canvas.RegenerateTransitions();
+        _canvas.FitToView();
+        RefreshMapsList();
+
+        if (_canvas.Map != null)
+            SyncMapFields(_canvas.Map);
+        SetStatus($"Removed map: {active.Map.Name}");
+    }
+
+    private void MarkWorldStructureDirty()
+    {
+        _worldStructureDirty = true;
+        MarkDirty();
+    }
+
     // ── Close guard ───────────────────────────────────────────────────────────
     protected override void OnFormClosing(FormClosingEventArgs e)
     {
@@ -1299,7 +1565,10 @@ public sealed class MainForm : Form
     // ── Utilities ─────────────────────────────────────────────────────────────
     private bool ConfirmDiscard()
     {
-        if (!_isDirty) return true;
+        bool anyDirty = _isDirty || _worldStructureDirty;
+        foreach (var em in _canvas.EditorMaps)
+            if (em.IsDirty) anyDirty = true;
+        if (!anyDirty) return true;
         return MessageBox.Show(this,
             "You have unsaved changes. Discard them?", "Unsaved Changes",
             MessageBoxButtons.YesNo, MessageBoxIcon.Warning) == DialogResult.Yes;

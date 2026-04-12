@@ -790,3 +790,57 @@ Details:
 - Single map files (not world) don't generate transitions:
     - RegenerateTransitions guard requires >= 2 maps
 ==============================================================================
+
+==============================================================================
+Task: Add world management UI - add, create, and remove maps from the world.
+Implemented: true
+
+Details:
+- Added a Maps panel to MainForm (left sidebar, below the dynamic
+  property panels):
+    - Owner-drawn ListBox showing all maps in the current world
+    - Each entry shows: map name (from MapData.Name), file path, and
+      a dirty asterisk (*) if the map has unsaved changes
+    - Active map is highlighted with bold cyan text
+    - Clicking a map entry sets it as the ActiveMap in the canvas
+
+- Added toolbar buttons (Add… / New / Remove) and File menu items:
+    "Add Map to World…":
+      - Opens a file dialog to select an existing .json map file
+      - Loads the map and adds it to the world
+      - Default position: to the right of the rightmost existing map
+        (or at origin if world is empty)
+      - Calls RegenerateTransitions() after adding
+      - Calls FitToView() to show the new layout
+
+    "New Map in World…":
+      - Creates a blank map (default bounds, one floor platform)
+      - Prompts for a file name/path to save it
+      - Adds to world at default position (right of rightmost map)
+      - Calls RegenerateTransitions()
+
+    "Remove Map from World":
+      - Removes the active map from the world (does NOT delete the
+        file from disk)
+      - Prompts for confirmation if map has unsaved changes
+      - Switches ActiveMap to next available map
+      - Calls RegenerateTransitions()
+
+- Updated the title bar:
+    - Shows world file name (e.g., "my_world.world.json")
+    - Shows asterisk (*) if any map or the world has unsaved changes
+
+- Updated dirty tracking:
+    - World is dirty if any EditorMap.IsDirty is true OR if the world
+      structure changed (maps added/removed/repositioned)
+    - ConfirmDiscard() checks world-level dirty state
+    - MarkDirty() sets IsDirty on the active EditorMap
+    - WriteWorldFile clears all dirty flags after successful save
+
+- FitToView (F key) already encompasses all maps with 12% margin
+
+- Keyboard shortcuts remain unchanged:
+    - M: Move Map tool
+    - Ctrl+Shift+N/O/S: World New/Open/Save
+    - All existing shortcuts remain for single-map editing
+==============================================================================
