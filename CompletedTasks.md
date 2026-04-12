@@ -602,3 +602,20 @@ Completed:
 - Updated architecture.md: removed SFML migration-status language and transition references
 - ReadMe.md was already up-to-date from prior tasks
 - Verified clean build with zero errors
+==============================================================================
+Task: Add WorldData model and world file serialization to the map editor.
+Implemented: true
+
+Details:
+- Added WorldMapEntry and WorldData model classes to Models.cs with
+  JsonPropertyName attributes matching existing style
+- Added File menu items: New World (Ctrl+Shift+N), Open World (Ctrl+Shift+O),
+  Save World (Ctrl+Shift+S), Save World As
+- Implemented world file I/O: LoadWorldFile() deserializes WorldData and loads
+  referenced map files with paths relative to world file directory;
+  WriteWorldFile() serializes WorldData and saves modified maps
+- Opening a single map file auto-creates a single-map world at offset (0,0)
+- World files use .world.json extension
+- Updated title bar to show world file name when applicable
+- Updated architecture.md with world JSON schema documentation
+==============================================================================

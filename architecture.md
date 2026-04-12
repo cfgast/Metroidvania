@@ -100,6 +100,19 @@ Enemies replace `CombatComponent` with `EnemyAIComponent` (+ optional `SlimeAtta
 }
 ```
 
+### World JSON schema (e.g. `my_world.world.json`)
+
+```jsonc
+{
+  "maps": [
+    { "path": "world_01.json", "x": 0, "y": 0 },
+    { "path": "world_02.json", "x": 3400, "y": 0 }
+  ]
+}
+```
+
+World files use the `.world.json` extension and reference individual map files by relative path. Each map entry includes a global X/Y offset in world space. The editor models (`WorldData`, `WorldMapEntry`) are defined in `Models.cs`. `MainForm.cs` provides File menu items for New/Open/Save World (with Ctrl+Shift+N/O/S shortcuts) and world file I/O (`LoadWorldFile`, `WriteWorldFile`). Opening a single map file auto-creates a one-entry world.
+
 ---
 
 ## Physics (`src/Physics/`)

@@ -88,3 +88,34 @@ public class AbilityPickupData
     [JsonPropertyName("width")]   public float  Width   { get; set; } = 30f;
     [JsonPropertyName("height")]  public float  Height  { get; set; } = 30f;
 }
+
+/// <summary>
+/// A neighboring map loaded as a read-only background overlay, positioned
+/// relative to the active map by matching transition pairs.
+/// </summary>
+public class BackgroundMap
+{
+    public MapData Map      { get; set; } = null!;
+    public float   OffsetX  { get; set; }
+    public float   OffsetY  { get; set; }
+    public string  FilePath { get; set; } = "";
+}
+
+/// <summary>
+/// An entry in a world file referencing a single map and its global position.
+/// </summary>
+public class WorldMapEntry
+{
+    [JsonPropertyName("path")] public string Path { get; set; } = "";
+    [JsonPropertyName("x")]    public float  X    { get; set; }
+    [JsonPropertyName("y")]    public float  Y    { get; set; }
+}
+
+/// <summary>
+/// Top-level world file model that aggregates multiple maps with world-space offsets.
+/// World files use the .world.json extension.
+/// </summary>
+public class WorldData
+{
+    [JsonPropertyName("maps")] public List<WorldMapEntry> Maps { get; set; } = new();
+}

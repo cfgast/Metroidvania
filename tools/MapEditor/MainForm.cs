@@ -17,6 +17,10 @@ public sealed class MainForm : Form
     private bool    _isDirty;
     private bool    _syncingUI;   // prevents re-entrant UI updates
 
+    // ── World state ──────────────────────────────────────────────────────────
+    private WorldData? _worldData;
+    private string?    _worldFilePath;
+
     // ── Map property controls ─────────────────────────────────────────────────
     private TextBox _txtName    = null!;
     private TextBox _txtBoundsX = null!, _txtBoundsY = null!;
@@ -57,7 +61,7 @@ public sealed class MainForm : Form
     private ComboBox _cboPickupAbility = null!;
 
     // ── Toolbar buttons ───────────────────────────────────────────────────────
-    private ToolStripButton _btnSelect = null!, _btnDraw = null!, _btnDrawEnemy = null!, _btnDrawTransition = null!, _btnDrawPickup = null!, _btnDrawSpawn = null!, _btnSnap = null!;
+    private ToolStripButton _btnSelect = null!, _btnDraw = null!, _btnDrawEnemy = null!, _btnDrawTransition = null!, _btnDrawPickup = null!, _btnDrawSpawn = null!, _btnSnap = null!, _btnNeighbors = null!;
 
     // ── Status bar labels ─────────────────────────────────────────────────────
     private ToolStripStatusLabel _lblInfo  = null!;
@@ -123,6 +127,11 @@ public sealed class MainForm : Form
         file.DropDownItems.Add("&Save\tCtrl+S",    null, (_, _) => SaveFile());
         file.DropDownItems.Add("Save &As…",        null, (_, _) => SaveFileAs());
         file.DropDownItems.Add(new ToolStripSeparator());
+        file.DropDownItems.Add("New &World\tCtrl+Shift+N",      null, (_, _) => NewWorld());
+        file.DropDownItems.Add("Open W&orld…\tCtrl+Shift+O",    null, (_, _) => OpenWorld());
+        file.DropDownItems.Add("Save Wo&rld\tCtrl+Shift+S",     null, (_, _) => SaveWorld());
+        file.DropDownItems.Add("Save World As…",                null, (_, _) => SaveWorldAs());
+        file.DropDownItems.Add(new ToolStripSeparator());
         file.DropDownItems.Add("E&xit",             null, (_, _) => Close());
 
         edit.DropDownItems.Add("&Delete Selected\tDel", null, (_, _) => _canvas.DeleteSelected());
@@ -133,6 +142,9 @@ public sealed class MainForm : Form
         view.DropDownItems.Add("Zoom Out\t-",           null, (_, _) => _canvas.SetZoom(_canvas.Zoom / 1.25f));
         view.DropDownItems.Add(new ToolStripSeparator());
         view.DropDownItems.Add("Toggle Grid &Snap\tG",  null, (_, _) => ToggleSnap());
+        view.DropDownItems.Add(new ToolStripSeparator());
+        view.DropDownItems.Add("Load &Neighbor Maps\tN", null, (_, _) => LoadNeighborMaps());
+        view.DropDownItems.Add("&Hide Neighbor Maps",    null, (_, _) => ToggleNeighborMaps());
 
         menu.Items.AddRange(new ToolStripItem[] { file, edit, view });
         return menu;
@@ -149,6 +161,7 @@ public sealed class MainForm : Form
         _btnDrawPickup     = Tbtn("Draw Pickup",     "Draw new ability pickup  [P]", false);
         _btnDrawSpawn      = Tbtn("Draw Spawn",      "Draw new spawn point  [W]",   false);
         _btnSnap           = Tbtn("Snap: ON",        "Toggle grid snapping  [G]",   true);
+        _btnNeighbors      = Tbtn("Neighbors",       "Load / toggle neighbor maps  [N]", false);
 
         _btnSelect.Click         += (_, _) => SetTool(EditorTool.Select);
         _btnDraw.Click           += (_, _) => SetTool(EditorTool.Draw);
@@ -157,6 +170,7 @@ public sealed class MainForm : Form
         _btnDrawPickup.Click     += (_, _) => SetTool(EditorTool.DrawPickup);
         _btnDrawSpawn.Click      += (_, _) => SetTool(EditorTool.DrawSpawnPoint);
         _btnSnap.Click           += (_, _) => ToggleSnap();
+        _btnNeighbors.Click      += (_, _) => ToggleOrLoadNeighbors();
 
         var btnDel = new ToolStripButton("Delete") { ToolTipText = "Delete selected  [Del]" };
         btnDel.Click += (_, _) => _canvas.DeleteSelected();
@@ -175,7 +189,9 @@ public sealed class MainForm : Form
             new ToolStripSeparator(),
             btnFit, btn100,
             new ToolStripSeparator(),
-            _btnSnap
+            _btnSnap,
+            new ToolStripSeparator(),
+            _btnNeighbors
         });
         return bar;
 
@@ -512,6 +528,8 @@ public sealed class MainForm : Form
         };
         _filePath = null;
         _isDirty  = false;
+        _canvas.ClearBackgroundMaps();
+        _btnNeighbors.Checked = false;
         _canvas.LoadMap(map);
         SyncMapFields(map);
         UpdateTitle();
@@ -536,8 +554,21 @@ public sealed class MainForm : Form
                        ?? throw new InvalidDataException("Failed to parse map file.");
             _filePath = dlg.FileName;
             _isDirty  = false;
+            _canvas.ClearBackgroundMaps();
+            _btnNeighbors.Checked = false;
             _canvas.LoadMap(map);
             SyncMapFields(map);
+
+            // Auto-create a single-map world
+            _worldData = new WorldData();
+            _worldData.Maps.Add(new WorldMapEntry
+            {
+                Path = Path.GetFileName(dlg.FileName),
+                X    = 0,
+                Y    = 0
+            });
+            _worldFilePath = null;
+
             UpdateTitle();
             SetStatus($"Opened: {Path.GetFileName(_filePath)}");
         }
@@ -623,6 +654,184 @@ public sealed class MainForm : Form
             dir = parent;
         }
         return AppDomain.CurrentDomain.BaseDirectory;
+    }
+
+    // ── World file I/O ────────────────────────────────────────────────────────
+    private void NewWorld()
+    {
+        if (!ConfirmDiscard()) return;
+        _worldData     = new WorldData();
+        _worldFilePath = null;
+        _filePath      = null;
+        _isDirty       = false;
+
+        var map = new MapData
+        {
+            Name       = "New Map",
+            Bounds     = new() { X = -200, Y = -500, Width = 3600, Height = 1200 },
+            SpawnPoint = new() { X = 150, Y = 475 },
+            Platforms  = new()
+            {
+                new() { X = -200, Y = 500, Width = 3600, Height = 40, R = 80, G = 80, B = 80 }
+            }
+        };
+        _canvas.ClearBackgroundMaps();
+        _btnNeighbors.Checked = false;
+        _canvas.LoadMap(map);
+        SyncMapFields(map);
+        UpdateTitle();
+        SetStatus("New empty world created.");
+    }
+
+    private void OpenWorld()
+    {
+        if (!ConfirmDiscard()) return;
+        using var dlg = new OpenFileDialog
+        {
+            Title            = "Open World",
+            Filter           = "World files (*.world.json)|*.world.json|All files (*.*)|*.*",
+            InitialDirectory = MapsDir()
+        };
+        if (dlg.ShowDialog(this) != DialogResult.OK) return;
+        LoadWorldFile(dlg.FileName);
+    }
+
+    private void LoadWorldFile(string worldPath)
+    {
+        try
+        {
+            var json = File.ReadAllText(worldPath);
+            var opts = new JsonSerializerOptions { PropertyNameCaseInsensitive = true };
+            var world = JsonSerializer.Deserialize<WorldData>(json, opts)
+                        ?? throw new InvalidDataException("Failed to parse world file.");
+
+            string worldDir = Path.GetDirectoryName(worldPath) ?? "";
+
+            // Load the first map as the active map
+            MapData? firstMap = null;
+            string?  firstMapPath = null;
+
+            foreach (var entry in world.Maps)
+            {
+                string mapPath = Path.IsPathRooted(entry.Path)
+                    ? entry.Path
+                    : Path.GetFullPath(Path.Combine(worldDir, entry.Path));
+
+                if (!File.Exists(mapPath))
+                {
+                    MessageBox.Show(this,
+                        $"Map file not found: {entry.Path}\nResolved to: {mapPath}",
+                        "Missing Map", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                    continue;
+                }
+
+                var mapJson = File.ReadAllText(mapPath);
+                var map = JsonSerializer.Deserialize<MapData>(mapJson, opts);
+                if (map == null) continue;
+
+                if (firstMap == null)
+                {
+                    firstMap     = map;
+                    firstMapPath = mapPath;
+                }
+            }
+
+            if (firstMap == null)
+                throw new InvalidDataException("No valid maps found in world file.");
+
+            _worldData     = world;
+            _worldFilePath = worldPath;
+            _filePath      = firstMapPath;
+            _isDirty       = false;
+
+            _canvas.ClearBackgroundMaps();
+            _btnNeighbors.Checked = false;
+            _canvas.LoadMap(firstMap);
+            SyncMapFields(firstMap);
+            UpdateTitle();
+            SetStatus($"Opened world: {Path.GetFileName(worldPath)} ({world.Maps.Count} map(s))");
+        }
+        catch (Exception ex)
+        {
+            MessageBox.Show(this, $"Could not open world file:\n{ex.Message}",
+                "Open Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
+        }
+    }
+
+    private void SaveWorld()
+    {
+        if (_worldData == null) { Warn("No world is loaded."); return; }
+        if (_worldFilePath == null) { SaveWorldAs(); return; }
+        WriteWorldFile(_worldFilePath);
+    }
+
+    private void SaveWorldAs()
+    {
+        if (_worldData == null) { Warn("No world is loaded."); return; }
+        using var dlg = new SaveFileDialog
+        {
+            Title            = "Save World",
+            Filter           = "World files (*.world.json)|*.world.json|All files (*.*)|*.*",
+            FileName         = _worldFilePath != null
+                ? Path.GetFileName(_worldFilePath)
+                : "my_world.world.json",
+            InitialDirectory = MapsDir()
+        };
+        if (dlg.ShowDialog(this) != DialogResult.OK) return;
+        _worldFilePath = dlg.FileName;
+        WriteWorldFile(_worldFilePath);
+    }
+
+    private void WriteWorldFile(string worldPath)
+    {
+        if (_worldData == null || _canvas.Map == null) return;
+        try
+        {
+            string worldDir = Path.GetDirectoryName(worldPath) ?? "";
+
+            // Save each referenced map file
+            var opts = new JsonSerializerOptions
+            {
+                WriteIndented = true,
+                DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull
+            };
+
+            // Save the currently active map if it has a path
+            if (_filePath != null)
+            {
+                WriteFile(_filePath);
+            }
+
+            // Write the world file with paths relative to the world file's directory
+            var worldToSave = new WorldData();
+            foreach (var entry in _worldData.Maps)
+            {
+                string relativePath = entry.Path;
+                // Ensure paths are relative to world directory
+                if (Path.IsPathRooted(relativePath) && !string.IsNullOrEmpty(worldDir))
+                {
+                    relativePath = Path.GetRelativePath(worldDir, relativePath);
+                }
+                worldToSave.Maps.Add(new WorldMapEntry
+                {
+                    Path = relativePath.Replace('\\', '/'),
+                    X    = entry.X,
+                    Y    = entry.Y
+                });
+            }
+
+            var worldJson = JsonSerializer.Serialize(worldToSave, opts);
+            File.WriteAllText(worldPath, worldJson);
+
+            _isDirty = false;
+            UpdateTitle();
+            SetStatus($"World saved: {Path.GetFileName(worldPath)}");
+        }
+        catch (Exception ex)
+        {
+            MessageBox.Show(this, $"Could not save world file:\n{ex.Message}",
+                "Save Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
+        }
     }
 
     // ── Apply settings ────────────────────────────────────────────────────────
@@ -1063,7 +1272,13 @@ public sealed class MainForm : Form
 
     private void UpdateTitle()
     {
-        string name = _filePath != null ? Path.GetFileName(_filePath) : "Untitled";
+        string name;
+        if (_worldFilePath != null)
+            name = Path.GetFileName(_worldFilePath);
+        else if (_filePath != null)
+            name = Path.GetFileName(_filePath);
+        else
+            name = "Untitled";
         Text = $"Map Editor — {name}{(_isDirty ? " *" : "")}";
     }
 
@@ -1096,6 +1311,15 @@ public sealed class MainForm : Form
     {
         if (e.Control)
         {
+            if (e.Shift)
+            {
+                switch (e.KeyCode)
+                {
+                    case Keys.N: NewWorld();   e.Handled = true; return;
+                    case Keys.O: OpenWorld();  e.Handled = true; return;
+                    case Keys.S: SaveWorld();  e.Handled = true; return;
+                }
+            }
             switch (e.KeyCode)
             {
                 case Keys.N: NewMap();    e.Handled = true; return;
@@ -1113,9 +1337,126 @@ public sealed class MainForm : Form
             case Keys.W: SetTool(EditorTool.DrawSpawnPoint); e.Handled = true; break;
             case Keys.F: _canvas.FitToView();         e.Handled = true; break;
             case Keys.G: ToggleSnap();                e.Handled = true; break;
+            case Keys.N: ToggleOrLoadNeighbors();     e.Handled = true; break;
             case Keys.D1: _canvas.SetZoom(1f);        e.Handled = true; break;
             case Keys.OemMinus: _canvas.SetZoom(_canvas.Zoom / 1.25f); e.Handled = true; break;
             case Keys.Oemplus:  _canvas.SetZoom(_canvas.Zoom * 1.25f); e.Handled = true; break;
+        }
+    }
+
+    // ── Neighbor maps ─────────────────────────────────────────────────────────
+    private void ToggleOrLoadNeighbors()
+    {
+        // If neighbors are loaded, toggle visibility; otherwise load them
+        if (_canvas.BackgroundMapCount > 0)
+            ToggleNeighborMaps();
+        else
+            LoadNeighborMaps();
+    }
+
+    private void ToggleNeighborMaps()
+    {
+        _canvas.ShowBackgroundMaps = !_canvas.ShowBackgroundMaps;
+        _btnNeighbors.Checked = _canvas.ShowBackgroundMaps;
+        SetStatus(_canvas.ShowBackgroundMaps ? "Neighbor maps visible." : "Neighbor maps hidden.");
+    }
+
+    private void LoadNeighborMaps()
+    {
+        var map = _canvas.Map;
+        if (map == null) { Warn("No map is loaded."); return; }
+        if (_filePath == null) { Warn("Save the current map first so neighbor paths can be resolved."); return; }
+        if (map.Transitions == null || map.Transitions.Count == 0)
+        {
+            SetStatus("No transitions — no neighbors to load.");
+            return;
+        }
+
+        string activeDir  = Path.GetDirectoryName(_filePath) ?? "";
+        string activeFile = Path.GetFileName(_filePath);
+        var bgMaps = new List<BackgroundMap>();
+        var loaded = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+
+        foreach (var activeTrans in map.Transitions)
+        {
+            if (string.IsNullOrWhiteSpace(activeTrans.TargetMap)) continue;
+
+            // Resolve the target file path
+            string targetFile = Path.GetFileName(activeTrans.TargetMap);
+            if (loaded.Contains(targetFile)) continue;
+
+            string targetPath = Path.Combine(activeDir, targetFile);
+            if (!File.Exists(targetPath))
+            {
+                // Try the maps/ directory
+                string mapsDir = MapsDir();
+                targetPath = Path.Combine(mapsDir, targetFile);
+            }
+            if (!File.Exists(targetPath)) continue;
+
+            try
+            {
+                var json = File.ReadAllText(targetPath);
+                var opts = new JsonSerializerOptions { PropertyNameCaseInsensitive = true };
+                var neighborMap = JsonSerializer.Deserialize<MapData>(json, opts);
+                if (neighborMap == null) continue;
+
+                // Find a back-transition from the neighbor that points to the active map
+                TransitionData? backTrans = null;
+                if (neighborMap.Transitions != null)
+                {
+                    foreach (var nt in neighborMap.Transitions)
+                    {
+                        if (string.IsNullOrWhiteSpace(nt.TargetMap)) continue;
+                        string ntTarget = Path.GetFileName(nt.TargetMap);
+                        if (string.Equals(ntTarget, activeFile, StringComparison.OrdinalIgnoreCase))
+                        {
+                            backTrans = nt;
+                            break;
+                        }
+                    }
+                }
+
+                // Compute offset so the matching transitions overlap
+                float offsetX, offsetY;
+                if (backTrans != null)
+                {
+                    offsetX = activeTrans.X - backTrans.X;
+                    offsetY = activeTrans.Y - backTrans.Y;
+                }
+                else
+                {
+                    // No back-transition found — place neighbor adjacent to the
+                    // active transition, guessing direction from transition position
+                    // relative to active map bounds
+                    offsetX = activeTrans.X - neighborMap.Bounds.X;
+                    offsetY = activeTrans.Y - neighborMap.Bounds.Y;
+                }
+
+                bgMaps.Add(new BackgroundMap
+                {
+                    Map      = neighborMap,
+                    OffsetX  = offsetX,
+                    OffsetY  = offsetY,
+                    FilePath = targetPath
+                });
+                loaded.Add(targetFile);
+            }
+            catch { /* skip maps that can't be parsed */ }
+        }
+
+        _canvas.SetBackgroundMaps(bgMaps);
+        _canvas.ShowBackgroundMaps = true;
+        _btnNeighbors.Checked = true;
+
+        if (bgMaps.Count > 0)
+        {
+            _canvas.FitToView();
+            SetStatus($"Loaded {bgMaps.Count} neighbor map(s).");
+        }
+        else
+        {
+            SetStatus("No neighbor maps found.");
         }
     }
 
