@@ -4,15 +4,19 @@
 
 #include <vulkan/vulkan.h>
 #include <GLFW/glfw3.h>
+#include <array>
 #include <memory>
 #include <string>
 #include <vector>
 
 class InputSystem;
 
+static constexpr uint32_t MAX_FRAMES_IN_FLIGHT = 2;
+
 // Vulkan 1.3 implementation of the Renderer interface.
-// Initializes Vulkan instance, device, and swap chain via vk-bootstrap.
-// Draw calls are still no-ops — rendering infrastructure comes in later tasks.
+// Initializes Vulkan instance, device, swap chain, command buffers, and
+// per-frame synchronization primitives via vk-bootstrap.
+// The frame loop clears to a solid color each frame using dynamic rendering.
 class VulkanRenderer : public Renderer
 {
 public:
@@ -93,16 +97,24 @@ public:
     GLFWwindow* getWindow() const { return m_window; }
 
 private:
+    friend void framebufferResizeCallback(GLFWwindow* window, int width, int height);
     void initVulkan();
     void createSwapchain();
     void destroySwapchain();
+    void createCommandPool();
+    void createSyncObjects();
     void cleanupVulkan();
+
+    void recreateSwapchain();
+    void transitionImageLayout(VkCommandBuffer cmd, VkImage image,
+                               VkImageLayout oldLayout, VkImageLayout newLayout);
 
     // ── GLFW ──────────────────────────────────────────────────────────
     GLFWwindow* m_window = nullptr;
     float       m_windowW = 0.f;
     float       m_windowH = 0.f;
     bool        m_open = true;
+    bool        m_framebufferResized = false;
 
     std::unique_ptr<InputSystem> m_input;
 
@@ -123,4 +135,17 @@ private:
     VkExtent2D               m_swapchainExtent = {0, 0};
     std::vector<VkImage>     m_swapchainImages;
     std::vector<VkImageView> m_swapchainImageViews;
+
+    // ── Command buffers ───────────────────────────────────────────────
+    VkCommandPool m_commandPool = VK_NULL_HANDLE;
+    std::array<VkCommandBuffer, MAX_FRAMES_IN_FLIGHT> m_commandBuffers{};
+
+    // ── Per-frame synchronization ─────────────────────────────────────
+    std::array<VkSemaphore, MAX_FRAMES_IN_FLIGHT> m_imageAvailable{};
+    std::array<VkSemaphore, MAX_FRAMES_IN_FLIGHT> m_renderFinished{};
+    std::array<VkFence,     MAX_FRAMES_IN_FLIGHT> m_inFlight{};
+    uint32_t m_currentFrame = 0;
+
+    // ── Clear color ───────────────────────────────────────────────────
+    VkClearColorValue m_clearColor = {{0.0f, 0.0f, 0.0f, 1.0f}};
 };

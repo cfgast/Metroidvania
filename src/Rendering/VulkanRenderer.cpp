@@ -43,6 +43,15 @@ private:
     GLFWwindow* m_window;
 };
 
+// ── GLFW resize callback ─────────────────────────────────────────────────────
+
+static void framebufferResizeCallback(GLFWwindow* window, int /*width*/, int /*height*/)
+{
+    auto* renderer = reinterpret_cast<VulkanRenderer*>(glfwGetWindowUserPointer(window));
+    if (renderer)
+        renderer->m_framebufferResized = true;
+}
+
 // ── Vulkan initialization ────────────────────────────────────────────────────
 
 void VulkanRenderer::initVulkan()
@@ -78,6 +87,19 @@ void VulkanRenderer::initVulkan()
     physSelector.set_minimum_version(1, 3)
                 .set_surface(m_surface)
                 .prefer_gpu_device_type(vkb::PreferredDeviceType::discrete);
+
+    // Enable dynamic rendering (core in Vulkan 1.3)
+    VkPhysicalDeviceDynamicRenderingFeatures dynRenderingFeature{};
+    dynRenderingFeature.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_DYNAMIC_RENDERING_FEATURES;
+    dynRenderingFeature.dynamicRendering = VK_TRUE;
+
+    // Enable synchronization2 (core in Vulkan 1.3)
+    VkPhysicalDeviceSynchronization2Features sync2Feature{};
+    sync2Feature.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_SYNCHRONIZATION_2_FEATURES;
+    sync2Feature.synchronization2 = VK_TRUE;
+
+    physSelector.add_required_extension_features(dynRenderingFeature);
+    physSelector.add_required_extension_features(sync2Feature);
 
     auto physResult = physSelector.select();
     if (!physResult)
@@ -169,11 +191,65 @@ void VulkanRenderer::destroySwapchain()
     }
 }
 
+void VulkanRenderer::createCommandPool()
+{
+    VkCommandPoolCreateInfo poolInfo{};
+    poolInfo.sType            = VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO;
+    poolInfo.flags            = VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT;
+    poolInfo.queueFamilyIndex = m_graphicsQueueFamily;
+
+    if (vkCreateCommandPool(m_device, &poolInfo, nullptr, &m_commandPool) != VK_SUCCESS)
+        throw std::runtime_error("VulkanRenderer: failed to create command pool");
+
+    VkCommandBufferAllocateInfo allocInfo{};
+    allocInfo.sType              = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO;
+    allocInfo.commandPool        = m_commandPool;
+    allocInfo.level              = VK_COMMAND_BUFFER_LEVEL_PRIMARY;
+    allocInfo.commandBufferCount = MAX_FRAMES_IN_FLIGHT;
+
+    if (vkAllocateCommandBuffers(m_device, &allocInfo, m_commandBuffers.data()) != VK_SUCCESS)
+        throw std::runtime_error("VulkanRenderer: failed to allocate command buffers");
+}
+
+void VulkanRenderer::createSyncObjects()
+{
+    VkSemaphoreCreateInfo semInfo{};
+    semInfo.sType = VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO;
+
+    VkFenceCreateInfo fenceInfo{};
+    fenceInfo.sType = VK_STRUCTURE_TYPE_FENCE_CREATE_INFO;
+    fenceInfo.flags = VK_FENCE_CREATE_SIGNALED_BIT; // start signaled so first frame doesn't block
+
+    for (uint32_t i = 0; i < MAX_FRAMES_IN_FLIGHT; ++i)
+    {
+        if (vkCreateSemaphore(m_device, &semInfo, nullptr, &m_imageAvailable[i]) != VK_SUCCESS ||
+            vkCreateSemaphore(m_device, &semInfo, nullptr, &m_renderFinished[i]) != VK_SUCCESS ||
+            vkCreateFence(m_device, &fenceInfo, nullptr, &m_inFlight[i]) != VK_SUCCESS)
+        {
+            throw std::runtime_error("VulkanRenderer: failed to create synchronization objects");
+        }
+    }
+}
+
 void VulkanRenderer::cleanupVulkan()
 {
     if (m_device != VK_NULL_HANDLE)
     {
         vkDeviceWaitIdle(m_device);
+
+        for (uint32_t i = 0; i < MAX_FRAMES_IN_FLIGHT; ++i)
+        {
+            if (m_imageAvailable[i] != VK_NULL_HANDLE)
+                vkDestroySemaphore(m_device, m_imageAvailable[i], nullptr);
+            if (m_renderFinished[i] != VK_NULL_HANDLE)
+                vkDestroySemaphore(m_device, m_renderFinished[i], nullptr);
+            if (m_inFlight[i] != VK_NULL_HANDLE)
+                vkDestroyFence(m_device, m_inFlight[i], nullptr);
+        }
+
+        if (m_commandPool != VK_NULL_HANDLE)
+            vkDestroyCommandPool(m_device, m_commandPool, nullptr);
+
         destroySwapchain();
         vkDestroyDevice(m_device, nullptr);
         m_device = VK_NULL_HANDLE;
@@ -199,6 +275,61 @@ void VulkanRenderer::cleanupVulkan()
     }
 }
 
+void VulkanRenderer::recreateSwapchain()
+{
+    // Handle minimization — wait until window has a non-zero size
+    int width = 0, height = 0;
+    glfwGetFramebufferSize(m_window, &width, &height);
+    while (width == 0 || height == 0)
+    {
+        glfwGetFramebufferSize(m_window, &width, &height);
+        glfwWaitEvents();
+    }
+
+    vkDeviceWaitIdle(m_device);
+    createSwapchain();
+
+    m_windowW = static_cast<float>(m_swapchainExtent.width);
+    m_windowH = static_cast<float>(m_swapchainExtent.height);
+}
+
+void VulkanRenderer::transitionImageLayout(VkCommandBuffer cmd, VkImage image,
+                                           VkImageLayout oldLayout, VkImageLayout newLayout)
+{
+    VkImageMemoryBarrier2 barrier{};
+    barrier.sType               = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2;
+    barrier.oldLayout           = oldLayout;
+    barrier.newLayout           = newLayout;
+    barrier.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+    barrier.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+    barrier.image               = image;
+    barrier.subresourceRange    = {VK_IMAGE_ASPECT_COLOR_BIT, 0, 1, 0, 1};
+
+    if (oldLayout == VK_IMAGE_LAYOUT_UNDEFINED &&
+        newLayout == VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL)
+    {
+        barrier.srcStageMask  = VK_PIPELINE_STAGE_2_TOP_OF_PIPE_BIT;
+        barrier.srcAccessMask = 0;
+        barrier.dstStageMask  = VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT;
+        barrier.dstAccessMask = VK_ACCESS_2_COLOR_ATTACHMENT_WRITE_BIT;
+    }
+    else if (oldLayout == VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL &&
+             newLayout == VK_IMAGE_LAYOUT_PRESENT_SRC_KHR)
+    {
+        barrier.srcStageMask  = VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT;
+        barrier.srcAccessMask = VK_ACCESS_2_COLOR_ATTACHMENT_WRITE_BIT;
+        barrier.dstStageMask  = VK_PIPELINE_STAGE_2_BOTTOM_OF_PIPE_BIT;
+        barrier.dstAccessMask = 0;
+    }
+
+    VkDependencyInfo depInfo{};
+    depInfo.sType                   = VK_STRUCTURE_TYPE_DEPENDENCY_INFO;
+    depInfo.imageMemoryBarrierCount = 1;
+    depInfo.pImageMemoryBarriers    = &barrier;
+
+    vkCmdPipelineBarrier2(cmd, &depInfo);
+}
+
 // ── Constructor / Destructor ─────────────────────────────────────────────────
 
 VulkanRenderer::VulkanRenderer(const std::string& title, unsigned int width,
@@ -222,10 +353,13 @@ VulkanRenderer::VulkanRenderer(const std::string& title, unsigned int width,
     }
 
     glfwSetWindowUserPointer(m_window, this);
+    glfwSetFramebufferSizeCallback(m_window, framebufferResizeCallback);
 
-    // Initialize Vulkan instance, device, and swap chain
+    // Initialize Vulkan instance, device, swap chain, commands, and sync
     initVulkan();
     createSwapchain();
+    createCommandPool();
+    createSyncObjects();
 
     m_input = std::make_unique<VulkanInput>(m_window);
 
@@ -287,8 +421,118 @@ void VulkanRenderer::getDesktopSize(unsigned int& w, unsigned int& h) const
 
 // ── Lifecycle ────────────────────────────────────────────────────────────────
 
-void VulkanRenderer::clear(float /*r*/, float /*g*/, float /*b*/, float /*a*/) {}
-void VulkanRenderer::display() {}
+void VulkanRenderer::clear(float r, float g, float b, float a)
+{
+    m_clearColor = {{r, g, b, a}};
+}
+
+void VulkanRenderer::display()
+{
+    // 1. Wait for this frame's in-flight fence
+    vkWaitForFences(m_device, 1, &m_inFlight[m_currentFrame], VK_TRUE, UINT64_MAX);
+
+    // 2. Acquire next swap chain image
+    uint32_t imageIndex = 0;
+    VkResult acquireResult = vkAcquireNextImageKHR(
+        m_device, m_swapchain, UINT64_MAX,
+        m_imageAvailable[m_currentFrame], VK_NULL_HANDLE, &imageIndex);
+
+    if (acquireResult == VK_ERROR_OUT_OF_DATE_KHR)
+    {
+        recreateSwapchain();
+        return;
+    }
+    if (acquireResult != VK_SUCCESS && acquireResult != VK_SUBOPTIMAL_KHR)
+        throw std::runtime_error("VulkanRenderer: failed to acquire swap chain image");
+
+    // 3. Reset fence and command buffer
+    vkResetFences(m_device, 1, &m_inFlight[m_currentFrame]);
+
+    VkCommandBuffer cmd = m_commandBuffers[m_currentFrame];
+    vkResetCommandBuffer(cmd, 0);
+
+    // 4. Begin command buffer recording
+    VkCommandBufferBeginInfo beginInfo{};
+    beginInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
+    beginInfo.flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT;
+    vkBeginCommandBuffer(cmd, &beginInfo);
+
+    // 5. Transition swap chain image: UNDEFINED → COLOR_ATTACHMENT_OPTIMAL
+    transitionImageLayout(cmd, m_swapchainImages[imageIndex],
+                          VK_IMAGE_LAYOUT_UNDEFINED,
+                          VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL);
+
+    // 6. Begin dynamic rendering
+    VkRenderingAttachmentInfo colorAttachment{};
+    colorAttachment.sType       = VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO;
+    colorAttachment.imageView   = m_swapchainImageViews[imageIndex];
+    colorAttachment.imageLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
+    colorAttachment.loadOp      = VK_ATTACHMENT_LOAD_OP_CLEAR;
+    colorAttachment.storeOp     = VK_ATTACHMENT_STORE_OP_STORE;
+    colorAttachment.clearValue.color = m_clearColor;
+
+    VkRenderingInfo renderInfo{};
+    renderInfo.sType                = VK_STRUCTURE_TYPE_RENDERING_INFO;
+    renderInfo.renderArea.offset    = {0, 0};
+    renderInfo.renderArea.extent    = m_swapchainExtent;
+    renderInfo.layerCount           = 1;
+    renderInfo.colorAttachmentCount = 1;
+    renderInfo.pColorAttachments    = &colorAttachment;
+
+    vkCmdBeginRendering(cmd, &renderInfo);
+
+    // (Future tasks will insert draw commands here)
+
+    // 7. End dynamic rendering
+    vkCmdEndRendering(cmd);
+
+    // 8. Transition image for presentation: COLOR_ATTACHMENT_OPTIMAL → PRESENT_SRC
+    transitionImageLayout(cmd, m_swapchainImages[imageIndex],
+                          VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
+                          VK_IMAGE_LAYOUT_PRESENT_SRC_KHR);
+
+    vkEndCommandBuffer(cmd);
+
+    // 9. Submit command buffer
+    VkPipelineStageFlags waitStage = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
+
+    VkSubmitInfo submitInfo{};
+    submitInfo.sType                = VK_STRUCTURE_TYPE_SUBMIT_INFO;
+    submitInfo.waitSemaphoreCount   = 1;
+    submitInfo.pWaitSemaphores      = &m_imageAvailable[m_currentFrame];
+    submitInfo.pWaitDstStageMask    = &waitStage;
+    submitInfo.commandBufferCount   = 1;
+    submitInfo.pCommandBuffers      = &cmd;
+    submitInfo.signalSemaphoreCount = 1;
+    submitInfo.pSignalSemaphores    = &m_renderFinished[m_currentFrame];
+
+    if (vkQueueSubmit(m_graphicsQueue, 1, &submitInfo, m_inFlight[m_currentFrame]) != VK_SUCCESS)
+        throw std::runtime_error("VulkanRenderer: failed to submit command buffer");
+
+    // 10. Present
+    VkPresentInfoKHR presentInfo{};
+    presentInfo.sType              = VK_STRUCTURE_TYPE_PRESENT_INFO_KHR;
+    presentInfo.waitSemaphoreCount = 1;
+    presentInfo.pWaitSemaphores    = &m_renderFinished[m_currentFrame];
+    presentInfo.swapchainCount     = 1;
+    presentInfo.pSwapchains        = &m_swapchain;
+    presentInfo.pImageIndices      = &imageIndex;
+
+    VkResult presentResult = vkQueuePresentKHR(m_presentQueue, &presentInfo);
+
+    if (presentResult == VK_ERROR_OUT_OF_DATE_KHR ||
+        presentResult == VK_SUBOPTIMAL_KHR || m_framebufferResized)
+    {
+        m_framebufferResized = false;
+        recreateSwapchain();
+    }
+    else if (presentResult != VK_SUCCESS)
+    {
+        throw std::runtime_error("VulkanRenderer: failed to present swap chain image");
+    }
+
+    m_currentFrame = (m_currentFrame + 1) % MAX_FRAMES_IN_FLIGHT;
+}
 
 // ── Frame / lighting pass ────────────────────────────────────────────────────
 

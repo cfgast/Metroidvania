@@ -1304,3 +1304,31 @@ After this task, VulkanRenderer should successfully initialize Vulkan and
 create a presentable swap chain, but not yet render anything.
 
 ==============================================================================
+
+==============================================================================
+Task 4: Command infrastructure and frame synchronization
+==============================================================================
+Implemented: true
+
+Create a VkCommandPool and per-frame VkCommandBuffers (double-buffered,
+i.e. 2 frames in flight).
+
+Create synchronization primitives per frame:
+- VkSemaphore imageAvailable — signaled when swap chain image is acquired
+- VkSemaphore renderFinished — signaled when command buffer completes
+- VkFence inFlight — CPU waits on this before reusing the frame's resources
+
+Implement the core frame loop in display():
+1. Wait for in-flight fence
+2. Acquire next swap chain image (vkAcquireNextImageKHR)
+3. Reset fence and command buffer
+4. Begin command buffer recording
+5. Begin dynamic rendering to the swap chain image
+6. End dynamic rendering
+7. Transition image for presentation
+8. Submit command buffer (signal renderFinished, wait on imageAvailable)
+9. Present (vkQueuePresentKHR)
+
+After this task, the window should clear to a solid color each frame.
+
+==============================================================================
