@@ -1385,3 +1385,26 @@ Create a VkPipeline (graphics) for flat-color rendering:
 - Load flat.vert.spv and flat.frag.spv as shader stages
 
 Create a helper to load .spv files from disk and create VkShaderModules.
+
+==============================================================================
+Task 7: Vertex buffer infrastructure with VMA
+==============================================================================
+Implemented: true
+
+Initialize the VMA allocator (VmaAllocator) during VulkanRenderer
+construction, after device creation.
+
+Create a persistent GPU-local vertex buffer for the unit quad (4 vertices,
+6 indices or 6 vertices for two triangles) — equivalent to GLRenderer's
+m_quadVAO/VBO. Use a one-time staging buffer upload.
+
+Create a per-frame dynamic vertex buffer system for geometry that changes
+every frame (circles, rounded rects, sprites, text, vertex-colored
+primitives). Options:
+- Ring buffer with per-frame offsets, or
+- Per-frame host-visible buffer with VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT
+
+The dynamic buffer should support multiple sub-allocations per frame (one
+per draw call) and reset each frame.
+
+Clean up VMA allocator and all buffers in VulkanRenderer destructor.

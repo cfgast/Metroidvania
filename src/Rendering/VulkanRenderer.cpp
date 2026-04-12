@@ -3,6 +3,7 @@
 
 #include <VkBootstrap.h>
 
+#include <cstring>
 #include <fstream>
 #include <iostream>
 #include <stdexcept>
@@ -238,6 +239,18 @@ void VulkanRenderer::cleanupVulkan()
     {
         vkDeviceWaitIdle(m_device);
 
+        // ── Destroy dynamic vertex buffers ───────────────────────────
+        for (uint32_t i = 0; i < MAX_FRAMES_IN_FLIGHT; ++i)
+        {
+            if (m_dynamicBuffers[i].buffer != VK_NULL_HANDLE)
+                vmaDestroyBuffer(m_allocator, m_dynamicBuffers[i].buffer,
+                                 m_dynamicBuffers[i].allocation);
+        }
+
+        // ── Destroy quad vertex buffer ───────────────────────────────
+        if (m_quadBuffer != VK_NULL_HANDLE)
+            vmaDestroyBuffer(m_allocator, m_quadBuffer, m_quadAllocation);
+
         for (uint32_t i = 0; i < MAX_FRAMES_IN_FLIGHT; ++i)
         {
             if (m_imageAvailable[i] != VK_NULL_HANDLE)
@@ -257,6 +270,13 @@ void VulkanRenderer::cleanupVulkan()
             vkDestroyPipelineLayout(m_device, m_flatPipelineLayout, nullptr);
         if (m_flatDescriptorSetLayout != VK_NULL_HANDLE)
             vkDestroyDescriptorSetLayout(m_device, m_flatDescriptorSetLayout, nullptr);
+
+        // ── Destroy VMA allocator ────────────────────────────────────
+        if (m_allocator != VK_NULL_HANDLE)
+        {
+            vmaDestroyAllocator(m_allocator);
+            m_allocator = VK_NULL_HANDLE;
+        }
 
         destroySwapchain();
         vkDestroyDevice(m_device, nullptr);
@@ -529,6 +549,171 @@ void VulkanRenderer::createFlatPipeline()
     std::cout << "[Vulkan] Flat-color pipeline created\n";
 }
 
+// ── VMA / buffer helpers ─────────────────────────────────────────────────────
+
+void VulkanRenderer::initAllocator()
+{
+    VmaVulkanFunctions vulkanFunctions{};
+    vulkanFunctions.vkGetInstanceProcAddr = vkGetInstanceProcAddr;
+    vulkanFunctions.vkGetDeviceProcAddr   = vkGetDeviceProcAddr;
+
+    VmaAllocatorCreateInfo allocatorInfo{};
+    allocatorInfo.vulkanApiVersion = VK_API_VERSION_1_3;
+    allocatorInfo.instance         = m_instance;
+    allocatorInfo.physicalDevice   = m_physicalDevice;
+    allocatorInfo.device           = m_device;
+    allocatorInfo.pVulkanFunctions = &vulkanFunctions;
+
+    if (vmaCreateAllocator(&allocatorInfo, &m_allocator) != VK_SUCCESS)
+        throw std::runtime_error("VulkanRenderer: failed to create VMA allocator");
+
+    std::cout << "[Vulkan] VMA allocator created\n";
+}
+
+void VulkanRenderer::createQuadBuffer()
+{
+    // 6 vertices (two triangles) forming a unit quad [0,0] → [1,1]
+    float quadVertices[] = {
+        0.f, 0.f,
+        1.f, 0.f,
+        1.f, 1.f,
+
+        0.f, 0.f,
+        1.f, 1.f,
+        0.f, 1.f,
+    };
+    VkDeviceSize bufferSize = sizeof(quadVertices);
+
+    // ── Staging buffer (host-visible) ────────────────────────────────
+    VkBufferCreateInfo stagingBufInfo{};
+    stagingBufInfo.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
+    stagingBufInfo.size  = bufferSize;
+    stagingBufInfo.usage = VK_BUFFER_USAGE_TRANSFER_SRC_BIT;
+
+    VmaAllocationCreateInfo stagingAllocInfo{};
+    stagingAllocInfo.usage = VMA_MEMORY_USAGE_AUTO;
+    stagingAllocInfo.flags = VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT;
+
+    VkBuffer      stagingBuffer;
+    VmaAllocation stagingAllocation;
+    if (vmaCreateBuffer(m_allocator, &stagingBufInfo, &stagingAllocInfo,
+                        &stagingBuffer, &stagingAllocation, nullptr) != VK_SUCCESS)
+        throw std::runtime_error("VulkanRenderer: failed to create quad staging buffer");
+
+    void* data;
+    vmaMapMemory(m_allocator, stagingAllocation, &data);
+    std::memcpy(data, quadVertices, bufferSize);
+    vmaUnmapMemory(m_allocator, stagingAllocation);
+
+    // ── GPU-local vertex buffer ──────────────────────────────────────
+    VkBufferCreateInfo bufInfo{};
+    bufInfo.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
+    bufInfo.size  = bufferSize;
+    bufInfo.usage = VK_BUFFER_USAGE_VERTEX_BUFFER_BIT |
+                    VK_BUFFER_USAGE_TRANSFER_DST_BIT;
+
+    VmaAllocationCreateInfo allocInfo{};
+    allocInfo.usage = VMA_MEMORY_USAGE_AUTO_PREFER_DEVICE;
+
+    if (vmaCreateBuffer(m_allocator, &bufInfo, &allocInfo,
+                        &m_quadBuffer, &m_quadAllocation, nullptr) != VK_SUCCESS)
+    {
+        vmaDestroyBuffer(m_allocator, stagingBuffer, stagingAllocation);
+        throw std::runtime_error("VulkanRenderer: failed to create quad vertex buffer");
+    }
+
+    // ── One-time copy via transient command buffer ───────────────────
+    VkCommandBufferAllocateInfo cmdAllocInfo{};
+    cmdAllocInfo.sType              = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO;
+    cmdAllocInfo.commandPool        = m_commandPool;
+    cmdAllocInfo.level              = VK_COMMAND_BUFFER_LEVEL_PRIMARY;
+    cmdAllocInfo.commandBufferCount = 1;
+
+    VkCommandBuffer cmd;
+    vkAllocateCommandBuffers(m_device, &cmdAllocInfo, &cmd);
+
+    VkCommandBufferBeginInfo beginInfo{};
+    beginInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
+    beginInfo.flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT;
+    vkBeginCommandBuffer(cmd, &beginInfo);
+
+    VkBufferCopy copyRegion{};
+    copyRegion.size = bufferSize;
+    vkCmdCopyBuffer(cmd, stagingBuffer, m_quadBuffer, 1, &copyRegion);
+
+    vkEndCommandBuffer(cmd);
+
+    VkSubmitInfo submitInfo{};
+    submitInfo.sType              = VK_STRUCTURE_TYPE_SUBMIT_INFO;
+    submitInfo.commandBufferCount = 1;
+    submitInfo.pCommandBuffers    = &cmd;
+
+    vkQueueSubmit(m_graphicsQueue, 1, &submitInfo, VK_NULL_HANDLE);
+    vkQueueWaitIdle(m_graphicsQueue);
+
+    vkFreeCommandBuffers(m_device, m_commandPool, 1, &cmd);
+    vmaDestroyBuffer(m_allocator, stagingBuffer, stagingAllocation);
+
+    std::cout << "[Vulkan] Unit quad buffer created (" << QUAD_VERTEX_COUNT
+              << " vertices, " << bufferSize << " bytes)\n";
+}
+
+void VulkanRenderer::createDynamicBuffers()
+{
+    for (uint32_t i = 0; i < MAX_FRAMES_IN_FLIGHT; ++i)
+    {
+        VkBufferCreateInfo bufInfo{};
+        bufInfo.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
+        bufInfo.size  = DYNAMIC_BUFFER_SIZE;
+        bufInfo.usage = VK_BUFFER_USAGE_VERTEX_BUFFER_BIT;
+
+        VmaAllocationCreateInfo allocInfo{};
+        allocInfo.usage = VMA_MEMORY_USAGE_AUTO;
+        allocInfo.flags = VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT |
+                          VMA_ALLOCATION_CREATE_MAPPED_BIT;
+
+        VmaAllocationInfo allocationInfo{};
+        if (vmaCreateBuffer(m_allocator, &bufInfo, &allocInfo,
+                            &m_dynamicBuffers[i].buffer,
+                            &m_dynamicBuffers[i].allocation,
+                            &allocationInfo) != VK_SUCCESS)
+            throw std::runtime_error("VulkanRenderer: failed to create dynamic buffer " +
+                                     std::to_string(i));
+
+        m_dynamicBuffers[i].mapped = allocationInfo.pMappedData;
+        m_dynamicBuffers[i].offset = 0;
+    }
+
+    std::cout << "[Vulkan] Dynamic vertex buffers created ("
+              << MAX_FRAMES_IN_FLIGHT << " x "
+              << (DYNAMIC_BUFFER_SIZE / 1024) << " KB)\n";
+}
+
+VulkanRenderer::DynamicAllocation
+VulkanRenderer::dynamicAllocate(VkDeviceSize size, VkDeviceSize alignment)
+{
+    auto& buf = m_dynamicBuffers[m_currentFrame];
+
+    // Align the current offset
+    VkDeviceSize alignedOffset = (buf.offset + alignment - 1) & ~(alignment - 1);
+
+    if (alignedOffset + size > DYNAMIC_BUFFER_SIZE)
+    {
+        std::cerr << "[Vulkan] Dynamic buffer overflow — needed "
+                  << size << " bytes, only "
+                  << (DYNAMIC_BUFFER_SIZE - alignedOffset) << " remain\n";
+        return {}; // data == nullptr signals failure
+    }
+
+    DynamicAllocation alloc;
+    alloc.buffer = buf.buffer;
+    alloc.offset = alignedOffset;
+    alloc.data   = static_cast<uint8_t*>(buf.mapped) + alignedOffset;
+
+    buf.offset = alignedOffset + size;
+    return alloc;
+}
+
 // ── Constructor / Destructor ─────────────────────────────────────────────────
 
 VulkanRenderer::VulkanRenderer(const std::string& title, unsigned int width,
@@ -556,10 +741,13 @@ VulkanRenderer::VulkanRenderer(const std::string& title, unsigned int width,
 
     // Initialize Vulkan instance, device, swap chain, commands, and sync
     initVulkan();
+    initAllocator();
     createSwapchain();
     createCommandPool();
     createSyncObjects();
     createFlatPipeline();
+    createQuadBuffer();
+    createDynamicBuffers();
 
     m_input = std::make_unique<VulkanInput>(m_window);
 
@@ -630,6 +818,9 @@ void VulkanRenderer::display()
 {
     // 1. Wait for this frame's in-flight fence
     vkWaitForFences(m_device, 1, &m_inFlight[m_currentFrame], VK_TRUE, UINT64_MAX);
+
+    // Reset dynamic buffer for this frame (GPU is done with it)
+    m_dynamicBuffers[m_currentFrame].offset = 0;
 
     // 2. Acquire next swap chain image
     uint32_t imageIndex = 0;

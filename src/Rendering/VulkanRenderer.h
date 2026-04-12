@@ -3,6 +3,7 @@
 #include "Renderer.h"
 
 #include <vulkan/vulkan.h>
+#include <vk_mem_alloc.h>
 #include <GLFW/glfw3.h>
 #include <array>
 #include <memory>
@@ -114,6 +115,22 @@ private:
     VkShaderModule createShaderModule(const std::vector<char>& code);
     void createFlatPipeline();
 
+    // ── VMA / buffer helpers ─────────────────────────────────────────
+    void initAllocator();
+    void createQuadBuffer();
+    void createDynamicBuffers();
+
+    // Sub-allocate from the current frame's dynamic buffer.
+    // Returns buffer handle, byte offset, and a host-visible pointer to
+    // write vertex data into. Returns data==nullptr on overflow.
+    struct DynamicAllocation {
+        VkBuffer     buffer = VK_NULL_HANDLE;
+        VkDeviceSize offset = 0;
+        void*        data   = nullptr;
+    };
+    DynamicAllocation dynamicAllocate(VkDeviceSize size,
+                                     VkDeviceSize alignment = 16);
+
     // ── GLFW ──────────────────────────────────────────────────────────
     GLFWwindow* m_window = nullptr;
     float       m_windowW = 0.f;
@@ -158,4 +175,22 @@ private:
     VkDescriptorSetLayout m_flatDescriptorSetLayout = VK_NULL_HANDLE;
     VkPipelineLayout      m_flatPipelineLayout      = VK_NULL_HANDLE;
     VkPipeline            m_flatPipeline            = VK_NULL_HANDLE;
+
+    // ── VMA allocator ─────────────────────────────────────────────────
+    VmaAllocator m_allocator = VK_NULL_HANDLE;
+
+    // ── Unit quad vertex buffer (GPU-local, static) ───────────────────
+    VkBuffer      m_quadBuffer     = VK_NULL_HANDLE;
+    VmaAllocation m_quadAllocation = VK_NULL_HANDLE;
+    static constexpr uint32_t QUAD_VERTEX_COUNT = 6;
+
+    // ── Per-frame dynamic vertex buffers (host-visible, reset each frame)
+    static constexpr VkDeviceSize DYNAMIC_BUFFER_SIZE = 4 * 1024 * 1024; // 4 MB
+    struct FrameDynamicBuffer {
+        VkBuffer      buffer     = VK_NULL_HANDLE;
+        VmaAllocation allocation = VK_NULL_HANDLE;
+        void*         mapped     = nullptr;
+        VkDeviceSize  offset     = 0;
+    };
+    std::array<FrameDynamicBuffer, MAX_FRAMES_IN_FLIGHT> m_dynamicBuffers{};
 };

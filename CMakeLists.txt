@@ -133,6 +133,7 @@ add_executable(Metroidvania
     src/UI/ControlsMenu.cpp
     src/Rendering/GLRenderer.cpp
     src/Rendering/VulkanRenderer.cpp
+    src/Rendering/VmaImpl.cpp
     src/Rendering/Shader.cpp
     src/Input/GLFWInput.cpp
     third_party/glad/src/gl.c
