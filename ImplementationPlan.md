@@ -78,7 +78,7 @@ task. No rendering code changes — build system only.
 ==============================================================================
 Task 19:Camera and view system
 ==============================================================================
-Implemented: false
+Implemented: true
 
 Implement setView(float centerX, centerY, width, height):
 - Compute orthographic projection using glm::ortho with Vulkan's 0..1

@@ -1709,3 +1709,30 @@ Register glfwSetFramebufferSizeCallback to trigger recreation.
 Handle minimization (width=0 or height=0) by skipping frames.
 
 ==============================================================================
+==============================================================================
+Task 19:Camera and view system
+==============================================================================
+Implemented: true
+
+Implement setView(float centerX, centerY, width, height):
+- Compute orthographic projection using glm::ortho with Vulkan's 0..1
+  depth range (enabled by GLM_FORCE_DEPTH_ZERO_TO_ONE):
+    left   = centerX - width/2
+    right  = centerX + width/2
+    top    = centerY - height/2
+    bottom = centerY + height/2
+- Store the projection matrix for use in push constants
+
+Implement resetView():
+- Set projection to a screen-space orthographic matrix:
+    left=0, right=windowWidth, top=0, bottom=windowHeight
+- Used for UI rendering after endFrame()
+
+Implement getWindowSize(float& w, float& h):
+- Return current window dimensions as floats
+
+All draw calls should use the current projection matrix in their push
+constants. The camera-follows-player behavior in main.cpp calls setView()
+each frame with the player's position — no changes needed in main.cpp.
+
+==============================================================================
