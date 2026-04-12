@@ -504,6 +504,7 @@ void GLRenderer::display()
 void GLRenderer::beginFrame()
 {
     m_frameBegan = true;
+    m_worldPass  = true;
     glBindFramebuffer(GL_FRAMEBUFFER, m_fbo);
     glViewport(0, 0, m_fboWidth, m_fboHeight);
 }
@@ -513,6 +514,7 @@ void GLRenderer::endFrame()
     if (!m_frameBegan)
         return;
     m_frameBegan = false;
+    m_worldPass  = false;
 
     // Blit FBO color attachment to the default framebuffer
     glBindFramebuffer(GL_FRAMEBUFFER, 0);
@@ -590,6 +592,14 @@ GLuint GLRenderer::loadNormalMap(const std::string& diffusePath)
 
 void GLRenderer::uploadLightUniforms(Shader& shader)
 {
+    // UI rendering (outside beginFrame/endFrame) gets full brightness, no lights
+    if (!m_worldPass)
+    {
+        shader.setVec3("uAmbientColor", glm::vec3(1.f, 1.f, 1.f));
+        shader.setInt("uNumLights", 0);
+        return;
+    }
+
     shader.setVec3("uAmbientColor", m_ambientColor);
 
     int count = static_cast<int>(m_lights.size());

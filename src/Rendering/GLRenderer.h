@@ -158,6 +158,7 @@ private:
     float       m_windowW = 0.f;
     float       m_windowH = 0.f;
     bool        m_open = true;
+    bool        m_worldPass = false;
 
     // GLFW-backed input system (owns the instance)
     std::unique_ptr<GLFWInput> m_glfwInput;

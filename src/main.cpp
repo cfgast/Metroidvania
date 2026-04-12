@@ -7,6 +7,7 @@
 #include <glm/vec2.hpp>
 
 #include "Rendering/GLRenderer.h"
+#include "Rendering/Light.h"
 #include "Input/InputSystem.h"
 #include "Core/GameObject.h"
 #include "Core/PlayerState.h"
@@ -477,6 +478,19 @@ int main()
 
             renderer.beginFrame();
             renderer.clearLights();
+
+            // Test player light: warm white glow that follows the player
+            {
+                Light playerLight;
+                playerLight.position  = player.position;
+                playerLight.color     = {1.0f, 0.95f, 0.8f};
+                playerLight.intensity = 0.6f;
+                playerLight.radius    = 300.f;
+                playerLight.z         = 80.f;
+                playerLight.type      = LightType::Point;
+                renderer.addLight(playerLight);
+            }
+
             renderer.setView(cx, cy, viewW, viewH);
             renderer.clear(30/255.f, 30/255.f, 50/255.f);
             map.render(renderer);
@@ -599,6 +613,19 @@ int main()
         }
         renderer.beginFrame();
         renderer.clearLights();
+
+        // Test player light: warm white glow that follows the player
+        {
+            Light playerLight;
+            playerLight.position  = player.position;
+            playerLight.color     = {1.0f, 0.95f, 0.8f};
+            playerLight.intensity = 0.6f;
+            playerLight.radius    = 300.f;
+            playerLight.z         = 80.f;
+            playerLight.type      = LightType::Point;
+            renderer.addLight(playerLight);
+        }
+
         renderer.setView(cx, cy, viewW, viewH);
         renderer.clear(30/255.f, 30/255.f, 50/255.f);
         map.render(renderer);

@@ -57,36 +57,7 @@ Coordinate system:
 ==============================================================================
 Task 3: Lighting compositing pass
 ==============================================================================
-Implemented: false
-
-Wire up the light data to the shaders during rendering so lights actually
-affect the scene visually.
-
-GLRenderer changes:
-- Before each drawRect/drawSprite/drawCircle/drawRoundedRect call, upload
-  the current light array to the active shader uniforms
-- In beginFrame(), set a flag (m_worldPass = true)
-- In endFrame(), set m_worldPass = false
-- When m_worldPass is false (UI rendering), skip light uniform upload and
-  use ambient = (1,1,1) so UI is fully lit
-- clearLights() empties the light vector at frame start
-- addLight() pushes a Light struct into the vector
-
-Update main.cpp:
-- After renderer.beginFrame(), call renderer.clearLights()
-- Add a test point light at the player position:
-    Light playerLight;
-    playerLight.position = player.position;
-    playerLight.color = {1.0, 0.95, 0.8};  // warm white
-    playerLight.intensity = 0.6;
-    playerLight.radius = 300;
-    playerLight.z = 80;
-    playerLight.type = LightType::Point;
-    renderer.addLight(playerLight);
-- Verify lighting is visible and moves with the player
-
-The scene should now show the player emitting a visible warm glow.
-Platforms and sprites near the player should be visibly brighter.
+Implemented: true
 
 ==============================================================================
 Task 4: Map light definitions and MapLoader integration
