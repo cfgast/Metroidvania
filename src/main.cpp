@@ -172,6 +172,7 @@ int main()
     // --- Room transition manager ---
     TransitionZone pendingZone;
     glm::vec2      pendingPlayerPos{0.f, 0.f};
+    float          transitionCooldown = 0.f;
 
     TransitionManager transitionMgr;
     transitionMgr.setLoadCallback(
@@ -218,6 +219,10 @@ int main()
                     player.position = spawn;
 
                 enemies = spawnEnemies(map, player);
+
+                // Brief cooldown so the player isn't immediately re-triggered
+                // by the return transition zone they spawn inside of.
+                transitionCooldown = 0.3f;
 
                 // Auto-save on room transition.
                 performSave();
@@ -520,7 +525,9 @@ int main()
             enemy->update(dt);
         }
 
-        if (const TransitionZone* zone = map.checkTransition(player.position, playerSize))
+        if (transitionCooldown > 0.f)
+            transitionCooldown -= dt;
+        else if (const TransitionZone* zone = map.checkTransition(player.position, playerSize))
         {
             pendingZone      = *zone;
             pendingPlayerPos = player.position;
