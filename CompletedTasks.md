@@ -1262,3 +1262,23 @@ The project should still compile and run with the OpenGL backend after this
 task. No rendering code changes — build system only.
 
 ==============================================================================
+
+==============================================================================
+Task 2:Create VulkanRenderer skeleton
+==============================================================================
+Implemented: true
+
+Create src/Rendering/VulkanRenderer.h and VulkanRenderer.cpp implementing
+every pure-virtual method from Renderer.h as a stub (no-op or minimal
+return value). The class should compile cleanly against the Renderer
+interface.
+
+Wire VulkanRenderer into main.cpp behind a #define USE_VULKAN preprocessor
+guard so the project compiles and runs with either backend. When USE_VULKAN
+is defined, main.cpp should create a VulkanRenderer instead of GLRenderer.
+When it is not defined, behavior is unchanged.
+
+At this point the Vulkan path will show a blank/non-functional window. The
+goal is to establish the file structure and verify the interface contract.
+
+==============================================================================
