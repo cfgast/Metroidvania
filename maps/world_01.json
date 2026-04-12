@@ -14,6 +14,14 @@
     "default": {
       "x": -40,
       "y": 220
+    },
+    "from_world_02": {
+      "x": 3260,
+      "y": 200
+    },
+    "from_world_03": {
+      "x": 1870,
+      "y": 620
     }
   },
   "platforms": [
@@ -236,38 +244,30 @@
   "transitions": [
     {
       "name": "to_world_02",
-      "x": 3350,
-      "y": -500,
+      "x": 3330,
+      "y": -20,
       "width": 50,
-      "height": 1200,
+      "height": 240,
       "targetMap": "maps/world_02.json",
-      "targetSpawn": "default",
+      "targetSpawn": "from_world_01",
       "edgeAxis": "vertical",
       "targetBaseX": -140,
-      "targetBaseY": -500
+      "targetBaseY": 300
     },
     {
       "name": "to_world_03",
-      "x": -200,
-      "y": 650,
-      "width": 3600,
-      "height": 50,
+      "x": 1670,
+      "y": 680,
+      "width": 180,
+      "height": 20,
       "targetMap": "maps/world_03.json",
       "targetSpawn": "default",
       "edgeAxis": "horizontal",
-      "targetBaseX": -200,
+      "targetBaseX": 1670,
       "targetBaseY": -440
     }
   ],
   "abilityPickups": [
-    {
-      "id": "pickup_01",
-      "ability": "WallSlide",
-      "x": 3070,
-      "y": 590,
-      "width": 30,
-      "height": 30
-    },
     {
       "id": "pickup_02",
       "ability": "Dash",

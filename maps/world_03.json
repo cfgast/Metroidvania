@@ -1,5 +1,5 @@
 {
-  "name": "New Map",
+  "name": "Underground Cavern",
   "bounds": {
     "x": -200,
     "y": -500,
@@ -10,7 +10,6 @@
     "x": 150,
     "y": 475
   },
-  "spawnPoints": {},
   "platforms": [
     {
       "x": -200,
@@ -22,8 +21,8 @@
       "b": 80
     },
     {
-      "x": 1100,
-      "y": -500,
+      "x": 1649.0352,
+      "y": -496.75385,
       "width": 30,
       "height": 920,
       "r": 120,
@@ -31,8 +30,8 @@
       "b": 40
     },
     {
-      "x": 1370,
-      "y": -500,
+      "x": 1864.8242,
+      "y": -499.03516,
       "width": 30,
       "height": 930,
       "r": 120,
@@ -40,17 +39,27 @@
       "b": 40
     }
   ],
+  "abilityPickups": [
+    {
+      "id": "pickup_01",
+      "ability": "WallSlide",
+      "x": 2534.6,
+      "y": 453.8,
+      "width": 30,
+      "height": 30
+    }
+  ],
   "transitions": [
     {
       "name": "to_world_01",
-      "x": -200,
+      "x": 1670,
       "y": -500,
-      "width": 3600,
-      "height": 50,
+      "width": 180,
+      "height": 20,
       "targetMap": "maps/world_01.json",
-      "targetSpawn": "default",
+      "targetSpawn": "from_world_03",
       "edgeAxis": "horizontal",
-      "targetBaseX": -200,
+      "targetBaseX": 1670,
       "targetBaseY": 640
     }
   ]

@@ -14,6 +14,10 @@
     "default": {
       "x": 290,
       "y": 390
+    },
+    "from_world_01": {
+      "x": -100,
+      "y": 490
     }
   },
   "platforms": [
@@ -79,6 +83,24 @@
       "r": 100,
       "g": 60,
       "b": 60
+    },
+    {
+      "x": -197.0039,
+      "y": 267.9967,
+      "width": 94.40283,
+      "height": 22.995544,
+      "r": 120,
+      "g": 80,
+      "b": 40
+    },
+    {
+      "x": -34.824707,
+      "y": 387.81555,
+      "width": 117.39795,
+      "height": 22.995483,
+      "r": 120,
+      "g": 80,
+      "b": 40
     }
   ],
   "enemies": [
@@ -100,20 +122,6 @@
       "height": 40
     }
   ],
-  "transitions": [
-    {
-      "name": "to_world_01",
-      "x": -200,
-      "y": -500,
-      "width": 50,
-      "height": 1200,
-      "targetMap": "maps/world_01.json",
-      "targetSpawn": "default",
-      "edgeAxis": "vertical",
-      "targetBaseX": 3340,
-      "targetBaseY": -500
-    }
-  ],
   "abilityPickups": [
     {
       "id": "double_jump_01",
@@ -122,6 +130,20 @@
       "y": 215,
       "width": 30,
       "height": 30
+    }
+  ],
+  "transitions": [
+    {
+      "name": "to_world_01",
+      "x": -200,
+      "y": 300,
+      "width": 50,
+      "height": 240,
+      "targetMap": "maps/world_01.json",
+      "targetSpawn": "from_world_02",
+      "edgeAxis": "vertical",
+      "targetBaseX": 3340,
+      "targetBaseY": -20
     }
   ]
 }
