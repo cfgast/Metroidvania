@@ -80,7 +80,7 @@ Enemies replace `CombatComponent` with `EnemyAIComponent` (+ optional `SlimeAtta
 |---|---|
 | `Platform.h` | Data struct: `Rect bounds`, `Color color`. |
 | `EnemyDefinition.h` | Data struct: position, waypoints, speed, damage, HP, size. |
-| `TransitionZone.h` | Data struct: trigger bounds, target map path, target spawn name. |
+| `TransitionZone.h` | Data struct: trigger bounds, target map path, target spawn name, relative-positioning fields (`edgeAxis`, `targetBaseX`, `targetBaseY`). |
 | `AbilityPickupDefinition.h` | Data struct: id, ability enum, position, size. |
 | `Map.h/.cpp` | Aggregates all level data. Provides AABB checks for transitions and pickups. `registerPhysXStatics()` creates `PxRigidStatic` actors for platforms. |
 | `MapLoader.h/.cpp` | Static `loadFromFile()` → parses JSON via nlohmann/json → returns `Map`. |
@@ -95,7 +95,11 @@ Enemies replace `CombatComponent` with `EnemyAIComponent` (+ optional `SlimeAtta
   "spawnPoints": { "<name>": { "x", "y" } },
   "platforms": [{ "x","y","width","height","r","g","b" }],
   "enemies": [{ "x","y","waypointA","waypointB","speed","damage","hp","width","height" }],
-  "transitions": [{ "x","y","width","height","targetMap","targetSpawn" }],
+  "transitions": [{ "x","y","width","height","targetMap","targetSpawn",
+                    "edgeAxis","targetBaseX","targetBaseY" }],
+  // edgeAxis: "vertical" (left/right adjacency) or "horizontal" (top/bottom).
+  //   Empty/missing = legacy mode (uses targetSpawn).
+  // targetBaseX/Y: origin in target map for relative player positioning.
   "abilityPickups": [{ "id","ability","x","y","width","height" }]
 }
 ```
@@ -140,8 +144,7 @@ The `EditorTool.MoveMap` tool allows repositioning maps in world space. Activate
 
 `TransitionGenerator` is a static class that detects edge adjacency between maps and auto-generates transition zones and spawn points. `RegenerateTransitions(List<EditorMap>)` clears all existing transitions and auto-generated spawn points (those prefixed `from_`), then checks all map pairs for shared edges. A shared edge occurs when one map's boundary exactly touches another's (within 0.5 units) and their perpendicular ranges overlap. For each adjacency, it creates:
 
-- **Transition zones**: 50-unit deep rectangles extending inward from the shared edge in both maps, spanning the overlap length. Named `to_<target_map>` with `targetSpawn` set to `from_<source_map>`.
-- **Spawn points**: Positioned 60 units inward from the edge at the midpoint of the overlap, named `from_<neighbor_map>`.
+- **Transition zones**: 50-unit deep rectangles extending inward from the shared edge in both maps, spanning the overlap length. Named `to_<target_map>` with `targetSpawn` set to `"default"` (fallback). Each zone includes `edgeAxis` (`"vertical"` for left/right, `"horizontal"` for top/bottom), `targetBaseX`, and `targetBaseY` for relative player positioning. Auto-transitions no longer generate `from_*` spawn points; existing ones are cleaned up on regeneration.
 
 Regeneration is triggered automatically on: MoveMap mouse-up, bounds change (Apply in properties panel), world load, and before every save (both single-map and world saves).
 

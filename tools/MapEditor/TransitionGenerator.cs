@@ -126,6 +126,7 @@ public static class TransitionGenerator
         string rightKey = MapKey(rightMap);
 
         // Transition zone in leftMap along its right edge (extends inward)
+        // Shared edge is vertical (left/right adjacency)
         leftMap.Map.Transitions.Add(new TransitionData
         {
             Name        = $"to_{rightKey}",
@@ -134,7 +135,10 @@ public static class TransitionGenerator
             Width       = TransitionDepth,
             Height      = overlapHeight,
             TargetMap   = rightMap.FilePath,
-            TargetSpawn = $"from_{leftKey}"
+            TargetSpawn = "default",
+            EdgeAxis    = "vertical",
+            TargetBaseX = worldEdgeX + SpawnOffset - rightMap.WorldX,
+            TargetBaseY = overlapTop - rightMap.WorldY
         });
 
         // Transition zone in rightMap along its left edge (extends inward)
@@ -146,23 +150,11 @@ public static class TransitionGenerator
             Width       = TransitionDepth,
             Height      = overlapHeight,
             TargetMap   = leftMap.FilePath,
-            TargetSpawn = $"from_{rightKey}"
+            TargetSpawn = "default",
+            EdgeAxis    = "vertical",
+            TargetBaseX = worldEdgeX - SpawnOffset - leftMap.WorldX,
+            TargetBaseY = overlapTop - leftMap.WorldY
         });
-
-        // Spawn point in leftMap: 60 units inward from the right edge
-        float midY = overlapTop + overlapHeight / 2f;
-        leftMap.Map.SpawnPoints[$"from_{rightKey}"] = new PointData
-        {
-            X = worldEdgeX - SpawnOffset - leftMap.WorldX,
-            Y = midY - leftMap.WorldY
-        };
-
-        // Spawn point in rightMap: 60 units inward from the left edge
-        rightMap.Map.SpawnPoints[$"from_{leftKey}"] = new PointData
-        {
-            X = worldEdgeX + SpawnOffset - rightMap.WorldX,
-            Y = midY - rightMap.WorldY
-        };
     }
 
     /// <summary>
@@ -178,6 +170,7 @@ public static class TransitionGenerator
         string bottomKey = MapKey(bottomMap);
 
         // Transition zone in topMap along its bottom edge (extends inward/upward)
+        // Shared edge is horizontal (top/bottom adjacency)
         topMap.Map.Transitions.Add(new TransitionData
         {
             Name        = $"to_{bottomKey}",
@@ -186,7 +179,10 @@ public static class TransitionGenerator
             Width       = overlapWidth,
             Height      = TransitionDepth,
             TargetMap   = bottomMap.FilePath,
-            TargetSpawn = $"from_{topKey}"
+            TargetSpawn = "default",
+            EdgeAxis    = "horizontal",
+            TargetBaseX = overlapLeft - bottomMap.WorldX,
+            TargetBaseY = worldEdgeY + SpawnOffset - bottomMap.WorldY
         });
 
         // Transition zone in bottomMap along its top edge (extends inward/downward)
@@ -198,22 +194,10 @@ public static class TransitionGenerator
             Width       = overlapWidth,
             Height      = TransitionDepth,
             TargetMap   = topMap.FilePath,
-            TargetSpawn = $"from_{bottomKey}"
+            TargetSpawn = "default",
+            EdgeAxis    = "horizontal",
+            TargetBaseX = overlapLeft - topMap.WorldX,
+            TargetBaseY = worldEdgeY - SpawnOffset - topMap.WorldY
         });
-
-        // Spawn point in topMap: 60 units inward from the bottom edge
-        float midX = overlapLeft + overlapWidth / 2f;
-        topMap.Map.SpawnPoints[$"from_{bottomKey}"] = new PointData
-        {
-            X = midX - topMap.WorldX,
-            Y = worldEdgeY - SpawnOffset - topMap.WorldY
-        };
-
-        // Spawn point in bottomMap: 60 units inward from the top edge
-        bottomMap.Map.SpawnPoints[$"from_{topKey}"] = new PointData
-        {
-            X = midX - bottomMap.WorldX,
-            Y = worldEdgeY + SpawnOffset - bottomMap.WorldY
-        };
     }
 }

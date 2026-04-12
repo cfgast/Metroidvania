@@ -844,3 +844,19 @@ Details:
     - Ctrl+Shift+N/O/S: World New/Open/Save
     - All existing shortcuts remain for single-map editing
 ==============================================================================
+==============================================================================
+Task: Add relative positioning fields to TransitionZone and update serialization in both C++ and C# codebases.
+Implemented: true
+
+Details:
+- C++ changes (src/Map/TransitionZone.h):
+    Added edgeAxis, targetBaseX, targetBaseY fields to TransitionZone struct.
+- C++ changes (src/Map/MapLoader.cpp):
+    Updated transition loading to read the new fields with defaults.
+- C# changes (tools/MapEditor/Models.cs):
+    Added EdgeAxis, TargetBaseX, TargetBaseY properties to TransitionData.
+- C# changes (tools/MapEditor/TransitionGenerator.cs):
+    Updated GenerateHorizontal/GenerateVertical to set edgeAxis and targetBase
+    fields. Removed from_* spawn point generation (cleanup code remains).
+    Set targetSpawn to "default" as fallback.
+==============================================================================

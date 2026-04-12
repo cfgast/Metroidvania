@@ -111,6 +111,9 @@ Map MapLoader::loadFromFile(const std::string& filePath)
             };
             zone.targetMap   = t.at("targetMap").get<std::string>();
             zone.targetSpawn = t.value("targetSpawn", "default");
+            zone.edgeAxis    = t.value("edgeAxis", "");
+            zone.targetBaseX = t.value("targetBaseX", 0.0f);
+            zone.targetBaseY = t.value("targetBaseY", 0.0f);
             map.addTransitionZone(zone);
         }
     }

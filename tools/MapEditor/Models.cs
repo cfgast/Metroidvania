@@ -77,6 +77,9 @@ public class TransitionData
     [JsonPropertyName("height")]      public float  Height      { get; set; }
     [JsonPropertyName("targetMap")]   public string TargetMap   { get; set; } = "";
     [JsonPropertyName("targetSpawn")] public string TargetSpawn { get; set; } = "default";
+    [JsonPropertyName("edgeAxis")]    public string EdgeAxis    { get; set; } = "";
+    [JsonPropertyName("targetBaseX")] public float  TargetBaseX { get; set; }
+    [JsonPropertyName("targetBaseY")] public float  TargetBaseY { get; set; }
 }
 
 public class AbilityPickupData
