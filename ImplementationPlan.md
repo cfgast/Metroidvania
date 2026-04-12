@@ -76,27 +76,6 @@ The project should still compile and run with the OpenGL backend after this
 task. No rendering code changes — build system only.
 
 ==============================================================================
-Task 6: Create flat-color graphics pipeline
-==============================================================================
-Implemented: false
-
-Create a VkPipelineLayout with:
-- Push constant range for projection matrix (mat4), model matrix (mat4),
-  and color (vec4) — 144 bytes total
-
-Create a VkPipeline (graphics) for flat-color rendering:
-- Vertex input: single vec2 attribute (position) at location 0
-- Input assembly: VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST
-- Viewport and scissor: dynamic state (VK_DYNAMIC_STATE_VIEWPORT,
-  VK_DYNAMIC_STATE_SCISSOR)
-- Rasterizer: polygon fill, no culling (2D sprites face camera)
-- Color blending: src-alpha / one-minus-src-alpha (matching GL setup)
-- Dynamic rendering: specify color attachment format matching swap chain
-- Load flat.vert.spv and flat.frag.spv as shader stages
-
-Create a helper to load .spv files from disk and create VkShaderModules.
-
-==============================================================================
 Task 7: Vertex buffer infrastructure with VMA
 ==============================================================================
 Implemented: false

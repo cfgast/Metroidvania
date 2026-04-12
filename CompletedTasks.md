@@ -1364,3 +1364,24 @@ Convert from GLSL 330 (OpenGL) to GLSL 450 (Vulkan):
 Add CMake rules using the function from Task 1 to compile each .glsl to
 .spv at build time. Add a post-build step to copy .spv files to the output
 directory alongside assets/shaders/.
+
+==============================================================================
+Task 6: Create flat-color graphics pipeline
+==============================================================================
+Implemented: true
+
+Create a VkPipelineLayout with:
+- Push constant range for projection matrix (mat4), model matrix (mat4),
+  and color (vec4) — 144 bytes total
+
+Create a VkPipeline (graphics) for flat-color rendering:
+- Vertex input: single vec2 attribute (position) at location 0
+- Input assembly: VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST
+- Viewport and scissor: dynamic state (VK_DYNAMIC_STATE_VIEWPORT,
+  VK_DYNAMIC_STATE_SCISSOR)
+- Rasterizer: polygon fill, no culling (2D sprites face camera)
+- Color blending: src-alpha / one-minus-src-alpha (matching GL setup)
+- Dynamic rendering: specify color attachment format matching swap chain
+- Load flat.vert.spv and flat.frag.spv as shader stages
+
+Create a helper to load .spv files from disk and create VkShaderModules.

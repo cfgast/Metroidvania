@@ -109,6 +109,11 @@ private:
     void transitionImageLayout(VkCommandBuffer cmd, VkImage image,
                                VkImageLayout oldLayout, VkImageLayout newLayout);
 
+    // ── Pipeline helpers ──────────────────────────────────────────────
+    static std::vector<char> readSPVFile(const std::string& path);
+    VkShaderModule createShaderModule(const std::vector<char>& code);
+    void createFlatPipeline();
+
     // ── GLFW ──────────────────────────────────────────────────────────
     GLFWwindow* m_window = nullptr;
     float       m_windowW = 0.f;
@@ -148,4 +153,9 @@ private:
 
     // ── Clear color ───────────────────────────────────────────────────
     VkClearColorValue m_clearColor = {{0.0f, 0.0f, 0.0f, 1.0f}};
+
+    // ── Flat-color pipeline ───────────────────────────────────────────
+    VkDescriptorSetLayout m_flatDescriptorSetLayout = VK_NULL_HANDLE;
+    VkPipelineLayout      m_flatPipelineLayout      = VK_NULL_HANDLE;
+    VkPipeline            m_flatPipeline            = VK_NULL_HANDLE;
 };
