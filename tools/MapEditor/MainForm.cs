@@ -61,7 +61,7 @@ public sealed class MainForm : Form
     private ComboBox _cboPickupAbility = null!;
 
     // ── Toolbar buttons ───────────────────────────────────────────────────────
-    private ToolStripButton _btnSelect = null!, _btnDraw = null!, _btnDrawEnemy = null!, _btnDrawTransition = null!, _btnDrawPickup = null!, _btnDrawSpawn = null!, _btnSnap = null!, _btnNeighbors = null!;
+    private ToolStripButton _btnSelect = null!, _btnDraw = null!, _btnDrawEnemy = null!, _btnDrawTransition = null!, _btnDrawPickup = null!, _btnDrawSpawn = null!, _btnSnap = null!;
 
     // ── Status bar labels ─────────────────────────────────────────────────────
     private ToolStripStatusLabel _lblInfo  = null!;
@@ -142,9 +142,6 @@ public sealed class MainForm : Form
         view.DropDownItems.Add("Zoom Out\t-",           null, (_, _) => _canvas.SetZoom(_canvas.Zoom / 1.25f));
         view.DropDownItems.Add(new ToolStripSeparator());
         view.DropDownItems.Add("Toggle Grid &Snap\tG",  null, (_, _) => ToggleSnap());
-        view.DropDownItems.Add(new ToolStripSeparator());
-        view.DropDownItems.Add("Load &Neighbor Maps\tN", null, (_, _) => LoadNeighborMaps());
-        view.DropDownItems.Add("&Hide Neighbor Maps",    null, (_, _) => ToggleNeighborMaps());
 
         menu.Items.AddRange(new ToolStripItem[] { file, edit, view });
         return menu;
@@ -161,7 +158,6 @@ public sealed class MainForm : Form
         _btnDrawPickup     = Tbtn("Draw Pickup",     "Draw new ability pickup  [P]", false);
         _btnDrawSpawn      = Tbtn("Draw Spawn",      "Draw new spawn point  [W]",   false);
         _btnSnap           = Tbtn("Snap: ON",        "Toggle grid snapping  [G]",   true);
-        _btnNeighbors      = Tbtn("Neighbors",       "Load / toggle neighbor maps  [N]", false);
 
         _btnSelect.Click         += (_, _) => SetTool(EditorTool.Select);
         _btnDraw.Click           += (_, _) => SetTool(EditorTool.Draw);
@@ -170,7 +166,6 @@ public sealed class MainForm : Form
         _btnDrawPickup.Click     += (_, _) => SetTool(EditorTool.DrawPickup);
         _btnDrawSpawn.Click      += (_, _) => SetTool(EditorTool.DrawSpawnPoint);
         _btnSnap.Click           += (_, _) => ToggleSnap();
-        _btnNeighbors.Click      += (_, _) => ToggleOrLoadNeighbors();
 
         var btnDel = new ToolStripButton("Delete") { ToolTipText = "Delete selected  [Del]" };
         btnDel.Click += (_, _) => _canvas.DeleteSelected();
@@ -189,9 +184,7 @@ public sealed class MainForm : Form
             new ToolStripSeparator(),
             btnFit, btn100,
             new ToolStripSeparator(),
-            _btnSnap,
-            new ToolStripSeparator(),
-            _btnNeighbors
+            _btnSnap
         });
         return bar;
 
@@ -528,8 +521,6 @@ public sealed class MainForm : Form
         };
         _filePath = null;
         _isDirty  = false;
-        _canvas.ClearBackgroundMaps();
-        _btnNeighbors.Checked = false;
         _canvas.LoadMap(map);
         SyncMapFields(map);
         UpdateTitle();
@@ -554,9 +545,15 @@ public sealed class MainForm : Form
                        ?? throw new InvalidDataException("Failed to parse map file.");
             _filePath = dlg.FileName;
             _isDirty  = false;
-            _canvas.ClearBackgroundMaps();
-            _btnNeighbors.Checked = false;
-            _canvas.LoadMap(map);
+
+            var editorMap = new EditorMap
+            {
+                Map      = map,
+                WorldX   = 0,
+                WorldY   = 0,
+                FilePath = dlg.FileName
+            };
+            _canvas.LoadWorld(new List<EditorMap> { editorMap });
             SyncMapFields(map);
 
             // Auto-create a single-map world
@@ -602,10 +599,16 @@ public sealed class MainForm : Form
     private void WriteFile(string path)
     {
         if (_canvas.Map == null) return;
+        WriteFileForMap(path, _canvas.Map);
+        _isDirty = false;
+        UpdateTitle();
+        SetStatus($"Saved: {Path.GetFileName(path)}");
+    }
+
+    private void WriteFileForMap(string path, MapData map)
+    {
         try
         {
-            var map = _canvas.Map;
-
             // Temporarily null-out empty collections so they are omitted from JSON
             var savedSpawnPts = map.SpawnPoints;
             var savedEnemies  = map.Enemies;
@@ -629,10 +632,6 @@ public sealed class MainForm : Form
             map.Enemies        = savedEnemies;
             map.Transitions    = savedTrans;
             map.AbilityPickups = savedPickups;
-
-            _isDirty = false;
-            UpdateTitle();
-            SetStatus($"Saved: {Path.GetFileName(path)}");
         }
         catch (Exception ex)
         {
@@ -675,8 +674,6 @@ public sealed class MainForm : Form
                 new() { X = -200, Y = 500, Width = 3600, Height = 40, R = 80, G = 80, B = 80 }
             }
         };
-        _canvas.ClearBackgroundMaps();
-        _btnNeighbors.Checked = false;
         _canvas.LoadMap(map);
         SyncMapFields(map);
         UpdateTitle();
@@ -707,9 +704,7 @@ public sealed class MainForm : Form
 
             string worldDir = Path.GetDirectoryName(worldPath) ?? "";
 
-            // Load the first map as the active map
-            MapData? firstMap = null;
-            string?  firstMapPath = null;
+            var editorMaps = new List<EditorMap>();
 
             foreach (var entry in world.Maps)
             {
@@ -729,27 +724,27 @@ public sealed class MainForm : Form
                 var map = JsonSerializer.Deserialize<MapData>(mapJson, opts);
                 if (map == null) continue;
 
-                if (firstMap == null)
+                editorMaps.Add(new EditorMap
                 {
-                    firstMap     = map;
-                    firstMapPath = mapPath;
-                }
+                    Map      = map,
+                    WorldX   = entry.X,
+                    WorldY   = entry.Y,
+                    FilePath = mapPath
+                });
             }
 
-            if (firstMap == null)
+            if (editorMaps.Count == 0)
                 throw new InvalidDataException("No valid maps found in world file.");
 
             _worldData     = world;
             _worldFilePath = worldPath;
-            _filePath      = firstMapPath;
+            _filePath      = editorMaps[0].FilePath;
             _isDirty       = false;
 
-            _canvas.ClearBackgroundMaps();
-            _btnNeighbors.Checked = false;
-            _canvas.LoadMap(firstMap);
-            SyncMapFields(firstMap);
+            _canvas.LoadWorld(editorMaps);
+            SyncMapFields(editorMaps[0].Map);
             UpdateTitle();
-            SetStatus($"Opened world: {Path.GetFileName(worldPath)} ({world.Maps.Count} map(s))");
+            SetStatus($"Opened world: {Path.GetFileName(worldPath)} ({editorMaps.Count} map(s))");
         }
         catch (Exception ex)
         {
@@ -789,25 +784,20 @@ public sealed class MainForm : Form
         {
             string worldDir = Path.GetDirectoryName(worldPath) ?? "";
 
-            // Save each referenced map file
-            var opts = new JsonSerializerOptions
+            // Save each map file from the canvas EditorMaps
+            foreach (var em in _canvas.EditorMaps)
             {
-                WriteIndented = true,
-                DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull
-            };
-
-            // Save the currently active map if it has a path
-            if (_filePath != null)
-            {
-                WriteFile(_filePath);
+                if (!string.IsNullOrEmpty(em.FilePath))
+                {
+                    WriteFileForMap(em.FilePath, em.Map);
+                }
             }
 
             // Write the world file with paths relative to the world file's directory
             var worldToSave = new WorldData();
-            foreach (var entry in _worldData.Maps)
+            foreach (var em in _canvas.EditorMaps)
             {
-                string relativePath = entry.Path;
-                // Ensure paths are relative to world directory
+                string relativePath = em.FilePath;
                 if (Path.IsPathRooted(relativePath) && !string.IsNullOrEmpty(worldDir))
                 {
                     relativePath = Path.GetRelativePath(worldDir, relativePath);
@@ -815,11 +805,16 @@ public sealed class MainForm : Form
                 worldToSave.Maps.Add(new WorldMapEntry
                 {
                     Path = relativePath.Replace('\\', '/'),
-                    X    = entry.X,
-                    Y    = entry.Y
+                    X    = em.WorldX,
+                    Y    = em.WorldY
                 });
             }
 
+            var opts = new JsonSerializerOptions
+            {
+                WriteIndented = true,
+                DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull
+            };
             var worldJson = JsonSerializer.Serialize(worldToSave, opts);
             File.WriteAllText(worldPath, worldJson);
 
@@ -1337,126 +1332,9 @@ public sealed class MainForm : Form
             case Keys.W: SetTool(EditorTool.DrawSpawnPoint); e.Handled = true; break;
             case Keys.F: _canvas.FitToView();         e.Handled = true; break;
             case Keys.G: ToggleSnap();                e.Handled = true; break;
-            case Keys.N: ToggleOrLoadNeighbors();     e.Handled = true; break;
             case Keys.D1: _canvas.SetZoom(1f);        e.Handled = true; break;
             case Keys.OemMinus: _canvas.SetZoom(_canvas.Zoom / 1.25f); e.Handled = true; break;
             case Keys.Oemplus:  _canvas.SetZoom(_canvas.Zoom * 1.25f); e.Handled = true; break;
-        }
-    }
-
-    // ── Neighbor maps ─────────────────────────────────────────────────────────
-    private void ToggleOrLoadNeighbors()
-    {
-        // If neighbors are loaded, toggle visibility; otherwise load them
-        if (_canvas.BackgroundMapCount > 0)
-            ToggleNeighborMaps();
-        else
-            LoadNeighborMaps();
-    }
-
-    private void ToggleNeighborMaps()
-    {
-        _canvas.ShowBackgroundMaps = !_canvas.ShowBackgroundMaps;
-        _btnNeighbors.Checked = _canvas.ShowBackgroundMaps;
-        SetStatus(_canvas.ShowBackgroundMaps ? "Neighbor maps visible." : "Neighbor maps hidden.");
-    }
-
-    private void LoadNeighborMaps()
-    {
-        var map = _canvas.Map;
-        if (map == null) { Warn("No map is loaded."); return; }
-        if (_filePath == null) { Warn("Save the current map first so neighbor paths can be resolved."); return; }
-        if (map.Transitions == null || map.Transitions.Count == 0)
-        {
-            SetStatus("No transitions — no neighbors to load.");
-            return;
-        }
-
-        string activeDir  = Path.GetDirectoryName(_filePath) ?? "";
-        string activeFile = Path.GetFileName(_filePath);
-        var bgMaps = new List<BackgroundMap>();
-        var loaded = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-
-        foreach (var activeTrans in map.Transitions)
-        {
-            if (string.IsNullOrWhiteSpace(activeTrans.TargetMap)) continue;
-
-            // Resolve the target file path
-            string targetFile = Path.GetFileName(activeTrans.TargetMap);
-            if (loaded.Contains(targetFile)) continue;
-
-            string targetPath = Path.Combine(activeDir, targetFile);
-            if (!File.Exists(targetPath))
-            {
-                // Try the maps/ directory
-                string mapsDir = MapsDir();
-                targetPath = Path.Combine(mapsDir, targetFile);
-            }
-            if (!File.Exists(targetPath)) continue;
-
-            try
-            {
-                var json = File.ReadAllText(targetPath);
-                var opts = new JsonSerializerOptions { PropertyNameCaseInsensitive = true };
-                var neighborMap = JsonSerializer.Deserialize<MapData>(json, opts);
-                if (neighborMap == null) continue;
-
-                // Find a back-transition from the neighbor that points to the active map
-                TransitionData? backTrans = null;
-                if (neighborMap.Transitions != null)
-                {
-                    foreach (var nt in neighborMap.Transitions)
-                    {
-                        if (string.IsNullOrWhiteSpace(nt.TargetMap)) continue;
-                        string ntTarget = Path.GetFileName(nt.TargetMap);
-                        if (string.Equals(ntTarget, activeFile, StringComparison.OrdinalIgnoreCase))
-                        {
-                            backTrans = nt;
-                            break;
-                        }
-                    }
-                }
-
-                // Compute offset so the matching transitions overlap
-                float offsetX, offsetY;
-                if (backTrans != null)
-                {
-                    offsetX = activeTrans.X - backTrans.X;
-                    offsetY = activeTrans.Y - backTrans.Y;
-                }
-                else
-                {
-                    // No back-transition found — place neighbor adjacent to the
-                    // active transition, guessing direction from transition position
-                    // relative to active map bounds
-                    offsetX = activeTrans.X - neighborMap.Bounds.X;
-                    offsetY = activeTrans.Y - neighborMap.Bounds.Y;
-                }
-
-                bgMaps.Add(new BackgroundMap
-                {
-                    Map      = neighborMap,
-                    OffsetX  = offsetX,
-                    OffsetY  = offsetY,
-                    FilePath = targetPath
-                });
-                loaded.Add(targetFile);
-            }
-            catch { /* skip maps that can't be parsed */ }
-        }
-
-        _canvas.SetBackgroundMaps(bgMaps);
-        _canvas.ShowBackgroundMaps = true;
-        _btnNeighbors.Checked = true;
-
-        if (bgMaps.Count > 0)
-        {
-            _canvas.FitToView();
-            SetStatus($"Loaded {bgMaps.Count} neighbor map(s).");
-        }
-        else
-        {
-            SetStatus("No neighbor maps found.");
         }
     }
 

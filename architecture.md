@@ -111,7 +111,20 @@ Enemies replace `CombatComponent` with `EnemyAIComponent` (+ optional `SlimeAtta
 }
 ```
 
-World files use the `.world.json` extension and reference individual map files by relative path. Each map entry includes a global X/Y offset in world space. The editor models (`WorldData`, `WorldMapEntry`) are defined in `Models.cs`. `MainForm.cs` provides File menu items for New/Open/Save World (with Ctrl+Shift+N/O/S shortcuts) and world file I/O (`LoadWorldFile`, `WriteWorldFile`). Opening a single map file auto-creates a one-entry world.
+World files use the `.world.json` extension and reference individual map files by relative path. Each map entry includes a global X/Y offset in world space. The editor models (`WorldData`, `WorldMapEntry`, `EditorMap`) are defined in `Models.cs`. `MainForm.cs` provides File menu items for New/Open/Save World (with Ctrl+Shift+N/O/S shortcuts) and world file I/O (`LoadWorldFile`, `WriteWorldFile`). Opening a single map file auto-creates a one-entry world.
+
+### Multi-Map Document Model
+
+`MapCanvas` uses a multi-map document model via `List<EditorMap>`:
+
+| Class | Role |
+|---|---|
+| `EditorMap` | Wraps a `MapData` with world-space offset (`WorldX`, `WorldY`), file path, and dirty flag. |
+| `MapCanvas.EditorMaps` | The list of all maps currently loaded in the editor. |
+| `MapCanvas.ActiveMap` | The currently focused `EditorMap`; editing tools operate only on this map's data. |
+| `MapCanvas.Map` | Convenience property returning `ActiveMap?.Map` for backward compatibility. |
+
+`LoadWorld(List<EditorMap>)` replaces the old `LoadMap()` entry point. A single-map `LoadMap(MapData)` overload still works by wrapping the map in a one-entry list. Inactive maps render dimmed with dotted borders; the active map renders at full opacity with a cyan highlighted border. `FitToView()` computes the bounding box of all loaded maps.
 
 ---
 

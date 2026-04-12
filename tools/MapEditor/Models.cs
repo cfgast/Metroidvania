@@ -90,15 +90,16 @@ public class AbilityPickupData
 }
 
 /// <summary>
-/// A neighboring map loaded as a read-only background overlay, positioned
-/// relative to the active map by matching transition pairs.
+/// Wraps a single map in the multi-map document model, tracking its global
+/// world-space position, file path, and dirty state.
 /// </summary>
-public class BackgroundMap
+public class EditorMap
 {
     public MapData Map      { get; set; } = null!;
-    public float   OffsetX  { get; set; }
-    public float   OffsetY  { get; set; }
+    public float   WorldX   { get; set; }
+    public float   WorldY   { get; set; }
     public string  FilePath { get; set; } = "";
+    public bool    IsDirty  { get; set; }
 }
 
 /// <summary>

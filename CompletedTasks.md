@@ -619,3 +619,27 @@ Details:
 - Updated title bar to show world file name when applicable
 - Updated architecture.md with world JSON schema documentation
 ==============================================================================
+==============================================================================
+Task: Refactor MapCanvas to support a multi-map document model.
+Implemented: true
+
+Details:
+- Added EditorMap class to Models.cs wrapping MapData with WorldX, WorldY,
+  FilePath, and IsDirty properties
+- Replaced BackgroundMap class with EditorMap (BackgroundMap removed)
+- Refactored MapCanvas to hold List<EditorMap> and ActiveMap instead of a
+  single MapData and separate BackgroundMap list
+- Added LoadWorld(List<EditorMap>) method; LoadMap(MapData) convenience
+  overload wraps into a single-entry EditorMap list
+- Updated OnPaint to render ALL EditorMaps: inactive maps dimmed with dotted
+  borders, active map at full opacity with cyan 2px highlighted border
+- Render order: inactive maps first (back), active map last (front)
+- All editing tools (select, draw, resize) continue to operate only on
+  ActiveMap's data
+- FitToView() computes bounding box of ALL loaded maps using world offsets
+- Single-map workflow preserved: opening a single map creates a one-entry list
+- Updated MainForm: LoadWorldFile now loads all maps as EditorMaps,
+  WriteWorldFile saves all maps from EditorMaps, removed neighbor map
+  toggle/load features (superseded by multi-map model)
+- Updated architecture.md with multi-map document model documentation
+==============================================================================

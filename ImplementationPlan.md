@@ -39,48 +39,6 @@ Key design decisions:
 The tasks are ordered so the editor builds and runs after every task.
 
 ==============================================================================
-Task: Refactor MapCanvas to support a multi-map document model.
-Implemented: false
-
-Details:
-- In Models.cs (or a new EditorTypes.cs), add an EditorMap class:
-    - Map (MapData): the parsed map data
-    - WorldX, WorldY (float): global offset in world space
-    - FilePath (string): path to the map JSON file
-    - IsDirty (bool): whether this map has unsaved changes
-
-- Refactor MapCanvas to hold a List<EditorMap> instead of a single MapData:
-    - Add property: List<EditorMap> EditorMaps
-    - Add property: EditorMap ActiveMap (the currently focused map)
-    - Remove the old single-map BackgroundMap list
-
-- Refactor LoadMap() to work with EditorMap:
-    - New method: LoadWorld(List<EditorMap> maps) — replaces LoadMap()
-    - Sets ActiveMap to the first map, calls FitToView()
-
-- Update all coordinate conversions (S2W, W2S, WR2S) to account for
-  the active map's world offset when doing hit-testing and editing.
-  Map-local coordinates = world coordinates - map's (WorldX, WorldY).
-
-- Update OnPaint rendering:
-    - Render ALL EditorMaps (not just the active one)
-    - Active map: full opacity, highlighted border (e.g., cyan 2px)
-    - Inactive maps: dimmed (alpha ~80), no highlight
-    - Each map renders: bounds, platforms, enemies, transitions, pickups,
-      spawns, and a name label
-    - Render order: inactive maps first (back), active map last (front)
-
-- All existing editing tools (select, draw, resize, etc.) continue to
-  operate only on the ActiveMap's data. Hit-testing for editing only
-  checks ActiveMap's elements.
-
-- FitToView() should compute the bounding box of ALL loaded maps
-  (using their world offsets + bounds) and zoom to fit everything.
-
-- Existing single-map workflow still works: opening a single map
-  creates a List<EditorMap> with one entry.
-
-==============================================================================
 Task: Implement map focus/activation by clicking.
 Implemented: false
 

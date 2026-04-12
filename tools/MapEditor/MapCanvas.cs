@@ -19,7 +19,12 @@ public sealed class MapCanvas : Control
     private float _panY = 0f;   // world Y of the canvas top  edge
 
     // ── Data ──────────────────────────────────────────────────────────────────
-    public MapData? Map { get; private set; }
+    private List<EditorMap> _editorMaps = new();
+    private EditorMap? _activeMap;
+
+    public List<EditorMap> EditorMaps => _editorMaps;
+    public EditorMap? ActiveMap => _activeMap;
+    public MapData? Map => _activeMap?.Map;
 
     // ── Selection ─────────────────────────────────────────────────────────────
     private PlatformData? _selected;
@@ -96,28 +101,58 @@ public sealed class MapCanvas : Control
     }
 
     // ── Map management ────────────────────────────────────────────────────────
+    /// <summary>
+    /// Load a set of EditorMaps into the canvas. The first map becomes active.
+    /// Replaces the old single-map LoadMap() method.
+    /// </summary>
+    public void LoadWorld(List<EditorMap> maps)
+    {
+        _editorMaps = maps;
+        _activeMap  = maps.Count > 0 ? maps[0] : null;
+        ClearSelection();
+        FitToView();
+    }
+
+    /// <summary>
+    /// Convenience overload: load a single MapData (creates a one-entry EditorMap list).
+    /// Keeps the single-map workflow working.
+    /// </summary>
     public void LoadMap(MapData map)
     {
-        Map            = map;
-        _selected      = null;
-        _selectedEnemy = null;
-        _selectedTransition = null;
-        _selectedPickup = null;
-        _selectedDefaultSpawn = false;
-        _selectedSpawnKey = null;
-        SelectionChanged?.Invoke(this, EventArgs.Empty);
-        FitToView();
+        LoadWorld(new List<EditorMap>
+        {
+            new EditorMap { Map = map, WorldX = 0, WorldY = 0 }
+        });
     }
 
     public void FitToView()
     {
-        if (Map == null || Width < 10 || Height < 10) return;
-        var b    = Map.Bounds;
-        float zx = Width  / b.Width;
-        float zy = Height / b.Height;
+        if (_editorMaps.Count == 0 || Width < 10 || Height < 10) return;
+
+        // Compute bounding box encompassing ALL loaded maps
+        float minX = float.MaxValue, minY = float.MaxValue;
+        float maxX = float.MinValue, maxY = float.MinValue;
+
+        foreach (var em in _editorMaps)
+        {
+            var b = em.Map.Bounds;
+            float bx = b.X + em.WorldX;
+            float by = b.Y + em.WorldY;
+            minX = Math.Min(minX, bx);
+            minY = Math.Min(minY, by);
+            maxX = Math.Max(maxX, bx + b.Width);
+            maxY = Math.Max(maxY, by + b.Height);
+        }
+
+        float totalW = maxX - minX;
+        float totalH = maxY - minY;
+        if (totalW < 1f || totalH < 1f) return;
+
+        float zx = Width  / totalW;
+        float zy = Height / totalH;
         _zoom = Math.Min(zx, zy) * 0.88f;
-        _panX = b.X + b.Width  / 2f - Width  / (2f * _zoom);
-        _panY = b.Y + b.Height / 2f - Height / (2f * _zoom);
+        _panX = minX + totalW / 2f - Width  / (2f * _zoom);
+        _panY = minY + totalH / 2f - Height / (2f * _zoom);
         ZoomChanged?.Invoke(this, EventArgs.Empty);
         Invalidate();
     }
@@ -150,15 +185,17 @@ public sealed class MapCanvas : Control
         g.SmoothingMode = SmoothingMode.None;
         g.Clear(BackCol);
 
-        if (Map == null) { DrawNoMap(g); return; }
+        if (_activeMap == null) { DrawNoMap(g); return; }
 
-        DrawDeathZone(g);
-        DrawBounds(g);
-        DrawGrid(g);
-        DrawPlatforms(g);
-        DrawEnemies(g);
-        DrawTransitions(g);
-        DrawPickups(g);
+        // Render inactive maps first (back), then active map last (front)
+        foreach (var em in _editorMaps)
+        {
+            if (em == _activeMap) continue;
+            DrawEditorMap(g, em, isActive: false);
+        }
+        DrawEditorMap(g, _activeMap, isActive: true);
+
+        // Active map editing overlays (drawing ghost, selection, handles)
         if (_isDrawing)       DrawGhost(g);
         if (_selected != null) { DrawSelectionOutline(g, _selected.X, _selected.Y, _selected.Width, _selected.Height); DrawSelectionHandles(g, _selected.X, _selected.Y, _selected.Width, _selected.Height); }
         if (_selectedEnemy != null) { DrawSelectionOutline(g, _selectedEnemy.X, _selectedEnemy.Y, _selectedEnemy.Width, _selectedEnemy.Height); DrawSelectionHandles(g, _selectedEnemy.X, _selectedEnemy.Y, _selectedEnemy.Width, _selectedEnemy.Height); }
@@ -166,6 +203,134 @@ public sealed class MapCanvas : Control
         if (_selectedPickup != null) { DrawSelectionOutline(g, _selectedPickup.X, _selectedPickup.Y, _selectedPickup.Width, _selectedPickup.Height); DrawSelectionHandles(g, _selectedPickup.X, _selectedPickup.Y, _selectedPickup.Width, _selectedPickup.Height); }
         DrawSpawnPoint(g);
         DrawNamedSpawnPoints(g);
+    }
+
+    /// <summary>
+    /// Renders a single EditorMap: bounds, grid, platforms, enemies, transitions,
+    /// pickups, and name label. Active maps render at full opacity with a cyan
+    /// border; inactive maps render dimmed.
+    /// </summary>
+    private void DrawEditorMap(Graphics g, EditorMap em, bool isActive)
+    {
+        var map = em.Map;
+        float ox = em.WorldX;
+        float oy = em.WorldY;
+
+        if (isActive)
+        {
+            // Full-opacity rendering for the active map
+            DrawDeathZone(g);
+            DrawBounds(g);
+            DrawGrid(g);
+            DrawPlatforms(g);
+            DrawEnemies(g);
+            DrawTransitions(g);
+            DrawPickups(g);
+        }
+        else
+        {
+            // Dimmed rendering for inactive maps
+            DrawInactiveMap(g, em);
+        }
+    }
+
+    /// <summary>
+    /// Draws an inactive (non-active) map with dimmed alpha and no highlight.
+    /// </summary>
+    private void DrawInactiveMap(Graphics g, EditorMap em)
+    {
+        var map = em.Map;
+        float ox = em.WorldX;
+        float oy = em.WorldY;
+
+        const int dimAlpha = 55;
+        var boundsFill   = Color.FromArgb(dimAlpha, 40, 40, 48);
+        var boundsBorder = Color.FromArgb(80, 60, 60, 140);
+        var platFill     = Color.FromArgb(dimAlpha, 80, 80, 80);
+        var platEdge     = Color.FromArgb(30, 0, 0, 0);
+        var enemyFill    = Color.FromArgb(dimAlpha, 200, 80, 60);
+        var transFill    = Color.FromArgb(30, 100, 100, 220);
+        var transBorder  = Color.FromArgb(60, 100, 100, 220);
+        var pickupFill   = Color.FromArgb(dimAlpha, 200, 200, 50);
+        var labelColor   = Color.FromArgb(100, 180, 180, 200);
+        var spawnColor   = Color.FromArgb(dimAlpha, 50, 205, 50);
+
+        using var boundsFillBr  = new SolidBrush(boundsFill);
+        using var boundsPen     = new Pen(boundsBorder, 1f) { DashStyle = DashStyle.Dot };
+        using var platFillBr    = new SolidBrush(platFill);
+        using var platEdgePen   = new Pen(platEdge, 1f);
+        using var enemyFillBr   = new SolidBrush(enemyFill);
+        using var transFillBr   = new SolidBrush(transFill);
+        using var transBorderPn = new Pen(transBorder, 1f) { DashStyle = DashStyle.Dash };
+        using var pickupFillBr  = new SolidBrush(pickupFill);
+        using var labelBr       = new SolidBrush(labelColor);
+        using var spawnBr       = new SolidBrush(spawnColor);
+        using var labelFont     = new Font("Segoe UI", 9f, FontStyle.Bold);
+
+        var b = map.Bounds;
+
+        // Bounds fill + border
+        var sr = WR2S(b.X + ox, b.Y + oy, b.Width, b.Height);
+        g.FillRectangle(boundsFillBr, sr);
+        g.DrawRectangle(boundsPen, sr.X, sr.Y, sr.Width, sr.Height);
+
+        // Map name label
+        if (_zoom > 0.06f)
+            g.DrawString(map.Name, labelFont, labelBr, sr.X + 4, sr.Y + 4);
+
+        // Platforms
+        foreach (var p in map.Platforms)
+        {
+            var pr = WR2S(p.X + ox, p.Y + oy, p.Width, p.Height);
+            g.FillRectangle(platFillBr, pr);
+            g.DrawRectangle(platEdgePen, pr.X, pr.Y, pr.Width, pr.Height);
+        }
+
+        // Enemies
+        if (map.Enemies != null)
+        {
+            foreach (var en in map.Enemies)
+            {
+                var er = WR2S(en.X + ox, en.Y + oy, en.Width, en.Height);
+                g.FillRectangle(enemyFillBr, er);
+            }
+        }
+
+        // Transitions
+        if (map.Transitions != null)
+        {
+            foreach (var tr in map.Transitions)
+            {
+                var trr = WR2S(tr.X + ox, tr.Y + oy, tr.Width, tr.Height);
+                g.FillRectangle(transFillBr, trr);
+                g.DrawRectangle(transBorderPn, trr.X, trr.Y, trr.Width, trr.Height);
+            }
+        }
+
+        // Pickups
+        if (map.AbilityPickups != null)
+        {
+            foreach (var pk in map.AbilityPickups)
+            {
+                var pkr = WR2S(pk.X + ox, pk.Y + oy, pk.Width, pk.Height);
+                g.FillRectangle(pickupFillBr, pkr);
+            }
+        }
+
+        // Spawn point
+        var sp = map.SpawnPoint;
+        var ss = W2S(sp.X + ox, sp.Y + oy);
+        float r = Math.Max(4f, 6f * _zoom);
+        var pts = new PointF[]
+        {
+            new(ss.X,           ss.Y - r),
+            new(ss.X + r * 0.6f, ss.Y),
+            new(ss.X,           ss.Y + r),
+            new(ss.X - r * 0.6f, ss.Y)
+        };
+        g.SmoothingMode = SmoothingMode.AntiAlias;
+        g.FillPolygon(spawnBr, pts);
+        g.SmoothingMode = SmoothingMode.None;
     }
 
     private void DrawNoMap(Graphics g)
@@ -197,7 +362,8 @@ public sealed class MapCanvas : Control
         var sr = WR2S(b.X, b.Y, b.Width, b.Height);
         using var fill = new SolidBrush(BoundsCol);
         g.FillRectangle(fill, sr);
-        using var pen = new Pen(BoundsBorderCol, 1.5f) { DashStyle = DashStyle.Dash };
+        // Active map gets a cyan highlighted border
+        using var pen = new Pen(Color.Cyan, 2f);
         g.DrawRectangle(pen, sr.X, sr.Y, sr.Width, sr.Height);
     }
 
@@ -651,7 +817,7 @@ public sealed class MapCanvas : Control
                 X = Snap(world.X), Y = Snap(world.Y),
                 Width = 30, Height = 30
             };
-            Map.AbilityPickups.Add(pk);
+            Map!.AbilityPickups.Add(pk);
             SelectPickup(pk);
             MapChanged?.Invoke(this, EventArgs.Empty);
             Invalidate();
