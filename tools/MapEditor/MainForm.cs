@@ -49,10 +49,7 @@ public sealed class MainForm : Form
     private TextBox _txtEnemySpeed = null!, _txtEnemyDamage = null!, _txtEnemyHP = null!;
 
     // ── Transition property controls ──────────────────────────────────────────
-    private Panel   _pnlTransition = null!;
-    private TextBox _txtTransName = null!, _txtTransX = null!, _txtTransY = null!;
-    private TextBox _txtTransW = null!, _txtTransH = null!;
-    private TextBox _txtTransTargetMap = null!, _txtTransTargetSpawn = null!;
+    // (Removed: transitions are now auto-generated and not editable)
 
     // ── Pickup property controls ──────────────────────────────────────────────
     private Panel    _pnlPickup = null!;
@@ -61,7 +58,7 @@ public sealed class MainForm : Form
     private ComboBox _cboPickupAbility = null!;
 
     // ── Toolbar buttons ───────────────────────────────────────────────────────
-    private ToolStripButton _btnSelect = null!, _btnDraw = null!, _btnDrawEnemy = null!, _btnDrawTransition = null!, _btnDrawPickup = null!, _btnDrawSpawn = null!, _btnMoveMap = null!, _btnSnap = null!;
+    private ToolStripButton _btnSelect = null!, _btnDraw = null!, _btnDrawEnemy = null!, _btnDrawPickup = null!, _btnDrawSpawn = null!, _btnMoveMap = null!, _btnSnap = null!;
 
     // ── Status bar labels ─────────────────────────────────────────────────────
     private ToolStripStatusLabel _lblInfo  = null!;
@@ -155,7 +152,6 @@ public sealed class MainForm : Form
         _btnSelect         = Tbtn("Select",          "Select / Move / Resize  [S]", true);
         _btnDraw           = Tbtn("Draw",            "Draw new platform  [D]",      false);
         _btnDrawEnemy      = Tbtn("Draw Enemy",      "Draw new enemy  [E]",         false);
-        _btnDrawTransition = Tbtn("Draw Transition", "Draw new transition  [T]",    false);
         _btnDrawPickup     = Tbtn("Draw Pickup",     "Draw new ability pickup  [P]", false);
         _btnDrawSpawn      = Tbtn("Draw Spawn",      "Draw new spawn point  [W]",   false);
         _btnMoveMap        = Tbtn("Move Map",        "Move map in world space  [M]", false);
@@ -164,7 +160,6 @@ public sealed class MainForm : Form
         _btnSelect.Click         += (_, _) => SetTool(EditorTool.Select);
         _btnDraw.Click           += (_, _) => SetTool(EditorTool.Draw);
         _btnDrawEnemy.Click      += (_, _) => SetTool(EditorTool.DrawEnemy);
-        _btnDrawTransition.Click += (_, _) => SetTool(EditorTool.DrawTransition);
         _btnDrawPickup.Click     += (_, _) => SetTool(EditorTool.DrawPickup);
         _btnDrawSpawn.Click      += (_, _) => SetTool(EditorTool.DrawSpawnPoint);
         _btnMoveMap.Click        += (_, _) => SetTool(EditorTool.MoveMap);
@@ -181,7 +176,7 @@ public sealed class MainForm : Form
 
         bar.Items.AddRange(new ToolStripItem[]
         {
-            _btnSelect, _btnDraw, _btnDrawEnemy, _btnDrawTransition, _btnDrawPickup, _btnDrawSpawn, _btnMoveMap,
+            _btnSelect, _btnDraw, _btnDrawEnemy, _btnDrawPickup, _btnDrawSpawn, _btnMoveMap,
             new ToolStripSeparator(),
             btnDel,
             new ToolStripSeparator(),
@@ -327,41 +322,6 @@ public sealed class MainForm : Form
         btnEnemyDel.Click   += (_, _) => _canvas.DeleteSelected();
         _pnlEnemy.Controls.AddRange(new Control[] { btnEnemyApply, btnEnemyDel });
         _pnlEnemy.Height  = ey;
-
-        // ── Selected Transition ───────────────────────────────────────────────
-        _pnlTransition = new Panel { Location = new(0, dynamicY), Width = panel.Width, AutoSize = false, Visible = false };
-        panel.Controls.Add(_pnlTransition);
-
-        int ty = 0;
-        _pnlTransition.Controls.Add(SectionLabel("SELECTED TRANSITION", 4, ty, pw)); ty += 22;
-        (_, _txtTransName, ty) = SingleField(_pnlTransition, "Name", ty, pw);
-        (_txtTransX, _txtTransY, ty) = TwoFields(_pnlTransition, "X", "Y", ty, pw, "Position");
-        (_txtTransW, _txtTransH, ty) = TwoFields(_pnlTransition, "Width", "Height", ty, pw, "Size");
-
-        _pnlTransition.Controls.Add(new Label
-        {
-            Text = "Target Map:", ForeColor = Color.Silver,
-            Font = new Font("Segoe UI", 7.5f),
-            Location = new(4, ty), Size = new(pw, 15), AutoSize = false
-        });
-        ty += 15;
-        _txtTransTargetMap = DarkTxt(4, ty, pw - 70);
-        var btnBrowseMap = DarkBtn("Browse…", 4 + pw - 66, ty, 66);
-        btnBrowseMap.Click += BrowseTargetMap;
-        _pnlTransition.Controls.AddRange(new Control[] { _txtTransTargetMap, btnBrowseMap });
-        ty += 26;
-
-        (_, _txtTransTargetSpawn, ty) = SingleField(_pnlTransition, "Target Spawn", ty, pw);
-
-        int thalf = (pw - 4) / 2;
-        var btnTransApply = DarkBtn("Apply",  4,              ty, thalf);
-        var btnTransDel   = DarkBtn("Delete", 4 + thalf + 4,  ty, thalf, Color.FromArgb(130, 55, 55));
-        ty += 30;
-
-        btnTransApply.Click += ApplyTransitionSettings;
-        btnTransDel.Click   += (_, _) => _canvas.DeleteSelected();
-        _pnlTransition.Controls.AddRange(new Control[] { btnTransApply, btnTransDel });
-        _pnlTransition.Height  = ty;
 
         // ── Selected Ability Pickup ───────────────────────────────────────────
         _pnlPickup = new Panel { Location = new(0, dynamicY), Width = panel.Width, AutoSize = false, Visible = false };
@@ -602,6 +562,10 @@ public sealed class MainForm : Form
     private void WriteFile(string path)
     {
         if (_canvas.Map == null) return;
+        // Regenerate auto-transitions before saving (only applies when multiple maps are loaded)
+        _canvas.RegenerateTransitions();
+        // Make transition targetMap paths relative for the game runtime
+        NormalizeTransitionPaths(_canvas.Map, MapsDir());
         WriteFileForMap(path, _canvas.Map);
         _isDirty = false;
         UpdateTitle();
@@ -656,6 +620,28 @@ public sealed class MainForm : Form
             dir = parent;
         }
         return AppDomain.CurrentDomain.BaseDirectory;
+    }
+
+    /// <summary>
+    /// Converts absolute targetMap paths in auto-generated transitions to
+    /// relative paths (e.g., "maps/world_02.json") for the game runtime.
+    /// </summary>
+    private static void NormalizeTransitionPaths(MapData map, string mapsDir)
+    {
+        if (map.Transitions == null) return;
+        // Resolve the project root (parent of the maps/ directory)
+        string? projectRoot = Path.GetDirectoryName(mapsDir);
+        if (projectRoot == null) return;
+
+        foreach (var tr in map.Transitions)
+        {
+            if (string.IsNullOrEmpty(tr.TargetMap)) continue;
+            if (Path.IsPathRooted(tr.TargetMap))
+            {
+                tr.TargetMap = Path.GetRelativePath(projectRoot, tr.TargetMap)
+                                   .Replace('\\', '/');
+            }
+        }
     }
 
     // ── World file I/O ────────────────────────────────────────────────────────
@@ -787,11 +773,20 @@ public sealed class MainForm : Form
         {
             string worldDir = Path.GetDirectoryName(worldPath) ?? "";
 
+            // Regenerate auto-transitions before saving
+            _canvas.RegenerateTransitions();
+
+            // Resolve the project maps/ directory for relative targetMap paths
+            string mapsDir = MapsDir();
+
             // Save each map file from the canvas EditorMaps
             foreach (var em in _canvas.EditorMaps)
             {
                 if (!string.IsNullOrEmpty(em.FilePath))
                 {
+                    // Make transition targetMap paths relative to the project root
+                    // (e.g., "maps/world_02.json") for the game runtime's MapLoader
+                    NormalizeTransitionPaths(em.Map, mapsDir);
                     WriteFileForMap(em.FilePath, em.Map);
                 }
             }
@@ -897,26 +892,6 @@ public sealed class MainForm : Form
         catch { Warn("Invalid values in enemy settings. Use numeric values."); }
     }
 
-    private void ApplyTransitionSettings(object? sender, EventArgs e)
-    {
-        var tr = _canvas.SelectedTransition;
-        if (tr == null) return;
-        try
-        {
-            tr.Name        = _txtTransName.Text.Trim();
-            tr.X           = ParseF(_txtTransX);
-            tr.Y           = ParseF(_txtTransY);
-            tr.Width       = MathF.Max(1f, ParseF(_txtTransW));
-            tr.Height      = MathF.Max(1f, ParseF(_txtTransH));
-            tr.TargetMap   = _txtTransTargetMap.Text.Trim();
-            tr.TargetSpawn = _txtTransTargetSpawn.Text.Trim();
-            MarkDirty();
-            _canvas.Invalidate();
-            SetStatus("Transition updated.");
-        }
-        catch { Warn("Invalid values in transition settings. Use numeric values for position/size."); }
-    }
-
     private void ApplyPickupSettings(object? sender, EventArgs e)
     {
         var pk = _canvas.SelectedPickup;
@@ -934,18 +909,6 @@ public sealed class MainForm : Form
             SetStatus("Ability pickup updated.");
         }
         catch { Warn("Invalid values in pickup settings. Use numeric values for position/size."); }
-    }
-
-    private void BrowseTargetMap(object? sender, EventArgs e)
-    {
-        using var dlg = new OpenFileDialog
-        {
-            Title            = "Select Target Map",
-            Filter           = "JSON map files (*.json)|*.json|All files (*.*)|*.*",
-            InitialDirectory = MapsDir()
-        };
-        if (dlg.ShowDialog(this) != DialogResult.OK) return;
-        _txtTransTargetMap.Text = Path.GetFileName(dlg.FileName);
     }
 
     // ── Spawn point handlers ──────────────────────────────────────────────────
@@ -1024,7 +987,6 @@ public sealed class MainForm : Form
         _pnlSpawn.Visible      = toShow == _pnlSpawn;
         _pnlPlatform.Visible   = toShow == _pnlPlatform;
         _pnlEnemy.Visible      = toShow == _pnlEnemy;
-        _pnlTransition.Visible = toShow == _pnlTransition;
         _pnlPickup.Visible     = toShow == _pnlPickup;
     }
 
@@ -1065,20 +1027,6 @@ public sealed class MainForm : Form
                 _txtEnemySpeed.Text   = en.Speed.ToString("F1");
                 _txtEnemyDamage.Text  = en.Damage.ToString("F1");
                 _txtEnemyHP.Text      = en.Hp.ToString("F1");
-                _syncingUI = false;
-                break;
-
-            case SelectableType.Transition:
-                ShowDynamicPanel(_pnlTransition);
-                var tr = _canvas.SelectedTransition!;
-                _syncingUI = true;
-                _txtTransName.Text        = tr.Name;
-                _txtTransX.Text           = tr.X.ToString("F1");
-                _txtTransY.Text           = tr.Y.ToString("F1");
-                _txtTransW.Text           = tr.Width.ToString("F1");
-                _txtTransH.Text           = tr.Height.ToString("F1");
-                _txtTransTargetMap.Text   = tr.TargetMap;
-                _txtTransTargetSpawn.Text = tr.TargetSpawn;
                 _syncingUI = false;
                 break;
 
@@ -1162,16 +1110,6 @@ public sealed class MainForm : Form
             _txtWaypointBY.Text   = en.WaypointB.Y.ToString("F1");
             _syncingUI = false;
         }
-        var tr = _canvas.SelectedTransition;
-        if (tr != null && !_syncingUI)
-        {
-            _syncingUI = true;
-            _txtTransX.Text = tr.X.ToString("F1");
-            _txtTransY.Text = tr.Y.ToString("F1");
-            _txtTransW.Text = tr.Width.ToString("F1");
-            _txtTransH.Text = tr.Height.ToString("F1");
-            _syncingUI = false;
-        }
         var pk = _canvas.SelectedPickup;
         if (pk != null && !_syncingUI)
         {
@@ -1227,7 +1165,6 @@ public sealed class MainForm : Form
         _btnSelect.Checked         = t == EditorTool.Select;
         _btnDraw.Checked           = t == EditorTool.Draw;
         _btnDrawEnemy.Checked      = t == EditorTool.DrawEnemy;
-        _btnDrawTransition.Checked = t == EditorTool.DrawTransition;
         _btnDrawPickup.Checked     = t == EditorTool.DrawPickup;
         _btnDrawSpawn.Checked      = t == EditorTool.DrawSpawnPoint;
         _btnMoveMap.Checked        = t == EditorTool.MoveMap;
@@ -1255,7 +1192,6 @@ public sealed class MainForm : Form
         {
             EditorTool.Draw           => "Draw Platform",
             EditorTool.DrawEnemy      => "Draw Enemy",
-            EditorTool.DrawTransition => "Draw Transition",
             EditorTool.DrawPickup     => "Draw Pickup",
             EditorTool.DrawSpawnPoint => "Draw Spawn",
             EditorTool.MoveMap        => "Move Map",
@@ -1263,7 +1199,6 @@ public sealed class MainForm : Form
         };
         string sel = _canvas.SelectedPlatform    != null ? " | Platform selected"     :
                      _canvas.SelectedEnemy       != null ? " | Enemy selected"        :
-                     _canvas.SelectedTransition  != null ? " | Transition selected"   :
                      _canvas.SelectedPickup      != null ? " | Pickup selected"       :
                      _canvas.SelectedDefaultSpawn        ? " | Default spawn selected" :
                      _canvas.SelectedSpawnKey     != null ? $" | Spawn \"{_canvas.SelectedSpawnKey}\" selected" : "";
@@ -1343,7 +1278,6 @@ public sealed class MainForm : Form
             case Keys.S: SetTool(EditorTool.Select);         e.Handled = true; break;
             case Keys.D: SetTool(EditorTool.Draw);           e.Handled = true; break;
             case Keys.E: SetTool(EditorTool.DrawEnemy);      e.Handled = true; break;
-            case Keys.T: SetTool(EditorTool.DrawTransition); e.Handled = true; break;
             case Keys.P: SetTool(EditorTool.DrawPickup);     e.Handled = true; break;
             case Keys.W: SetTool(EditorTool.DrawSpawnPoint); e.Handled = true; break;
             case Keys.M: SetTool(EditorTool.MoveMap);       e.Handled = true; break;

@@ -754,3 +754,39 @@ Details:
   blue rectangles with dashed borders and target map labels)
 
 ==============================================================================
+==============================================================================
+Task: Remove manual transition tool and integrate auto-transitions with save.
+Implemented: true
+
+Details:
+- Removed manual transition drawing tool:
+    - Removed EditorTool.DrawTransition enum value
+    - Removed SelectableType.Transition enum value
+    - Removed the "Draw Transition [T]" toolbar button
+    - Removed the 'T' keyboard shortcut
+    - Removed transition-specific hit-testing from Select tool
+    - Removed the Transition properties panel from MainForm
+    - Removed the "Delete" functionality for transitions
+    - Removed SelectTransition, HitTransition, ApplyResizeTransition methods
+    - Removed ApplyTransitionSettings and BrowseTargetMap methods
+    - Removed all _selectedTransition field references
+
+- Auto-transitions displayed but NOT editable:
+    - Rendered in OnPaint as before (blue semi-transparent rects)
+    - Added "⚡ [auto]" label to indicate auto-generated transitions
+    - Transitions cannot be selected, moved, or deleted by the user
+
+- Updated SaveFile() / SaveWorld():
+    - RegenerateTransitions() called before every save
+    - NormalizeTransitionPaths() converts absolute targetMap paths to
+      relative paths (e.g., "maps/world_02.json") for the game runtime
+    - Auto-generated spawn points preserved alongside user-created ones
+
+- Updated LoadWorld():
+    - RegenerateTransitions() called after loading all maps (already
+      handled in MapCanvas.LoadWorld)
+    - Old manually-placed transitions replaced by auto-generated ones
+
+- Single map files (not world) don't generate transitions:
+    - RegenerateTransitions guard requires >= 2 maps
+==============================================================================

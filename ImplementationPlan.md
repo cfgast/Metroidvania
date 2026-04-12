@@ -39,45 +39,6 @@ Key design decisions:
 The tasks are ordered so the editor builds and runs after every task.
 
 ==============================================================================
-Task: Remove manual transition tool and integrate auto-transitions with save.
-Implemented: false
-
-Details:
-- Remove the manual transition drawing tool:
-    - Remove EditorTool.DrawTransition enum value (or leave it but
-      remove it from the toolbar)
-    - Remove the "Draw Transition [T]" toolbar button
-    - Remove the 'T' keyboard shortcut
-    - Remove transition-specific hit-testing from Select tool (users
-      cannot select/move/resize auto-transitions)
-    - Remove the Transition properties panel from MainForm
-    - Remove the "Delete" functionality for transitions
-
-- Auto-transitions should be displayed but NOT editable:
-    - Render them in OnPaint as before (blue semi-transparent rects)
-    - Add a small label or icon indicating they are auto-generated
-    - They cannot be selected, moved, or deleted by the user
-
-- Update SaveFile() / SaveWorld():
-    - When saving each map file, the auto-generated transitions and
-      spawn points are already in MapData (placed there by
-      RegenerateTransitions), so they serialize naturally.
-    - Ensure targetMap paths are relative to the maps/ directory
-      (e.g., "maps/world_02.json") for consistency with the game
-      runtime's MapLoader expectations.
-    - Ensure auto-generated spawn points don't overwrite user-created
-      spawn points with different names.
-
-- Update LoadWorld():
-    - After loading all maps, call RegenerateTransitions() to ensure
-      transitions match the current map positions.
-    - This means any manually-placed transitions from old map files
-      are replaced by auto-generated ones on load.
-
-- When opening a single map file (not a world), don't generate
-  transitions (there's only one map, no neighbors).
-
-==============================================================================
 Task: Add world management UI - add, create, and remove maps from the world.
 Implemented: false
 

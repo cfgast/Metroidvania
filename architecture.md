@@ -143,7 +143,11 @@ The `EditorTool.MoveMap` tool allows repositioning maps in world space. Activate
 - **Transition zones**: 50-unit deep rectangles extending inward from the shared edge in both maps, spanning the overlap length. Named `to_<target_map>` with `targetSpawn` set to `from_<source_map>`.
 - **Spawn points**: Positioned 60 units inward from the edge at the midpoint of the overlap, named `from_<neighbor_map>`.
 
-Regeneration is triggered automatically on: MoveMap mouse-up, bounds change (Apply in properties panel), and world load.
+Regeneration is triggered automatically on: MoveMap mouse-up, bounds change (Apply in properties panel), world load, and before every save (both single-map and world saves).
+
+Auto-generated transitions are **display-only** — they cannot be selected, moved, resized, or deleted by the user. They render as blue semi-transparent dashed rectangles labeled with "⚡ [auto]" to indicate they are auto-generated. The manual transition drawing tool (`DrawTransition`), its toolbar button, keyboard shortcut (`T`), and properties panel have been removed. The `SelectableType.Transition` enum value and all transition-specific hit-testing, selection, and drag logic have been removed from `MapCanvas`.
+
+When saving, `NormalizeTransitionPaths()` converts absolute `targetMap` paths in transitions to relative paths (e.g., `maps/world_02.json`) for compatibility with the game runtime's `MapLoader`. Single-map files opened outside a world do not generate transitions (the `RegenerateTransitions` guard requires ≥2 maps).
 
 ---
 
