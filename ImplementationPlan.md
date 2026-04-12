@@ -76,29 +76,6 @@ The project should still compile and run with the OpenGL backend after this
 task. No rendering code changes — build system only.
 
 ==============================================================================
-Task 10: Port textured sprite pipeline
-==============================================================================
-Implemented: false
-
-Create a VkPipeline for textured sprite rendering:
-- Vertex input: vec2 position (location 0) + vec2 texcoord (location 1)
-- Push constants: projection matrix (mat4)
-- Descriptor set 0: lighting UBO (placeholder for now, bind dummy buffer)
-- Descriptor set 1: diffuse sampler (binding 0) + normal map sampler (binding 1)
-- Alpha blending enabled, dynamic viewport/scissor
-- Dynamic rendering with swap chain color format
-
-Implement drawSprite(TextureHandle tex, float x, y, int frameX, frameY,
-frameW, frameH, float originX, originY):
-- Build 6-vertex quad with UV coordinates calculated from frame rect
-  and full texture dimensions (same math as GLRenderer)
-- Upload vertices to dynamic buffer
-- Bind textured pipeline
-- Push projection matrix
-- Bind texture descriptor set
-- vkCmdDraw(6)
-
-==============================================================================
 Task 11: Normal map support
 ==============================================================================
 Implemented: false

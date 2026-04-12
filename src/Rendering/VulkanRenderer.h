@@ -116,12 +116,20 @@ private:
     static std::vector<char> readSPVFile(const std::string& path);
     VkShaderModule createShaderModule(const std::vector<char>& code);
     void createFlatPipeline();
+    void createTexturedPipeline();
 
     // ── Texture helpers ──────────────────────────────────────────────
     void createTextureDescriptorResources();
     void cleanupTextureResources();
     VkCommandBuffer beginOneTimeCommands();
     void endOneTimeCommands(VkCommandBuffer cmd);
+
+    // ── Sprite/lighting resource helpers ──────────────────────────────
+    void createLightingResources();
+    void createFlatNormalTexture();
+    void createTextureFlagsUBO();
+    VkDescriptorSet getOrCreateTextureDescriptorSet(TextureHandle diffuse,
+                                                     TextureHandle normal);
 
     // ── Frame recording helpers ──────────────────────────────────────
     void ensureFrameStarted();
@@ -187,6 +195,10 @@ private:
     VkPipelineLayout      m_flatPipelineLayout      = VK_NULL_HANDLE;
     VkPipeline            m_flatPipeline            = VK_NULL_HANDLE;
 
+    // ── Textured sprite pipeline ──────────────────────────────────────
+    VkPipelineLayout m_texturedPipelineLayout = VK_NULL_HANDLE;
+    VkPipeline       m_texturedPipeline       = VK_NULL_HANDLE;
+
     // ── VMA allocator ─────────────────────────────────────────────────
     VmaAllocator m_allocator = VK_NULL_HANDLE;
 
@@ -250,4 +262,17 @@ private:
                        DescriptorSetKeyHash> m_textureDescriptorCache;
 
     static constexpr uint32_t MAX_TEXTURE_DESCRIPTOR_SETS = 256;
+
+    // ── Dummy lighting UBO (placeholder until lighting is ported) ─────
+    VkBuffer         m_lightingUBO              = VK_NULL_HANDLE;
+    VmaAllocation    m_lightingUBOAllocation    = VK_NULL_HANDLE;
+    VkDescriptorPool m_lightingDescriptorPool   = VK_NULL_HANDLE;
+    VkDescriptorSet  m_lightingDescriptorSet    = VK_NULL_HANDLE;
+
+    // ── Texture flags UBO (uHasNormalMap) ─────────────────────────────
+    VkBuffer      m_textureFlagsUBO           = VK_NULL_HANDLE;
+    VmaAllocation m_textureFlagsUBOAllocation = VK_NULL_HANDLE;
+
+    // ── Default flat normal texture ──────────────────────────────────
+    TextureHandle m_flatNormalTexture = 0;
 };
