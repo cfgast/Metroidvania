@@ -2,15 +2,17 @@
 
 #include "Renderer.h"
 
+#include <vulkan/vulkan.h>
 #include <GLFW/glfw3.h>
 #include <memory>
 #include <string>
+#include <vector>
 
 class InputSystem;
 
 // Vulkan 1.3 implementation of the Renderer interface.
-// Currently a stub — all draw calls are no-ops. Creates a GLFW window
-// without an OpenGL context (GLFW_NO_API) ready for Vulkan surface creation.
+// Initializes Vulkan instance, device, and swap chain via vk-bootstrap.
+// Draw calls are still no-ops — rendering infrastructure comes in later tasks.
 class VulkanRenderer : public Renderer
 {
 public:
@@ -91,10 +93,34 @@ public:
     GLFWwindow* getWindow() const { return m_window; }
 
 private:
+    void initVulkan();
+    void createSwapchain();
+    void destroySwapchain();
+    void cleanupVulkan();
+
+    // ── GLFW ──────────────────────────────────────────────────────────
     GLFWwindow* m_window = nullptr;
     float       m_windowW = 0.f;
     float       m_windowH = 0.f;
     bool        m_open = true;
 
     std::unique_ptr<InputSystem> m_input;
+
+    // ── Vulkan core ───────────────────────────────────────────────────
+    VkInstance               m_instance       = VK_NULL_HANDLE;
+    VkDebugUtilsMessengerEXT m_debugMessenger = VK_NULL_HANDLE;
+    VkSurfaceKHR             m_surface        = VK_NULL_HANDLE;
+    VkPhysicalDevice         m_physicalDevice = VK_NULL_HANDLE;
+    VkDevice                 m_device         = VK_NULL_HANDLE;
+    VkQueue                  m_graphicsQueue  = VK_NULL_HANDLE;
+    VkQueue                  m_presentQueue   = VK_NULL_HANDLE;
+    uint32_t                 m_graphicsQueueFamily = 0;
+    uint32_t                 m_presentQueueFamily  = 0;
+
+    // ── Swap chain ────────────────────────────────────────────────────
+    VkSwapchainKHR           m_swapchain       = VK_NULL_HANDLE;
+    VkFormat                 m_swapchainFormat  = VK_FORMAT_UNDEFINED;
+    VkExtent2D               m_swapchainExtent = {0, 0};
+    std::vector<VkImage>     m_swapchainImages;
+    std::vector<VkImageView> m_swapchainImageViews;
 };

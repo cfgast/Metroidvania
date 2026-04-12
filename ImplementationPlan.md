@@ -76,26 +76,6 @@ The project should still compile and run with the OpenGL backend after this
 task. No rendering code changes — build system only.
 
 ==============================================================================
-Task 3: Vulkan instance, device, and swap chain
-==============================================================================
-Implemented: false
-
-Using vk-bootstrap:
-- Create VkInstance with validation layers enabled in debug builds
-- Create VkSurfaceKHR via glfwCreateWindowSurface()
-- Select a physical device (prefer discrete GPU)
-- Create a logical device with graphics and present queue families
-- Create a swap chain: VK_PRESENT_MODE_FIFO (v-sync),
-  VK_FORMAT_B8G8R8A8_SRGB preferred, window-sized extents
-- Store swap chain VkImages and create VkImageViews for each
-
-GLFW must be initialized with glfwWindowHint(GLFW_CLIENT_API, GLFW_NO_API)
-to skip OpenGL context creation when using Vulkan.
-
-After this task, VulkanRenderer should successfully initialize Vulkan and
-create a presentable swap chain, but not yet render anything.
-
-==============================================================================
 Task 4: Command infrastructure and frame synchronization
 ==============================================================================
 Implemented: false
