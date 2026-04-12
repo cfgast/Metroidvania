@@ -14,14 +14,6 @@
     "default": {
       "x": -40,
       "y": 220
-    },
-    "from_world_02": {
-      "x": 3260,
-      "y": 200
-    },
-    "from_world_03": {
-      "x": 1870,
-      "y": 620
     }
   },
   "platforms": [
@@ -244,26 +236,26 @@
   "transitions": [
     {
       "name": "to_world_02",
-      "x": 3330,
-      "y": -20,
+      "x": 3350,
+      "y": -500,
       "width": 50,
-      "height": 240,
+      "height": 1200,
       "targetMap": "maps/world_02.json",
-      "targetSpawn": "from_world_01",
+      "targetSpawn": "default",
       "edgeAxis": "vertical",
       "targetBaseX": -140,
-      "targetBaseY": 300
+      "targetBaseY": -500
     },
     {
       "name": "to_world_03",
-      "x": 1670,
-      "y": 680,
-      "width": 180,
-      "height": 20,
+      "x": -200,
+      "y": 650,
+      "width": 3600,
+      "height": 50,
       "targetMap": "maps/world_03.json",
       "targetSpawn": "default",
       "edgeAxis": "horizontal",
-      "targetBaseX": 1670,
+      "targetBaseX": -200,
       "targetBaseY": -440
     }
   ],

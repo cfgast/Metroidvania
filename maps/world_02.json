@@ -14,10 +14,6 @@
     "default": {
       "x": 290,
       "y": 390
-    },
-    "from_world_01": {
-      "x": -100,
-      "y": 490
     }
   },
   "platforms": [
@@ -136,14 +132,14 @@
     {
       "name": "to_world_01",
       "x": -200,
-      "y": 300,
+      "y": -500,
       "width": 50,
-      "height": 240,
+      "height": 1200,
       "targetMap": "maps/world_01.json",
-      "targetSpawn": "from_world_02",
+      "targetSpawn": "default",
       "edgeAxis": "vertical",
       "targetBaseX": 3340,
-      "targetBaseY": -20
+      "targetBaseY": -500
     }
   ]
 }
