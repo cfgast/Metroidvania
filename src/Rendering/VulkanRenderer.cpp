@@ -6,6 +6,7 @@
 #include <glm/gtc/matrix_transform.hpp>
 #include <stb_image.h>
 
+#include <cmath>
 #include <cstring>
 #include <fstream>
 #include <iostream>
@@ -290,6 +291,15 @@ void VulkanRenderer::cleanupVulkan()
             vkDestroyDescriptorPool(m_device, m_textDescriptorPool, nullptr);
         if (m_textDescriptorSetLayout != VK_NULL_HANDLE)
             vkDestroyDescriptorSetLayout(m_device, m_textDescriptorSetLayout, nullptr);
+
+        if (m_vertColorTriListPipeline != VK_NULL_HANDLE)
+            vkDestroyPipeline(m_device, m_vertColorTriListPipeline, nullptr);
+        if (m_vertColorTriStripPipeline != VK_NULL_HANDLE)
+            vkDestroyPipeline(m_device, m_vertColorTriStripPipeline, nullptr);
+        if (m_vertColorLineListPipeline != VK_NULL_HANDLE)
+            vkDestroyPipeline(m_device, m_vertColorLineListPipeline, nullptr);
+        if (m_vertColorPipelineLayout != VK_NULL_HANDLE)
+            vkDestroyPipelineLayout(m_device, m_vertColorPipelineLayout, nullptr);
 
         if (m_lightingDescriptorPool != VK_NULL_HANDLE)
             vkDestroyDescriptorPool(m_device, m_lightingDescriptorPool, nullptr);
@@ -903,6 +913,177 @@ void VulkanRenderer::createTextPipeline()
     std::cout << "[Vulkan] Text pipeline created\n";
 }
 
+void VulkanRenderer::createVertexColorPipelines()
+{
+    // ── Pipeline layout: push constants only (mat4 projection = 64 bytes)
+    VkPushConstantRange pushRange{};
+    pushRange.stageFlags = VK_SHADER_STAGE_VERTEX_BIT;
+    pushRange.offset     = 0;
+    pushRange.size       = 64;
+
+    VkPipelineLayoutCreateInfo layoutInfo{};
+    layoutInfo.sType                  = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO;
+    layoutInfo.setLayoutCount         = 0;
+    layoutInfo.pSetLayouts            = nullptr;
+    layoutInfo.pushConstantRangeCount = 1;
+    layoutInfo.pPushConstantRanges    = &pushRange;
+
+    if (vkCreatePipelineLayout(m_device, &layoutInfo, nullptr,
+                               &m_vertColorPipelineLayout) != VK_SUCCESS)
+        throw std::runtime_error("VulkanRenderer: failed to create vertex-color pipeline layout");
+
+    // ── Load shader modules
+    auto vertCode = readSPVFile("assets/shaders/vertcolor.vert.spv");
+    auto fragCode = readSPVFile("assets/shaders/vertcolor.frag.spv");
+    VkShaderModule vertModule = createShaderModule(vertCode);
+    VkShaderModule fragModule = createShaderModule(fragCode);
+
+    VkPipelineShaderStageCreateInfo shaderStages[2]{};
+    shaderStages[0].sType  = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
+    shaderStages[0].stage  = VK_SHADER_STAGE_VERTEX_BIT;
+    shaderStages[0].module = vertModule;
+    shaderStages[0].pName  = "main";
+
+    shaderStages[1].sType  = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
+    shaderStages[1].stage  = VK_SHADER_STAGE_FRAGMENT_BIT;
+    shaderStages[1].module = fragModule;
+    shaderStages[1].pName  = "main";
+
+    // ── Vertex input: vec2 position (location 0) + vec4 color (location 1)
+    VkVertexInputBindingDescription bindingDesc{};
+    bindingDesc.binding   = 0;
+    bindingDesc.stride    = sizeof(float) * 6; // x, y, r, g, b, a
+    bindingDesc.inputRate = VK_VERTEX_INPUT_RATE_VERTEX;
+
+    VkVertexInputAttributeDescription attrDescs[2]{};
+    attrDescs[0].binding  = 0;
+    attrDescs[0].location = 0;
+    attrDescs[0].format   = VK_FORMAT_R32G32_SFLOAT;
+    attrDescs[0].offset   = 0;
+
+    attrDescs[1].binding  = 0;
+    attrDescs[1].location = 1;
+    attrDescs[1].format   = VK_FORMAT_R32G32B32A32_SFLOAT;
+    attrDescs[1].offset   = sizeof(float) * 2;
+
+    VkPipelineVertexInputStateCreateInfo vertexInputInfo{};
+    vertexInputInfo.sType                           = VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO;
+    vertexInputInfo.vertexBindingDescriptionCount    = 1;
+    vertexInputInfo.pVertexBindingDescriptions       = &bindingDesc;
+    vertexInputInfo.vertexAttributeDescriptionCount  = 2;
+    vertexInputInfo.pVertexAttributeDescriptions     = attrDescs;
+
+    // ── Dynamic viewport and scissor
+    VkPipelineViewportStateCreateInfo viewportState{};
+    viewportState.sType         = VK_STRUCTURE_TYPE_PIPELINE_VIEWPORT_STATE_CREATE_INFO;
+    viewportState.viewportCount = 1;
+    viewportState.scissorCount  = 1;
+
+    VkDynamicState dynamicStates[] = {VK_DYNAMIC_STATE_VIEWPORT, VK_DYNAMIC_STATE_SCISSOR};
+    VkPipelineDynamicStateCreateInfo dynamicState{};
+    dynamicState.sType             = VK_STRUCTURE_TYPE_PIPELINE_DYNAMIC_STATE_CREATE_INFO;
+    dynamicState.dynamicStateCount = 2;
+    dynamicState.pDynamicStates    = dynamicStates;
+
+    // ── Rasterizer: polygon fill, no culling
+    VkPipelineRasterizationStateCreateInfo rasterizer{};
+    rasterizer.sType                   = VK_STRUCTURE_TYPE_PIPELINE_RASTERIZATION_STATE_CREATE_INFO;
+    rasterizer.depthClampEnable        = VK_FALSE;
+    rasterizer.rasterizerDiscardEnable = VK_FALSE;
+    rasterizer.polygonMode             = VK_POLYGON_MODE_FILL;
+    rasterizer.lineWidth               = 1.0f;
+    rasterizer.cullMode                = VK_CULL_MODE_NONE;
+    rasterizer.frontFace               = VK_FRONT_FACE_COUNTER_CLOCKWISE;
+    rasterizer.depthBiasEnable         = VK_FALSE;
+
+    // ── Multisampling: disabled
+    VkPipelineMultisampleStateCreateInfo multisampling{};
+    multisampling.sType                = VK_STRUCTURE_TYPE_PIPELINE_MULTISAMPLE_STATE_CREATE_INFO;
+    multisampling.sampleShadingEnable  = VK_FALSE;
+    multisampling.rasterizationSamples = VK_SAMPLE_COUNT_1_BIT;
+
+    // ── Color blending: src-alpha / one-minus-src-alpha
+    VkPipelineColorBlendAttachmentState colorBlendAttachment{};
+    colorBlendAttachment.colorWriteMask = VK_COLOR_COMPONENT_R_BIT | VK_COLOR_COMPONENT_G_BIT |
+                                          VK_COLOR_COMPONENT_B_BIT | VK_COLOR_COMPONENT_A_BIT;
+    colorBlendAttachment.blendEnable         = VK_TRUE;
+    colorBlendAttachment.srcColorBlendFactor = VK_BLEND_FACTOR_SRC_ALPHA;
+    colorBlendAttachment.dstColorBlendFactor = VK_BLEND_FACTOR_ONE_MINUS_SRC_ALPHA;
+    colorBlendAttachment.colorBlendOp        = VK_BLEND_OP_ADD;
+    colorBlendAttachment.srcAlphaBlendFactor = VK_BLEND_FACTOR_ONE;
+    colorBlendAttachment.dstAlphaBlendFactor = VK_BLEND_FACTOR_ONE_MINUS_SRC_ALPHA;
+    colorBlendAttachment.alphaBlendOp        = VK_BLEND_OP_ADD;
+
+    VkPipelineColorBlendStateCreateInfo colorBlending{};
+    colorBlending.sType           = VK_STRUCTURE_TYPE_PIPELINE_COLOR_BLEND_STATE_CREATE_INFO;
+    colorBlending.logicOpEnable   = VK_FALSE;
+    colorBlending.attachmentCount = 1;
+    colorBlending.pAttachments    = &colorBlendAttachment;
+
+    // ── Dynamic rendering: color attachment format matching swap chain
+    VkPipelineRenderingCreateInfo renderingInfo{};
+    renderingInfo.sType                   = VK_STRUCTURE_TYPE_PIPELINE_RENDERING_CREATE_INFO;
+    renderingInfo.colorAttachmentCount    = 1;
+    renderingInfo.pColorAttachmentFormats = &m_swapchainFormat;
+
+    // ── Base pipeline create info (shared across topologies)
+    VkPipelineInputAssemblyStateCreateInfo inputAssembly{};
+    inputAssembly.sType                  = VK_STRUCTURE_TYPE_PIPELINE_INPUT_ASSEMBLY_STATE_CREATE_INFO;
+    inputAssembly.primitiveRestartEnable = VK_FALSE;
+
+    VkGraphicsPipelineCreateInfo pipelineInfo{};
+    pipelineInfo.sType               = VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_CREATE_INFO;
+    pipelineInfo.pNext               = &renderingInfo;
+    pipelineInfo.stageCount          = 2;
+    pipelineInfo.pStages             = shaderStages;
+    pipelineInfo.pVertexInputState   = &vertexInputInfo;
+    pipelineInfo.pInputAssemblyState = &inputAssembly;
+    pipelineInfo.pViewportState      = &viewportState;
+    pipelineInfo.pRasterizationState = &rasterizer;
+    pipelineInfo.pMultisampleState   = &multisampling;
+    pipelineInfo.pDepthStencilState  = nullptr;
+    pipelineInfo.pColorBlendState    = &colorBlending;
+    pipelineInfo.pDynamicState       = &dynamicState;
+    pipelineInfo.layout              = m_vertColorPipelineLayout;
+    pipelineInfo.renderPass          = VK_NULL_HANDLE;
+    pipelineInfo.subpass             = 0;
+
+    // ── Create triangle-list pipeline
+    inputAssembly.topology = VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST;
+    if (vkCreateGraphicsPipelines(m_device, VK_NULL_HANDLE, 1, &pipelineInfo,
+                                  nullptr, &m_vertColorTriListPipeline) != VK_SUCCESS)
+    {
+        vkDestroyShaderModule(m_device, vertModule, nullptr);
+        vkDestroyShaderModule(m_device, fragModule, nullptr);
+        throw std::runtime_error("VulkanRenderer: failed to create vertex-color tri-list pipeline");
+    }
+
+    // ── Create triangle-strip pipeline
+    inputAssembly.topology = VK_PRIMITIVE_TOPOLOGY_TRIANGLE_STRIP;
+    if (vkCreateGraphicsPipelines(m_device, VK_NULL_HANDLE, 1, &pipelineInfo,
+                                  nullptr, &m_vertColorTriStripPipeline) != VK_SUCCESS)
+    {
+        vkDestroyShaderModule(m_device, vertModule, nullptr);
+        vkDestroyShaderModule(m_device, fragModule, nullptr);
+        throw std::runtime_error("VulkanRenderer: failed to create vertex-color tri-strip pipeline");
+    }
+
+    // ── Create line-list pipeline
+    inputAssembly.topology = VK_PRIMITIVE_TOPOLOGY_LINE_LIST;
+    if (vkCreateGraphicsPipelines(m_device, VK_NULL_HANDLE, 1, &pipelineInfo,
+                                  nullptr, &m_vertColorLineListPipeline) != VK_SUCCESS)
+    {
+        vkDestroyShaderModule(m_device, vertModule, nullptr);
+        vkDestroyShaderModule(m_device, fragModule, nullptr);
+        throw std::runtime_error("VulkanRenderer: failed to create vertex-color line-list pipeline");
+    }
+
+    vkDestroyShaderModule(m_device, vertModule, nullptr);
+    vkDestroyShaderModule(m_device, fragModule, nullptr);
+
+    std::cout << "[Vulkan] Vertex-color pipelines created (tri-list, tri-strip, line-list)\n";
+}
+
 // ── VMA / buffer helpers ─────────────────────────────────────────────────────
 
 void VulkanRenderer::initAllocator()
@@ -1487,6 +1668,7 @@ VulkanRenderer::VulkanRenderer(const std::string& title, unsigned int width,
     createFlatNormalTexture();
     createTexturedPipeline();
     createTextPipeline();
+    createVertexColorPipelines();
 
     initFreeType();
 
@@ -1717,6 +1899,35 @@ void VulkanRenderer::getWindowSize(float& w, float& h) const
 
 // ── Primitives ───────────────────────────────────────────────────────────────
 
+static constexpr int   kCircleSegments = 32;
+static constexpr int   kCornerSegments = 8;
+static constexpr float kPi = 3.14159265358979323846f;
+
+// Helper: bind a vertex-color pipeline with viewport/scissor/push constants
+static void bindVertColorPipeline(VkCommandBuffer cmd, VkPipeline pipeline,
+                                  VkPipelineLayout layout,
+                                  VkExtent2D extent, const glm::mat4& proj)
+{
+    vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, pipeline);
+
+    VkViewport viewport{};
+    viewport.x        = 0.f;
+    viewport.y        = 0.f;
+    viewport.width    = static_cast<float>(extent.width);
+    viewport.height   = static_cast<float>(extent.height);
+    viewport.minDepth = 0.f;
+    viewport.maxDepth = 1.f;
+    vkCmdSetViewport(cmd, 0, 1, &viewport);
+
+    VkRect2D scissor{};
+    scissor.offset = {0, 0};
+    scissor.extent = extent;
+    vkCmdSetScissor(cmd, 0, 1, &scissor);
+
+    vkCmdPushConstants(cmd, layout, VK_SHADER_STAGE_VERTEX_BIT,
+                       0, sizeof(glm::mat4), &proj);
+}
+
 void VulkanRenderer::drawRect(float x, float y, float w, float h,
                               float r, float g, float b, float a)
 {
@@ -1794,16 +2005,186 @@ void VulkanRenderer::drawRectOutlined(float x, float y, float w, float h,
     drawRect(x + w, y, t, h, outR, outG, outB, outA);
 }
 
-void VulkanRenderer::drawCircle(float /*cx*/, float /*cy*/, float /*radius*/,
-                                float /*r*/, float /*g*/, float /*b*/, float /*a*/,
-                                float /*outR*/, float /*outG*/, float /*outB*/, float /*outA*/,
-                                float /*outlineThickness*/) {}
+void VulkanRenderer::drawCircle(float cx, float cy, float radius,
+                                float r, float g, float b, float a,
+                                float outR, float outG, float outB, float outA,
+                                float outlineThickness)
+{
+    ensureFrameStarted();
 
-void VulkanRenderer::drawRoundedRect(float /*x*/, float /*y*/, float /*w*/, float /*h*/,
-                                     float /*cornerRadius*/,
-                                     float /*r*/, float /*g*/, float /*b*/, float /*a*/,
-                                     float /*outR*/, float /*outG*/, float /*outB*/, float /*outA*/,
-                                     float /*outlineThickness*/) {}
+    // ── Filled circle as triangle list (convert fan → individual triangles)
+    std::vector<Vertex> verts;
+    verts.reserve(kCircleSegments * 3);
+
+    for (int i = 0; i < kCircleSegments; ++i)
+    {
+        float a0 = 2.f * kPi * static_cast<float>(i) / static_cast<float>(kCircleSegments);
+        float a1 = 2.f * kPi * static_cast<float>(i + 1) / static_cast<float>(kCircleSegments);
+
+        verts.push_back({cx, cy, r, g, b, a});
+        verts.push_back({cx + radius * std::cos(a0), cy + radius * std::sin(a0), r, g, b, a});
+        verts.push_back({cx + radius * std::cos(a1), cy + radius * std::sin(a1), r, g, b, a});
+    }
+
+    VkDeviceSize dataSize = verts.size() * sizeof(Vertex);
+    auto alloc = dynamicAllocate(dataSize);
+    if (!alloc.data) return;
+    std::memcpy(alloc.data, verts.data(), dataSize);
+
+    VkCommandBuffer cmd = m_commandBuffers[m_currentFrame];
+    bindVertColorPipeline(cmd, m_vertColorTriListPipeline,
+                          m_vertColorPipelineLayout, m_swapchainExtent,
+                          m_projection);
+
+    vkCmdBindVertexBuffers(cmd, 0, 1, &alloc.buffer, &alloc.offset);
+    vkCmdDraw(cmd, static_cast<uint32_t>(verts.size()), 1, 0, 0);
+
+    // ── Outline as triangle-strip ring
+    if (outlineThickness > 0.f && outA > 0.f)
+    {
+        float innerR = radius;
+        float outerR = radius + outlineThickness;
+
+        std::vector<Vertex> ring;
+        ring.reserve(2 * (kCircleSegments + 1));
+
+        for (int i = 0; i <= kCircleSegments; ++i)
+        {
+            float angle = 2.f * kPi * static_cast<float>(i) / static_cast<float>(kCircleSegments);
+            float cosA = std::cos(angle);
+            float sinA = std::sin(angle);
+
+            ring.push_back({cx + innerR * cosA, cy + innerR * sinA, outR, outG, outB, outA});
+            ring.push_back({cx + outerR * cosA, cy + outerR * sinA, outR, outG, outB, outA});
+        }
+
+        VkDeviceSize ringSize = ring.size() * sizeof(Vertex);
+        auto ringAlloc = dynamicAllocate(ringSize);
+        if (!ringAlloc.data) return;
+        std::memcpy(ringAlloc.data, ring.data(), ringSize);
+
+        bindVertColorPipeline(cmd, m_vertColorTriStripPipeline,
+                              m_vertColorPipelineLayout, m_swapchainExtent,
+                              m_projection);
+
+        vkCmdBindVertexBuffers(cmd, 0, 1, &ringAlloc.buffer, &ringAlloc.offset);
+        vkCmdDraw(cmd, static_cast<uint32_t>(ring.size()), 1, 0, 0);
+    }
+}
+
+void VulkanRenderer::drawRoundedRect(float x, float y, float w, float h,
+                                     float cornerRadius,
+                                     float r, float g, float b, float a,
+                                     float outR, float outG, float outB, float outA,
+                                     float outlineThickness)
+{
+    ensureFrameStarted();
+
+    // Clamp corner radius
+    float maxR = std::min(w * 0.5f, h * 0.5f);
+    float cr = std::min(cornerRadius, maxR);
+    if (cr < 0.f) cr = 0.f;
+
+    float cxr = x + w * 0.5f;
+    float cyr = y + h * 0.5f;
+
+    // Corner arc centers and start angles
+    struct CornerArc { float cx, cy, startAngle; };
+    CornerArc corners[4] = {
+        { x + w - cr, y + cr,     -kPi * 0.5f },  // top-right
+        { x + w - cr, y + h - cr,  0.f },           // bottom-right
+        { x + cr,     y + h - cr,  kPi * 0.5f },    // bottom-left
+        { x + cr,     y + cr,      kPi },            // top-left
+    };
+
+    // Build perimeter points (used for both fill and outline)
+    std::vector<std::pair<float,float>> perim;
+    perim.reserve(4 * (kCornerSegments + 1) + 1);
+
+    for (int c = 0; c < 4; ++c)
+    {
+        float arcCx = corners[c].cx;
+        float arcCy = corners[c].cy;
+        float start = corners[c].startAngle;
+
+        for (int i = 0; i <= kCornerSegments; ++i)
+        {
+            float angle = start + (kPi * 0.5f) * static_cast<float>(i) / static_cast<float>(kCornerSegments);
+            perim.push_back({arcCx + cr * std::cos(angle),
+                             arcCy + cr * std::sin(angle)});
+        }
+    }
+
+    // ── Filled rounded rect as triangle list (fan → individual triangles)
+    std::vector<Vertex> verts;
+    int perimCount = static_cast<int>(perim.size());
+    verts.reserve(perimCount * 3);
+
+    for (int i = 0; i < perimCount; ++i)
+    {
+        int next = (i + 1) % perimCount;
+        verts.push_back({cxr, cyr, r, g, b, a});
+        verts.push_back({perim[i].first, perim[i].second, r, g, b, a});
+        verts.push_back({perim[next].first, perim[next].second, r, g, b, a});
+    }
+
+    VkDeviceSize dataSize = verts.size() * sizeof(Vertex);
+    auto alloc = dynamicAllocate(dataSize);
+    if (!alloc.data) return;
+    std::memcpy(alloc.data, verts.data(), dataSize);
+
+    VkCommandBuffer cmd = m_commandBuffers[m_currentFrame];
+    bindVertColorPipeline(cmd, m_vertColorTriListPipeline,
+                          m_vertColorPipelineLayout, m_swapchainExtent,
+                          m_projection);
+
+    vkCmdBindVertexBuffers(cmd, 0, 1, &alloc.buffer, &alloc.offset);
+    vkCmdDraw(cmd, static_cast<uint32_t>(verts.size()), 1, 0, 0);
+
+    // ── Outline as triangle-strip ring
+    if (outlineThickness > 0.f && outA > 0.f)
+    {
+        float ot = outlineThickness;
+
+        std::vector<Vertex> ring;
+        ring.reserve(2 * (perimCount + 1));
+
+        for (int c = 0; c < 4; ++c)
+        {
+            float arcCx = corners[c].cx;
+            float arcCy = corners[c].cy;
+            float start = corners[c].startAngle;
+
+            for (int i = 0; i <= kCornerSegments; ++i)
+            {
+                float angle = start + (kPi * 0.5f) * static_cast<float>(i) / static_cast<float>(kCornerSegments);
+                float cosA = std::cos(angle);
+                float sinA = std::sin(angle);
+
+                ring.push_back({arcCx + cr * cosA, arcCy + cr * sinA,
+                                outR, outG, outB, outA});
+                ring.push_back({arcCx + (cr + ot) * cosA, arcCy + (cr + ot) * sinA,
+                                outR, outG, outB, outA});
+            }
+        }
+
+        // Close the ring
+        ring.push_back(ring[0]);
+        ring.push_back(ring[1]);
+
+        VkDeviceSize ringSize = ring.size() * sizeof(Vertex);
+        auto ringAlloc = dynamicAllocate(ringSize);
+        if (!ringAlloc.data) return;
+        std::memcpy(ringAlloc.data, ring.data(), ringSize);
+
+        bindVertColorPipeline(cmd, m_vertColorTriStripPipeline,
+                              m_vertColorPipelineLayout, m_swapchainExtent,
+                              m_projection);
+
+        vkCmdBindVertexBuffers(cmd, 0, 1, &ringAlloc.buffer, &ringAlloc.offset);
+        vkCmdDraw(cmd, static_cast<uint32_t>(ring.size()), 1, 0, 0);
+    }
+}
 
 // ── Textured sprites ─────────────────────────────────────────────────────────
 
@@ -2793,5 +3174,40 @@ void VulkanRenderer::measureText(FontHandle font, const std::string& str,
 
 // ── Vertex-colored geometry ──────────────────────────────────────────────────
 
-void VulkanRenderer::drawTriangleStrip(const std::vector<Vertex>& /*verts*/) {}
-void VulkanRenderer::drawLines(const std::vector<Vertex>& /*verts*/) {}
+void VulkanRenderer::drawTriangleStrip(const std::vector<Vertex>& verts)
+{
+    if (verts.size() < 3) return;
+    ensureFrameStarted();
+
+    VkDeviceSize dataSize = verts.size() * sizeof(Vertex);
+    auto alloc = dynamicAllocate(dataSize);
+    if (!alloc.data) return;
+    std::memcpy(alloc.data, verts.data(), dataSize);
+
+    VkCommandBuffer cmd = m_commandBuffers[m_currentFrame];
+    bindVertColorPipeline(cmd, m_vertColorTriStripPipeline,
+                          m_vertColorPipelineLayout, m_swapchainExtent,
+                          m_projection);
+
+    vkCmdBindVertexBuffers(cmd, 0, 1, &alloc.buffer, &alloc.offset);
+    vkCmdDraw(cmd, static_cast<uint32_t>(verts.size()), 1, 0, 0);
+}
+
+void VulkanRenderer::drawLines(const std::vector<Vertex>& verts)
+{
+    if (verts.size() < 2) return;
+    ensureFrameStarted();
+
+    VkDeviceSize dataSize = verts.size() * sizeof(Vertex);
+    auto alloc = dynamicAllocate(dataSize);
+    if (!alloc.data) return;
+    std::memcpy(alloc.data, verts.data(), dataSize);
+
+    VkCommandBuffer cmd = m_commandBuffers[m_currentFrame];
+    bindVertColorPipeline(cmd, m_vertColorLineListPipeline,
+                          m_vertColorPipelineLayout, m_swapchainExtent,
+                          m_projection);
+
+    vkCmdBindVertexBuffers(cmd, 0, 1, &alloc.buffer, &alloc.offset);
+    vkCmdDraw(cmd, static_cast<uint32_t>(verts.size()), 1, 0, 0);
+}

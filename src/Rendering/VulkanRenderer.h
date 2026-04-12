@@ -123,6 +123,7 @@ private:
     void createFlatPipeline();
     void createTexturedPipeline();
     void createTextPipeline();
+    void createVertexColorPipelines();
 
     // ── Texture helpers ──────────────────────────────────────────────
     void createTextureDescriptorResources();
@@ -241,6 +242,12 @@ private:
     VkPipelineLayout      m_textPipelineLayout      = VK_NULL_HANDLE;
     VkPipeline            m_textPipeline            = VK_NULL_HANDLE;
     VkDescriptorPool      m_textDescriptorPool      = VK_NULL_HANDLE;
+
+    // ── Vertex-color pipelines ────────────────────────────────────────
+    VkPipelineLayout m_vertColorPipelineLayout     = VK_NULL_HANDLE;
+    VkPipeline       m_vertColorTriListPipeline    = VK_NULL_HANDLE;
+    VkPipeline       m_vertColorTriStripPipeline   = VK_NULL_HANDLE;
+    VkPipeline       m_vertColorLineListPipeline   = VK_NULL_HANDLE;
 
     // ── VMA allocator ─────────────────────────────────────────────────
     VmaAllocator m_allocator = VK_NULL_HANDLE;

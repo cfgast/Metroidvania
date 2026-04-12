@@ -76,39 +76,6 @@ The project should still compile and run with the OpenGL backend after this
 task. No rendering code changes — build system only.
 
 ==============================================================================
-Task 14: Vertex-color pipeline and primitives
-==============================================================================
-Implemented: false
-
-Create VkPipeline(s) for vertex-colored geometry:
-- Vertex input: vec2 position (location 0) + vec4 color (location 1)
-- Push constants: projection matrix (mat4)
-- Alpha blending enabled, dynamic viewport/scissor
-
-Vulkan does not support GL_TRIANGLE_FAN. Options:
-- Create separate pipelines for TRIANGLE_LIST, TRIANGLE_STRIP, and
-  LINE_LIST topologies, OR
-- Use VK_EXT_extended_dynamic_state (core in 1.3) for dynamic topology
-
-Implement drawTriangleStrip(const vector<Vertex>& verts):
-- Upload vertices to dynamic buffer, bind vertex-color pipeline with
-  triangle-strip topology, draw
-
-Implement drawLines(const vector<Vertex>& verts):
-- Same but with line-list topology
-
-Implement drawCircle(float cx, cy, radius, r, g, b, a, bool filled):
-- Generate circle vertices (32 segments) as a triangle list (not fan)
-  for filled circles, or as a triangle-strip ring for outlines
-- Upload to dynamic buffer, draw
-
-Implement drawRoundedRect(float x, y, w, h, float radius, r, g, b, a,
-bool filled):
-- Generate rounded rect vertices as triangle list (filled) or strip
-  (outline) — convert from GLRenderer's triangle-fan approach
-- Upload to dynamic buffer, draw
-
-==============================================================================
 Task 15: Off-screen render target
 ==============================================================================
 Implemented: false
