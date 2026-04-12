@@ -132,6 +132,10 @@ Clicking on an inactive map in the Select tool switches `ActiveMap` to that map.
 
 All active-map drawing uses a `Graphics.TranslateTransform` to offset local coordinates by the active map's `WorldX`/`WorldY`, so maps render at their correct world positions. Hit-testing and element creation convert world coordinates to local coordinates via `WorldToLocal()` before comparing against map-local element data.
 
+### Move Map Tool
+
+The `EditorTool.MoveMap` tool allows repositioning maps in world space. Activated via the toolbar "Move Map [M]" button or the `M` keyboard shortcut. Clicking on a map starts a drag; the map's `WorldX`/`WorldY` offset is updated as the user moves the mouse, with optional grid snapping. A dashed cyan outline and coordinate tooltip provide visual feedback during the drag. Only the world-space offset changes — internal map coordinates are unaffected. On mouse-up, the `_transitionsNeedRegen` flag is set so auto-transition generation (Task 5) can recalculate adjacency.
+
 ---
 
 ## Physics (`src/Physics/`)

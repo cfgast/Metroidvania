@@ -39,88 +39,6 @@ Key design decisions:
 The tasks are ordered so the editor builds and runs after every task.
 
 ==============================================================================
-Task: Implement map focus/activation by clicking.
-Implemented: true
-
-Details:
-- In MapCanvas, when the user clicks (left mouse, Select tool) on empty
-  space or on an element that belongs to a non-active map, switch the
-  ActiveMap to that map.
-
-- Add a method: EditorMap HitMap(PointF worldPoint)
-    - Returns the topmost EditorMap whose world-offset bounds contain
-      the given world point.
-    - If the point is inside the active map's bounds, prefer the active
-      map (don't switch away accidentally).
-    - If multiple inactive maps overlap at the point, return the one
-      rendered on top (last in list).
-
-- Update OnMouseDown (Select tool):
-    1. First, try hit-testing the ActiveMap's elements (handles,
-       waypoints, spawns, platforms, enemies, transitions, pickups)
-       as before.
-    2. If nothing is hit on the active map, call HitMap() to check
-       if the click is inside another map's bounds.
-    3. If another map is found, switch ActiveMap to it, clear selection,
-       fire SelectionChanged event, and repaint.
-    4. If no map is hit, just clear selection as before.
-
-- When ActiveMap changes:
-    - Clear all selections
-    - Fire SelectionChanged so the properties panel refreshes
-    - Repaint canvas to update active/inactive highlighting
-    - Update MainForm status bar to show active map name
-
-- In MainForm, update the status bar left text to include the active
-  map's name (e.g., "Active: World 1 - Starting Area | 18 platforms").
-
-- Update the Map Settings section of the properties panel to show the
-  active map's name and bounds (it should already work if it reads
-  from ActiveMap.Map, but verify).
-
-==============================================================================
-Task: Add a "Move Map" tool for repositioning maps in world space.
-Implemented: false
-
-Details:
-- Add a new EditorTool enum value: EditorTool.MoveMap
-
-- In MainForm, add a "Move Map" toolbar button with hotkey [M]:
-    - Icon/label: "Move Map [M]"
-    - Positioned after the existing tool buttons
-    - Add keyboard shortcut handler for 'M' key
-
-- In MapCanvas, implement the MoveMap tool:
-    OnMouseDown (MoveMap tool, left click):
-      - Call HitMap() to find which map is under the cursor
-      - If a map is found, start dragging:
-        - Store the hit map as _draggingMap
-        - Store the mouse offset from the map's world origin
-        - Switch ActiveMap to the dragged map
-        - Set cursor to SizeAll
-
-    OnMouseMove (if _draggingMap != null):
-      - Compute new world position from mouse position minus stored offset
-      - If grid snap is enabled, snap the position to 10-unit grid
-      - Update _draggingMap.WorldX and _draggingMap.WorldY
-      - Mark the world as dirty
-      - Repaint canvas
-
-    OnMouseUp:
-      - Clear _draggingMap
-      - Reset cursor
-      - Trigger auto-transition recalculation (for now, just mark a
-        flag _transitionsNeedRegen = true; Task 5 will implement the
-        actual recalculation)
-
-- Visual feedback while dragging:
-    - Draw the map bounds as a dashed outline during drag
-    - Show coordinate tooltip near cursor: "(X, Y)"
-
-- The map's internal coordinates do NOT change — only WorldX/WorldY
-  (the offset in the world file) is modified.
-
-==============================================================================
 Task: Implement adjacency detection and auto-transition generation engine.
 Implemented: false
 
@@ -228,7 +146,7 @@ Details:
   transitions (there's only one map, no neighbors).
 
 ==============================================================================
-Task: Add world management UI — add, create, and remove maps from the world.
+Task: Add world management UI - add, create, and remove maps from the world.
 Implemented: false
 
 Details:

@@ -6,7 +6,7 @@ using System.Windows.Forms;
 
 namespace MapEditor;
 
-public enum EditorTool { Select, Draw, DrawEnemy, DrawTransition, DrawPickup, DrawSpawnPoint }
+public enum EditorTool { Select, Draw, DrawEnemy, DrawTransition, DrawPickup, DrawSpawnPoint, MoveMap }
 public enum SelectableType { None, Platform, Enemy, Transition, Pickup, DefaultSpawn, NamedSpawn }
 internal enum ResizeHandle { None, Move, N, NE, E, SE, S, SW, W, NW }
 internal enum WaypointDrag { None, A, B }
@@ -83,6 +83,11 @@ public sealed class MapCanvas : Control
     private float        _moveOffX, _moveOffY;
     private PointF       _origWaypointA, _origWaypointB;
     private WaypointDrag _draggingWaypoint;
+
+    // ── MoveMap drag state ───────────────────────────────────────────────────
+    private EditorMap? _draggingMap;
+    private float      _dragMapOffX, _dragMapOffY;
+    internal bool      _transitionsNeedRegen;
 
     // ── Appearance ────────────────────────────────────────────────────────────
     private const int HandlePx = 8;
@@ -281,6 +286,28 @@ public sealed class MapCanvas : Control
 
         // Restore transform after active-map drawing
         g.Transform = savedTransform;
+
+        // MoveMap drag overlay: dashed outline and coordinate tooltip
+        if (_draggingMap != null)
+        {
+            var dm = _draggingMap;
+            var b  = dm.Map.Bounds;
+            var sr = WR2S(b.X + dm.WorldX, b.Y + dm.WorldY, b.Width, b.Height);
+            using var dashPen = new Pen(Color.FromArgb(200, 0, 255, 255), 2f) { DashStyle = DashStyle.Dash };
+            g.DrawRectangle(dashPen, sr.X, sr.Y, sr.Width, sr.Height);
+
+            // Coordinate tooltip near cursor
+            string coordText = $"({dm.WorldX:F0}, {dm.WorldY:F0})";
+            using var tipFont = new Font("Segoe UI", 8f);
+            using var tipBg   = new SolidBrush(Color.FromArgb(180, 30, 30, 35));
+            using var tipFg   = new SolidBrush(Color.FromArgb(220, 220, 220));
+            var tipSize = g.MeasureString(coordText, tipFont);
+            var tipPos  = PointToClient(Cursor.Position);
+            float tipX  = tipPos.X + 16;
+            float tipY  = tipPos.Y + 16;
+            g.FillRectangle(tipBg, tipX - 2, tipY - 1, tipSize.Width + 4, tipSize.Height + 2);
+            g.DrawString(coordText, tipFont, tipFg, tipX, tipY);
+        }
     }
 
     /// <summary>
@@ -857,7 +884,24 @@ public sealed class MapCanvas : Control
             return;
         }
 
-        if (e.Button != MouseButtons.Left || Map == null) return;
+        if (e.Button != MouseButtons.Left) return;
+
+        // MoveMap tool works even when no active map is set
+        if (_tool == EditorTool.MoveMap)
+        {
+            var hitMap = HitMap(world);
+            if (hitMap != null)
+            {
+                _draggingMap  = hitMap;
+                _dragMapOffX  = world.X - hitMap.WorldX;
+                _dragMapOffY  = world.Y - hitMap.WorldY;
+                SetActiveMap(hitMap);
+                Cursor = Cursors.SizeAll;
+            }
+            return;
+        }
+
+        if (Map == null) return;
 
         // Convert world coordinates to active map's local space
         var local = WorldToLocal(world);
@@ -1085,6 +1129,23 @@ public sealed class MapCanvas : Control
             return;
         }
 
+        if (_draggingMap != null)
+        {
+            float newX = world.X - _dragMapOffX;
+            float newY = world.Y - _dragMapOffY;
+            if (SnapToGrid)
+            {
+                newX = MathF.Round(newX / GridSize) * GridSize;
+                newY = MathF.Round(newY / GridSize) * GridSize;
+            }
+            _draggingMap.WorldX = newX;
+            _draggingMap.WorldY = newY;
+            _draggingMap.IsDirty = true;
+            MapChanged?.Invoke(this, EventArgs.Empty);
+            Invalidate();
+            return;
+        }
+
         if (_isDragging && (_selected != null || _selectedEnemy != null || _selectedTransition != null || _selectedPickup != null || _selectedDefaultSpawn || _selectedSpawnKey != null))
         {
             if (_selected != null)
@@ -1176,6 +1237,14 @@ public sealed class MapCanvas : Control
     {
         if (_isPanning) { _isPanning = false; UpdateCursorForTool(); return; }
 
+        if (_draggingMap != null)
+        {
+            _draggingMap = null;
+            UpdateCursorForTool();
+            _transitionsNeedRegen = true;
+            return;
+        }
+
         if (_isDrawing && e.Button == MouseButtons.Left)
         {
             _isDrawing = false;
@@ -1264,10 +1333,11 @@ public sealed class MapCanvas : Control
     }
 
     // ── Cursor ────────────────────────────────────────────────────────────────
-    private void UpdateCursorForTool() => Cursor = (_tool == EditorTool.Draw || _tool == EditorTool.DrawEnemy || _tool == EditorTool.DrawTransition || _tool == EditorTool.DrawPickup || _tool == EditorTool.DrawSpawnPoint) ? Cursors.Cross : Cursors.Default;
+    private void UpdateCursorForTool() => Cursor = _tool == EditorTool.MoveMap ? Cursors.SizeAll : (_tool == EditorTool.Draw || _tool == EditorTool.DrawEnemy || _tool == EditorTool.DrawTransition || _tool == EditorTool.DrawPickup || _tool == EditorTool.DrawSpawnPoint) ? Cursors.Cross : Cursors.Default;
 
     private void UpdateCursor(Point screen, PointF world)
     {
+        if (_tool == EditorTool.MoveMap) { Cursor = Cursors.SizeAll; return; }
         if (_tool == EditorTool.Draw || _tool == EditorTool.DrawEnemy || _tool == EditorTool.DrawTransition || _tool == EditorTool.DrawPickup || _tool == EditorTool.DrawSpawnPoint) { Cursor = Cursors.Cross; return; }
         var h = HitHandle(screen);
         if (h != ResizeHandle.None) { Cursor = GetResizeCursor(h); return; }

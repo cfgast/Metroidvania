@@ -61,7 +61,7 @@ public sealed class MainForm : Form
     private ComboBox _cboPickupAbility = null!;
 
     // ── Toolbar buttons ───────────────────────────────────────────────────────
-    private ToolStripButton _btnSelect = null!, _btnDraw = null!, _btnDrawEnemy = null!, _btnDrawTransition = null!, _btnDrawPickup = null!, _btnDrawSpawn = null!, _btnSnap = null!;
+    private ToolStripButton _btnSelect = null!, _btnDraw = null!, _btnDrawEnemy = null!, _btnDrawTransition = null!, _btnDrawPickup = null!, _btnDrawSpawn = null!, _btnMoveMap = null!, _btnSnap = null!;
 
     // ── Status bar labels ─────────────────────────────────────────────────────
     private ToolStripStatusLabel _lblInfo  = null!;
@@ -158,6 +158,7 @@ public sealed class MainForm : Form
         _btnDrawTransition = Tbtn("Draw Transition", "Draw new transition  [T]",    false);
         _btnDrawPickup     = Tbtn("Draw Pickup",     "Draw new ability pickup  [P]", false);
         _btnDrawSpawn      = Tbtn("Draw Spawn",      "Draw new spawn point  [W]",   false);
+        _btnMoveMap        = Tbtn("Move Map",        "Move map in world space  [M]", false);
         _btnSnap           = Tbtn("Snap: ON",        "Toggle grid snapping  [G]",   true);
 
         _btnSelect.Click         += (_, _) => SetTool(EditorTool.Select);
@@ -166,6 +167,7 @@ public sealed class MainForm : Form
         _btnDrawTransition.Click += (_, _) => SetTool(EditorTool.DrawTransition);
         _btnDrawPickup.Click     += (_, _) => SetTool(EditorTool.DrawPickup);
         _btnDrawSpawn.Click      += (_, _) => SetTool(EditorTool.DrawSpawnPoint);
+        _btnMoveMap.Click        += (_, _) => SetTool(EditorTool.MoveMap);
         _btnSnap.Click           += (_, _) => ToggleSnap();
 
         var btnDel = new ToolStripButton("Delete") { ToolTipText = "Delete selected  [Del]" };
@@ -179,7 +181,7 @@ public sealed class MainForm : Form
 
         bar.Items.AddRange(new ToolStripItem[]
         {
-            _btnSelect, _btnDraw, _btnDrawEnemy, _btnDrawTransition, _btnDrawPickup, _btnDrawSpawn,
+            _btnSelect, _btnDraw, _btnDrawEnemy, _btnDrawTransition, _btnDrawPickup, _btnDrawSpawn, _btnMoveMap,
             new ToolStripSeparator(),
             btnDel,
             new ToolStripSeparator(),
@@ -1227,6 +1229,7 @@ public sealed class MainForm : Form
         _btnDrawTransition.Checked = t == EditorTool.DrawTransition;
         _btnDrawPickup.Checked     = t == EditorTool.DrawPickup;
         _btnDrawSpawn.Checked      = t == EditorTool.DrawSpawnPoint;
+        _btnMoveMap.Checked        = t == EditorTool.MoveMap;
         UpdateStatus();
     }
 
@@ -1254,6 +1257,7 @@ public sealed class MainForm : Form
             EditorTool.DrawTransition => "Draw Transition",
             EditorTool.DrawPickup     => "Draw Pickup",
             EditorTool.DrawSpawnPoint => "Draw Spawn",
+            EditorTool.MoveMap        => "Move Map",
             _                         => "Select"
         };
         string sel = _canvas.SelectedPlatform    != null ? " | Platform selected"     :
@@ -1341,6 +1345,7 @@ public sealed class MainForm : Form
             case Keys.T: SetTool(EditorTool.DrawTransition); e.Handled = true; break;
             case Keys.P: SetTool(EditorTool.DrawPickup);     e.Handled = true; break;
             case Keys.W: SetTool(EditorTool.DrawSpawnPoint); e.Handled = true; break;
+            case Keys.M: SetTool(EditorTool.MoveMap);       e.Handled = true; break;
             case Keys.F: _canvas.FitToView();         e.Handled = true; break;
             case Keys.G: ToggleSnap();                e.Handled = true; break;
             case Keys.D1: _canvas.SetZoom(1f);        e.Handled = true; break;
