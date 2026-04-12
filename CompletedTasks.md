@@ -726,3 +726,31 @@ Details:
   (the offset in the world file) is modified.
 
 ==============================================================================
+
+==============================================================================
+Task: Implement adjacency detection and auto-transition generation engine.
+Implemented: true
+
+Details:
+- Created TransitionGenerator.cs in tools/MapEditor/ with a static
+  TransitionGenerator class implementing:
+  - RegenerateTransitions(List<EditorMap>): clears all transitions and
+    auto-generated spawn points (prefixed "from_"), then detects edge
+    adjacency between all map pairs and generates transition zones and
+    spawn points for each shared edge
+  - Edge adjacency detection for all four orientations (A-right to B-left,
+    A-left to B-right, A-bottom to B-top, A-top to B-bottom) with 0.5-unit
+    tolerance and overlap segment validation
+  - Horizontal transitions: 50-unit wide zones extending inward from the
+    shared edge, spanning the overlap height; spawn points 60 units inward
+  - Vertical transitions: 50-unit tall zones extending inward from the
+    shared edge, spanning the overlap width; spawn points 60 units inward
+  - Transition naming: "to_<target_filename>", spawn naming: "from_<source>"
+- Added RegenerateTransitions() method to MapCanvas that calls the static
+  generator when 2+ maps are loaded and repaints
+- Hooked regeneration into: MoveMap mouse-up, LoadWorld, and
+  MainForm.ApplyMapSettings (bounds change)
+- Auto-transitions render using existing drawing code (semi-transparent
+  blue rectangles with dashed borders and target map labels)
+
+==============================================================================

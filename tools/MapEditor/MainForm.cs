@@ -845,6 +845,7 @@ public sealed class MainForm : Form
             map.Bounds.Width  = ParseF(_txtBoundsW);
             map.Bounds.Height = ParseF(_txtBoundsH);
             MarkDirty();
+            _canvas.RegenerateTransitions();
             _canvas.Invalidate();
             SetStatus("Map settings applied.");
         }

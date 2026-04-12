@@ -134,7 +134,16 @@ All active-map drawing uses a `Graphics.TranslateTransform` to offset local coor
 
 ### Move Map Tool
 
-The `EditorTool.MoveMap` tool allows repositioning maps in world space. Activated via the toolbar "Move Map [M]" button or the `M` keyboard shortcut. Clicking on a map starts a drag; the map's `WorldX`/`WorldY` offset is updated as the user moves the mouse, with optional grid snapping. A dashed cyan outline and coordinate tooltip provide visual feedback during the drag. Only the world-space offset changes — internal map coordinates are unaffected. On mouse-up, the `_transitionsNeedRegen` flag is set so auto-transition generation (Task 5) can recalculate adjacency.
+The `EditorTool.MoveMap` tool allows repositioning maps in world space. Activated via the toolbar "Move Map [M]" button or the `M` keyboard shortcut. Clicking on a map starts a drag; the map's `WorldX`/`WorldY` offset is updated as the user moves the mouse, with optional grid snapping. A dashed cyan outline and coordinate tooltip provide visual feedback during the drag. Only the world-space offset changes — internal map coordinates are unaffected. On mouse-up, `RegenerateTransitions()` is called to recalculate adjacency-based transitions.
+
+### Auto-Transition Generation (`TransitionGenerator.cs`)
+
+`TransitionGenerator` is a static class that detects edge adjacency between maps and auto-generates transition zones and spawn points. `RegenerateTransitions(List<EditorMap>)` clears all existing transitions and auto-generated spawn points (those prefixed `from_`), then checks all map pairs for shared edges. A shared edge occurs when one map's boundary exactly touches another's (within 0.5 units) and their perpendicular ranges overlap. For each adjacency, it creates:
+
+- **Transition zones**: 50-unit deep rectangles extending inward from the shared edge in both maps, spanning the overlap length. Named `to_<target_map>` with `targetSpawn` set to `from_<source_map>`.
+- **Spawn points**: Positioned 60 units inward from the edge at the midpoint of the overlap, named `from_<neighbor_map>`.
+
+Regeneration is triggered automatically on: MoveMap mouse-up, bounds change (Apply in properties panel), and world load.
 
 ---
 

@@ -116,12 +116,14 @@ public sealed class MapCanvas : Control
         _editorMaps = maps;
         _activeMap  = maps.Count > 0 ? maps[0] : null;
         ClearSelection();
+        RegenerateTransitions();
         FitToView();
     }
 
     /// <summary>
     /// Convenience overload: load a single MapData (creates a one-entry EditorMap list).
-    /// Keeps the single-map workflow working.
+    /// Keeps the single-map workflow working. Does not generate transitions
+    /// since there are no neighboring maps.
     /// </summary>
     public void LoadMap(MapData map)
     {
@@ -129,6 +131,16 @@ public sealed class MapCanvas : Control
         {
             new EditorMap { Map = map, WorldX = 0, WorldY = 0 }
         });
+    }
+
+    /// <summary>
+    /// Recalculates auto-transitions for all loaded maps based on edge adjacency.
+    /// </summary>
+    public void RegenerateTransitions()
+    {
+        if (_editorMaps.Count < 2) return;
+        TransitionGenerator.RegenerateTransitions(_editorMaps);
+        Invalidate();
     }
 
     public void FitToView()
@@ -1242,6 +1254,7 @@ public sealed class MapCanvas : Control
             _draggingMap = null;
             UpdateCursorForTool();
             _transitionsNeedRegen = true;
+            RegenerateTransitions();
             return;
         }
 
