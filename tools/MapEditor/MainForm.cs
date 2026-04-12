@@ -57,6 +57,18 @@ public sealed class MainForm : Form
     private TextBox  _txtPickupW = null!, _txtPickupH = null!;
     private ComboBox _cboPickupAbility = null!;
 
+    // ── Light property controls ───────────────────────────────────────────────
+    private Panel    _pnlLight = null!;
+    private TextBox  _txtLightName = null!;
+    private ComboBox _cboLightType = null!;
+    private TextBox  _txtLightX = null!, _txtLightY = null!, _txtLightZ = null!;
+    private TextBox  _txtLightR = null!, _txtLightG = null!, _txtLightB = null!;
+    private TextBox  _txtLightIntensity = null!, _txtLightRadius = null!;
+    private TextBox  _txtLightDirX = null!, _txtLightDirY = null!;
+    private TextBox  _txtLightInnerCone = null!, _txtLightOuterCone = null!;
+    private Panel    _lightColorSwatch = null!;
+    private Panel    _pnlSpotFields = null!;
+
     // ── Maps panel controls ──────────────────────────────────────────────────
     private ListBox _lstMaps    = null!;
     private Button  _btnAddMap  = null!;
@@ -65,7 +77,7 @@ public sealed class MainForm : Form
     private bool    _worldStructureDirty;  // maps added/removed/repositioned
 
     // ── Toolbar buttons ───────────────────────────────────────────────────────
-    private ToolStripButton _btnSelect = null!, _btnDraw = null!, _btnDrawEnemy = null!, _btnDrawPickup = null!, _btnDrawSpawn = null!, _btnMoveMap = null!, _btnSnap = null!;
+    private ToolStripButton _btnSelect = null!, _btnDraw = null!, _btnDrawEnemy = null!, _btnDrawPickup = null!, _btnDrawSpawn = null!, _btnDrawLight = null!, _btnMoveMap = null!, _btnSnap = null!;
 
     // ── Status bar labels ─────────────────────────────────────────────────────
     private ToolStripStatusLabel _lblInfo  = null!;
@@ -165,6 +177,7 @@ public sealed class MainForm : Form
         _btnDrawEnemy      = Tbtn("Draw Enemy",      "Draw new enemy  [E]",         false);
         _btnDrawPickup     = Tbtn("Draw Pickup",     "Draw new ability pickup  [P]", false);
         _btnDrawSpawn      = Tbtn("Draw Spawn",      "Draw new spawn point  [W]",   false);
+        _btnDrawLight      = Tbtn("Place Light",     "Place new light  [L]",        false);
         _btnMoveMap        = Tbtn("Move Map",        "Move map in world space  [M]", false);
         _btnSnap           = Tbtn("Snap: ON",        "Toggle grid snapping  [G]",   true);
 
@@ -173,6 +186,7 @@ public sealed class MainForm : Form
         _btnDrawEnemy.Click      += (_, _) => SetTool(EditorTool.DrawEnemy);
         _btnDrawPickup.Click     += (_, _) => SetTool(EditorTool.DrawPickup);
         _btnDrawSpawn.Click      += (_, _) => SetTool(EditorTool.DrawSpawnPoint);
+        _btnDrawLight.Click      += (_, _) => SetTool(EditorTool.DrawLight);
         _btnMoveMap.Click        += (_, _) => SetTool(EditorTool.MoveMap);
         _btnSnap.Click           += (_, _) => ToggleSnap();
 
@@ -187,7 +201,7 @@ public sealed class MainForm : Form
 
         bar.Items.AddRange(new ToolStripItem[]
         {
-            _btnSelect, _btnDraw, _btnDrawEnemy, _btnDrawPickup, _btnDrawSpawn, _btnMoveMap,
+            _btnSelect, _btnDraw, _btnDrawEnemy, _btnDrawPickup, _btnDrawSpawn, _btnDrawLight, _btnMoveMap,
             new ToolStripSeparator(),
             btnDel,
             new ToolStripSeparator(),
@@ -377,10 +391,85 @@ public sealed class MainForm : Form
         _pnlPickup.Controls.AddRange(new Control[] { btnPickupApply, btnPickupDel });
         _pnlPickup.Height  = pky;
 
+        // ── Selected Light ────────────────────────────────────────────────────
+        _pnlLight = new Panel { Location = new(0, dynamicY), Width = panel.Width, AutoSize = false, Visible = false };
+        panel.Controls.Add(_pnlLight);
+
+        int ly = 0;
+        _pnlLight.Controls.Add(SectionLabel("SELECTED LIGHT", 4, ly, pw)); ly += 22;
+        (_, _txtLightName, ly) = SingleField(_pnlLight, "Name", ly, pw);
+
+        _pnlLight.Controls.Add(new Label
+        {
+            Text = "Type:", ForeColor = Color.Silver,
+            Font = new Font("Segoe UI", 7.5f),
+            Location = new(4, ly), Size = new(pw, 15), AutoSize = false
+        });
+        ly += 15;
+        _cboLightType = new ComboBox
+        {
+            Location      = new(4, ly),
+            Size          = new(pw, 22),
+            DropDownStyle = ComboBoxStyle.DropDownList,
+            BackColor     = Color.FromArgb(58, 58, 65),
+            ForeColor     = Color.WhiteSmoke,
+            FlatStyle     = FlatStyle.Flat,
+            Font          = new Font("Consolas", 8.5f)
+        };
+        _cboLightType.Items.AddRange(new object[] { "point", "spot" });
+        _cboLightType.SelectedIndex = 0;
+        _cboLightType.SelectedIndexChanged += (_, _) =>
+        {
+            if (!_syncingUI && _pnlSpotFields != null)
+                _pnlSpotFields.Visible = _cboLightType.SelectedItem?.ToString() == "spot";
+        };
+        _pnlLight.Controls.Add(_cboLightType);
+        ly += 26;
+
+        (_txtLightX, _txtLightY, ly) = TwoFields(_pnlLight, "X", "Y", ly, pw, "Position");
+        (_, _txtLightZ, ly) = SingleField(_pnlLight, "Z (height)", ly, pw);
+        (_txtLightR, _txtLightG, _txtLightB, ly) = ThreeFields(_pnlLight, "R", "G", "B", ly, pw, "Color (0.0–1.0)");
+
+        _lightColorSwatch = new Panel
+        {
+            Location    = new(4, ly),
+            Size        = new(pw, 20),
+            BorderStyle = BorderStyle.FixedSingle,
+            BackColor   = Color.White
+        };
+        _pnlLight.Controls.Add(_lightColorSwatch);
+        ly += 26;
+
+        _txtLightR.TextChanged += (_, _) => RefreshLightSwatch();
+        _txtLightG.TextChanged += (_, _) => RefreshLightSwatch();
+        _txtLightB.TextChanged += (_, _) => RefreshLightSwatch();
+
+        (_, _txtLightIntensity, ly) = SingleField(_pnlLight, "Intensity", ly, pw);
+        (_, _txtLightRadius, ly)    = SingleField(_pnlLight, "Radius", ly, pw);
+
+        // Spot-only fields in a sub-panel
+        _pnlSpotFields = new Panel { Location = new(0, ly), Width = pw + 8, AutoSize = false, Visible = false };
+        _pnlLight.Controls.Add(_pnlSpotFields);
+        int sfy = 0;
+        (_txtLightDirX, _txtLightDirY, sfy) = TwoFields(_pnlSpotFields, "DirX", "DirY", sfy, pw, "Direction");
+        (_txtLightInnerCone, _txtLightOuterCone, sfy) = TwoFields(_pnlSpotFields, "Inner°", "Outer°", sfy, pw, "Cone angles");
+        _pnlSpotFields.Height = sfy;
+        ly += sfy;
+
+        int lhalf = (pw - 4) / 2;
+        var btnLightApply = DarkBtn("Apply",  4,              ly, lhalf);
+        var btnLightDel   = DarkBtn("Delete", 4 + lhalf + 4,  ly, lhalf, Color.FromArgb(130, 55, 55));
+        ly += 30;
+
+        btnLightApply.Click += ApplyLightSettings;
+        btnLightDel.Click   += (_, _) => _canvas.DeleteSelected();
+        _pnlLight.Controls.AddRange(new Control[] { btnLightApply, btnLightDel });
+        _pnlLight.Height = ly;
+
         // ── Maps panel (below dynamic panels) ────────────────────────────────
         // Position it below the highest dynamic panel bottom. We use a fixed
         // Y that is below the dynamic area — the parent panel scrolls.
-        int mapsY = dynamicY + 320;
+        int mapsY = dynamicY + 420;
         panel.Controls.Add(new Label { Height = 1, Location = new(4, mapsY - 8), Width = pw, BackColor = Color.FromArgb(70, 70, 80) });
         panel.Controls.Add(SectionLabel("WORLD MAPS", 4, mapsY, pw)); mapsY += 22;
 
@@ -632,10 +721,12 @@ public sealed class MainForm : Form
             var savedEnemies  = map.Enemies;
             var savedTrans    = map.Transitions;
             var savedPickups  = map.AbilityPickups;
+            var savedLights   = map.Lights;
             if (savedSpawnPts.Count == 0) map.SpawnPoints    = null!;
             if (savedEnemies.Count  == 0) map.Enemies        = null!;
             if (savedTrans.Count    == 0) map.Transitions    = null!;
             if (savedPickups.Count  == 0) map.AbilityPickups = null!;
+            if (savedLights.Count   == 0) map.Lights         = null!;
 
             var opts = new JsonSerializerOptions
             {
@@ -650,6 +741,7 @@ public sealed class MainForm : Form
             map.Enemies        = savedEnemies;
             map.Transitions    = savedTrans;
             map.AbilityPickups = savedPickups;
+            map.Lights         = savedLights;
         }
         catch (Exception ex)
         {
@@ -970,6 +1062,46 @@ public sealed class MainForm : Form
         catch { Warn("Invalid values in pickup settings. Use numeric values for position/size."); }
     }
 
+    private void ApplyLightSettings(object? sender, EventArgs e)
+    {
+        var lt = _canvas.SelectedLight;
+        if (lt == null) return;
+        try
+        {
+            lt.Name       = _txtLightName.Text.Trim();
+            lt.Type       = _cboLightType.SelectedItem?.ToString() ?? "point";
+            lt.X          = ParseF(_txtLightX);
+            lt.Y          = ParseF(_txtLightY);
+            lt.Z          = ParseF(_txtLightZ);
+            lt.R          = ParseF(_txtLightR);
+            lt.G          = ParseF(_txtLightG);
+            lt.B          = ParseF(_txtLightB);
+            lt.Intensity  = ParseF(_txtLightIntensity);
+            lt.Radius     = MathF.Max(1f, ParseF(_txtLightRadius));
+            lt.DirectionX = ParseF(_txtLightDirX);
+            lt.DirectionY = ParseF(_txtLightDirY);
+            lt.InnerCone  = ParseF(_txtLightInnerCone);
+            lt.OuterCone  = ParseF(_txtLightOuterCone);
+            _pnlSpotFields.Visible = lt.Type == "spot";
+            MarkDirty();
+            _canvas.Invalidate();
+            RefreshLightSwatch();
+            SetStatus("Light updated.");
+        }
+        catch { Warn("Invalid values in light settings. Use numeric values."); }
+    }
+
+    private void RefreshLightSwatch()
+    {
+        if (!float.TryParse(_txtLightR.Text, out float r)) return;
+        if (!float.TryParse(_txtLightG.Text, out float g)) return;
+        if (!float.TryParse(_txtLightB.Text, out float b)) return;
+        _lightColorSwatch.BackColor = Color.FromArgb(
+            Math.Clamp((int)(r * 255), 0, 255),
+            Math.Clamp((int)(g * 255), 0, 255),
+            Math.Clamp((int)(b * 255), 0, 255));
+    }
+
     // ── Spawn point handlers ──────────────────────────────────────────────────
     private void OnSpawnListSelected(object? sender, EventArgs e)
     {
@@ -1047,6 +1179,7 @@ public sealed class MainForm : Form
         _pnlPlatform.Visible   = toShow == _pnlPlatform;
         _pnlEnemy.Visible      = toShow == _pnlEnemy;
         _pnlPickup.Visible     = toShow == _pnlPickup;
+        _pnlLight.Visible      = toShow == _pnlLight;
     }
 
     // ── Canvas event handlers ─────────────────────────────────────────────────
@@ -1134,6 +1267,30 @@ public sealed class MainForm : Form
                 _syncingUI = false;
                 break;
 
+            case SelectableType.Light:
+                ShowDynamicPanel(_pnlLight);
+                var lt = _canvas.SelectedLight!;
+                _syncingUI = true;
+                _txtLightName.Text = lt.Name;
+                int ltIdx = _cboLightType.Items.IndexOf(lt.Type);
+                _cboLightType.SelectedIndex = ltIdx >= 0 ? ltIdx : 0;
+                _txtLightX.Text = lt.X.ToString("F1");
+                _txtLightY.Text = lt.Y.ToString("F1");
+                _txtLightZ.Text = lt.Z.ToString("F1");
+                _txtLightR.Text = lt.R.ToString("F2");
+                _txtLightG.Text = lt.G.ToString("F2");
+                _txtLightB.Text = lt.B.ToString("F2");
+                _txtLightIntensity.Text = lt.Intensity.ToString("F2");
+                _txtLightRadius.Text    = lt.Radius.ToString("F1");
+                _txtLightDirX.Text      = lt.DirectionX.ToString("F2");
+                _txtLightDirY.Text      = lt.DirectionY.ToString("F2");
+                _txtLightInnerCone.Text = lt.InnerCone.ToString("F1");
+                _txtLightOuterCone.Text = lt.OuterCone.ToString("F1");
+                _pnlSpotFields.Visible  = lt.Type == "spot";
+                _syncingUI = false;
+                RefreshLightSwatch();
+                break;
+
             default:
                 ShowDynamicPanel(null);
                 break;
@@ -1197,6 +1354,15 @@ public sealed class MainForm : Form
                 _syncingUI = false;
             }
         }
+        var ltSel = _canvas.SelectedLight;
+        if (ltSel != null && !_syncingUI)
+        {
+            _syncingUI = true;
+            _txtLightX.Text      = ltSel.X.ToString("F1");
+            _txtLightY.Text      = ltSel.Y.ToString("F1");
+            _txtLightRadius.Text = ltSel.Radius.ToString("F1");
+            _syncingUI = false;
+        }
         // Refresh spawn list if a spawn was added/removed
         _syncingUI = true;
         RefreshSpawnPointsList();
@@ -1227,6 +1393,7 @@ public sealed class MainForm : Form
         _btnDrawEnemy.Checked      = t == EditorTool.DrawEnemy;
         _btnDrawPickup.Checked     = t == EditorTool.DrawPickup;
         _btnDrawSpawn.Checked      = t == EditorTool.DrawSpawnPoint;
+        _btnDrawLight.Checked      = t == EditorTool.DrawLight;
         _btnMoveMap.Checked        = t == EditorTool.MoveMap;
         UpdateStatus();
     }
@@ -1248,12 +1415,14 @@ public sealed class MainForm : Form
         int    transCount  = _canvas.Map?.Transitions?.Count ?? 0;
         int    pickupCount = _canvas.Map?.AbilityPickups?.Count ?? 0;
         int    spawnCount  = ((_canvas.Map?.SpawnPoints?.Count ?? 0) + 1);
+        int    lightCount  = _canvas.Map?.Lights?.Count ?? 0;
         string tool       = _canvas.Tool switch
         {
             EditorTool.Draw           => "Draw Platform",
             EditorTool.DrawEnemy      => "Draw Enemy",
             EditorTool.DrawPickup     => "Draw Pickup",
             EditorTool.DrawSpawnPoint => "Draw Spawn",
+            EditorTool.DrawLight      => "Place Light",
             EditorTool.MoveMap        => "Move Map",
             _                         => "Select"
         };
@@ -1261,9 +1430,10 @@ public sealed class MainForm : Form
                      _canvas.SelectedEnemy       != null ? " | Enemy selected"        :
                      _canvas.SelectedPickup      != null ? " | Pickup selected"       :
                      _canvas.SelectedDefaultSpawn        ? " | Default spawn selected" :
-                     _canvas.SelectedSpawnKey     != null ? $" | Spawn \"{_canvas.SelectedSpawnKey}\" selected" : "";
+                     _canvas.SelectedSpawnKey     != null ? $" | Spawn \"{_canvas.SelectedSpawnKey}\" selected" :
+                     _canvas.SelectedLight       != null ? " | Light selected"         : "";
         string active = !string.IsNullOrEmpty(mapName) ? $"Active: {mapName} | " : "";
-        _lblInfo.Text = $"{active}{platCount} platforms, {enemyCount} enemies, {transCount} transitions, {pickupCount} pickups, {spawnCount} spawns{sel} | {tool} mode";
+        _lblInfo.Text = $"{active}{platCount} platforms, {enemyCount} enemies, {transCount} transitions, {pickupCount} pickups, {spawnCount} spawns, {lightCount} lights{sel} | {tool} mode";
     }
 
     private void SetStatus(string msg) => _lblInfo.Text = msg;
@@ -1346,6 +1516,7 @@ public sealed class MainForm : Form
             case Keys.E: SetTool(EditorTool.DrawEnemy);      e.Handled = true; break;
             case Keys.P: SetTool(EditorTool.DrawPickup);     e.Handled = true; break;
             case Keys.W: SetTool(EditorTool.DrawSpawnPoint); e.Handled = true; break;
+            case Keys.L: SetTool(EditorTool.DrawLight);      e.Handled = true; break;
             case Keys.M: SetTool(EditorTool.MoveMap);       e.Handled = true; break;
             case Keys.F: _canvas.FitToView();         e.Handled = true; break;
             case Keys.G: ToggleSnap();                e.Handled = true; break;

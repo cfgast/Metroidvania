@@ -123,7 +123,7 @@ Enemies replace `CombatComponent` with `EnemyAIComponent` (+ optional `SlimeAtta
 }
 ```
 
-World files use the `.world.json` extension and reference individual map files by relative path. Each map entry includes a global X/Y offset in world space. The editor models (`WorldData`, `WorldMapEntry`, `EditorMap`) are defined in `Models.cs`. `MainForm.cs` provides File menu items for New/Open/Save World (with Ctrl+Shift+N/O/S shortcuts) and world file I/O (`LoadWorldFile`, `WriteWorldFile`). Opening a single map file auto-creates a one-entry world.
+World files use the `.world.json` extension and reference individual map files by relative path. Each map entry includes a global X/Y offset in world space. The editor models (`WorldData`, `WorldMapEntry`, `EditorMap`, `LightData`) are defined in `Models.cs`. `MainForm.cs` provides File menu items for New/Open/Save World (with Ctrl+Shift+N/O/S shortcuts) and world file I/O (`LoadWorldFile`, `WriteWorldFile`). Opening a single map file auto-creates a one-entry world.
 
 ### Multi-Map Document Model
 
@@ -147,6 +147,10 @@ All active-map drawing uses a `Graphics.TranslateTransform` to offset local coor
 ### Move Map Tool
 
 The `EditorTool.MoveMap` tool allows repositioning maps in world space. Activated via the toolbar "Move Map [M]" button or the `M` keyboard shortcut. Clicking on a map starts a drag; the map's `WorldX`/`WorldY` offset is updated as the user moves the mouse, with optional grid snapping. A dashed cyan outline and coordinate tooltip provide visual feedback during the drag. Only the world-space offset changes — internal map coordinates are unaffected. On mouse-up, `RegenerateTransitions()` is called to recalculate adjacency-based transitions.
+
+### Place Light Tool
+
+The `EditorTool.DrawLight` tool places point and spot lights on the map. Activated via the toolbar "Place Light [L]" button or the `L` keyboard shortcut. Clicking on the canvas creates a new `LightData` at the cursor position with default values (point light, white color, radius 200, intensity 1, Z height 80). Selected lights display a sun icon with radiating rays at the light position and a translucent radius circle colored to match the light color. Four cardinal grab handles on the radius circle allow interactive radius adjustment via drag. Spot lights show a direction arrow and a dash-dot radius circle. Light properties (name, type, position, Z, color, intensity, radius, spot direction, cone angles) are editable in the left sidebar property panel. The `LightData` model class in `Models.cs` serializes to/from the `"lights"` array in the map JSON. `SelectableType.Light` has been added along with full selection, dragging, deletion, and hit-testing support in `MapCanvas`. Inactive maps render lights as small dimmed circles.
 
 ### Auto-Transition Generation (`TransitionGenerator.cs`)
 

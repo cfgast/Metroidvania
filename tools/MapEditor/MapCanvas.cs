@@ -6,8 +6,8 @@ using System.Windows.Forms;
 
 namespace MapEditor;
 
-public enum EditorTool { Select, Draw, DrawEnemy, DrawPickup, DrawSpawnPoint, MoveMap }
-public enum SelectableType { None, Platform, Enemy, Pickup, DefaultSpawn, NamedSpawn }
+public enum EditorTool { Select, Draw, DrawEnemy, DrawPickup, DrawSpawnPoint, DrawLight, MoveMap }
+public enum SelectableType { None, Platform, Enemy, Pickup, DefaultSpawn, NamedSpawn, Light }
 internal enum ResizeHandle { None, Move, N, NE, E, SE, S, SW, W, NW }
 internal enum WaypointDrag { None, A, B }
 
@@ -42,12 +42,16 @@ public sealed class MapCanvas : Control
     private string? _selectedSpawnKey;
     public  string? SelectedSpawnKey => _selectedSpawnKey;
 
+    private LightData? _selectedLight;
+    public  LightData? SelectedLight => _selectedLight;
+
     public  SelectableType SelectedType =>
         _selected != null ? SelectableType.Platform :
         _selectedEnemy != null ? SelectableType.Enemy :
         _selectedPickup != null ? SelectableType.Pickup :
         _selectedDefaultSpawn ? SelectableType.DefaultSpawn :
         _selectedSpawnKey != null ? SelectableType.NamedSpawn :
+        _selectedLight != null ? SelectableType.Light :
         SelectableType.None;
 
     // ── Tool ──────────────────────────────────────────────────────────────────
@@ -79,6 +83,7 @@ public sealed class MapCanvas : Control
     private float        _moveOffX, _moveOffY;
     private PointF       _origWaypointA, _origWaypointB;
     private WaypointDrag _draggingWaypoint;
+    private bool         _draggingLightRadius;
 
     // ── MoveMap drag state ───────────────────────────────────────────────────
     private EditorMap? _draggingMap;
@@ -257,6 +262,7 @@ public sealed class MapCanvas : Control
         _selectedPickup       = null;
         _selectedDefaultSpawn = false;
         _selectedSpawnKey     = null;
+        _selectedLight        = null;
     }
 
     // ── Paint ─────────────────────────────────────────────────────────────────
@@ -287,6 +293,7 @@ public sealed class MapCanvas : Control
         if (_selected != null) { DrawSelectionOutline(g, _selected.X, _selected.Y, _selected.Width, _selected.Height); DrawSelectionHandles(g, _selected.X, _selected.Y, _selected.Width, _selected.Height); }
         if (_selectedEnemy != null) { DrawSelectionOutline(g, _selectedEnemy.X, _selectedEnemy.Y, _selectedEnemy.Width, _selectedEnemy.Height); DrawSelectionHandles(g, _selectedEnemy.X, _selectedEnemy.Y, _selectedEnemy.Width, _selectedEnemy.Height); }
         if (_selectedPickup != null) { DrawSelectionOutline(g, _selectedPickup.X, _selectedPickup.Y, _selectedPickup.Width, _selectedPickup.Height); DrawSelectionHandles(g, _selectedPickup.X, _selectedPickup.Y, _selectedPickup.Width, _selectedPickup.Height); }
+        if (_selectedLight != null) DrawLightSelectionOverlay(g, _selectedLight);
         DrawSpawnPoint(g);
         DrawNamedSpawnPoints(g);
 
@@ -337,6 +344,7 @@ public sealed class MapCanvas : Control
             DrawEnemies(g);
             DrawTransitions(g);
             DrawPickups(g);
+            DrawLights(g);
         }
         else
         {
@@ -425,6 +433,21 @@ public sealed class MapCanvas : Control
             {
                 var pkr = WR2S(pk.X + ox, pk.Y + oy, pk.Width, pk.Height);
                 g.FillRectangle(pickupFillBr, pkr);
+            }
+        }
+
+        // Lights
+        if (map.Lights != null)
+        {
+            var lightColor = Color.FromArgb(dimAlpha, 255, 255, 200);
+            using var lightBr = new SolidBrush(lightColor);
+            foreach (var lt in map.Lights)
+            {
+                var ls = W2S(lt.X + ox, lt.Y + oy);
+                float lr = Math.Max(4f, 6f * _zoom);
+                g.SmoothingMode = SmoothingMode.AntiAlias;
+                g.FillEllipse(lightBr, ls.X - lr, ls.Y - lr, lr * 2, lr * 2);
+                g.SmoothingMode = SmoothingMode.None;
             }
         }
 
@@ -717,6 +740,103 @@ public sealed class MapCanvas : Control
         }
     }
 
+    private void DrawLights(Graphics g)
+    {
+        if (Map!.Lights == null || Map.Lights.Count == 0) return;
+
+        for (int i = 0; i < Map.Lights.Count; i++)
+        {
+            var lt = Map.Lights[i];
+            bool isSel = lt == _selectedLight;
+            DrawLightIcon(g, lt, isSel, i);
+        }
+    }
+
+    private void DrawLightIcon(Graphics g, LightData lt, bool selected, int index)
+    {
+        var s = W2S(lt.X, lt.Y);
+        float iconR = Math.Max(6f, 10f * _zoom);
+
+        // Radius circle (translucent, colored to match light)
+        int cr = Math.Clamp((int)(lt.R * 255), 0, 255);
+        int cg = Math.Clamp((int)(lt.G * 255), 0, 255);
+        int cb = Math.Clamp((int)(lt.B * 255), 0, 255);
+        float radiusPx = lt.Radius * _zoom;
+        using var radiusBrush = new SolidBrush(Color.FromArgb(30, cr, cg, cb));
+        using var radiusPen   = new Pen(Color.FromArgb(selected ? 120 : 60, cr, cg, cb), selected ? 2f : 1f);
+        if (lt.Type == "spot")
+            radiusPen.DashStyle = DashStyle.DashDot;
+        g.SmoothingMode = SmoothingMode.AntiAlias;
+        g.FillEllipse(radiusBrush, s.X - radiusPx, s.Y - radiusPx, radiusPx * 2, radiusPx * 2);
+        g.DrawEllipse(radiusPen, s.X - radiusPx, s.Y - radiusPx, radiusPx * 2, radiusPx * 2);
+
+        // Sun icon: filled circle with rays
+        using var iconFill = new SolidBrush(Color.FromArgb(220, cr, cg, cb));
+        using var iconPen  = new Pen(selected ? Color.Cyan : Color.FromArgb(200, 255, 255, 200), selected ? 2.5f : 1.5f);
+        g.FillEllipse(iconFill, s.X - iconR, s.Y - iconR, iconR * 2, iconR * 2);
+        g.DrawEllipse(iconPen, s.X - iconR, s.Y - iconR, iconR * 2, iconR * 2);
+
+        // Draw rays (small lines radiating out)
+        float rayLen = iconR * 0.7f;
+        float rayStart = iconR + 2f;
+        using var rayPen = new Pen(Color.FromArgb(180, cr, cg, cb), 1.5f);
+        for (int r = 0; r < 8; r++)
+        {
+            double angle = r * Math.PI / 4.0;
+            float cos = (float)Math.Cos(angle);
+            float sin = (float)Math.Sin(angle);
+            g.DrawLine(rayPen,
+                s.X + cos * rayStart, s.Y + sin * rayStart,
+                s.X + cos * (rayStart + rayLen), s.Y + sin * (rayStart + rayLen));
+        }
+
+        // Spot light direction indicator
+        if (lt.Type == "spot")
+        {
+            float dirLen = radiusPx * 0.5f;
+            float dx = lt.DirectionX, dy = lt.DirectionY;
+            float mag = MathF.Sqrt(dx * dx + dy * dy);
+            if (mag > 0.001f) { dx /= mag; dy /= mag; }
+            using var dirPen = new Pen(Color.FromArgb(200, 255, 200, 50), 2f);
+            dirPen.EndCap = System.Drawing.Drawing2D.LineCap.ArrowAnchor;
+            g.DrawLine(dirPen, s.X, s.Y, s.X + dx * dirLen, s.Y + dy * dirLen);
+        }
+
+        g.SmoothingMode = SmoothingMode.None;
+
+        // Label
+        if (_zoom > 0.3f)
+        {
+            using var f = new Font("Segoe UI", 7f, FontStyle.Bold);
+            string label = string.IsNullOrEmpty(lt.Name) ? $"LIGHT {index}" : lt.Name;
+            if (lt.Type == "spot") label = "🔦 " + label;
+            else label = "💡 " + label;
+            using var labelBr = new SolidBrush(Color.FromArgb(220, 255, 255, 200));
+            g.DrawString(label, f, labelBr, s.X + iconR + 4, s.Y - 8);
+        }
+    }
+
+    private void DrawLightSelectionOverlay(Graphics g, LightData lt)
+    {
+        var s = W2S(lt.X, lt.Y);
+        float radiusPx = lt.Radius * _zoom;
+
+        // Draw radius grab handle (small square on the edge of the radius circle)
+        g.SmoothingMode = SmoothingMode.AntiAlias;
+        float handleR = HandlePx / 2f;
+        // Place handle at the right edge of the radius circle
+        g.FillRectangle(Brushes.White, s.X + radiusPx - handleR, s.Y - handleR, HandlePx, HandlePx);
+        g.DrawRectangle(Pens.SteelBlue, s.X + radiusPx - handleR, s.Y - handleR, HandlePx, HandlePx);
+        // Also place on left, top, bottom
+        g.FillRectangle(Brushes.White, s.X - radiusPx - handleR, s.Y - handleR, HandlePx, HandlePx);
+        g.DrawRectangle(Pens.SteelBlue, s.X - radiusPx - handleR, s.Y - handleR, HandlePx, HandlePx);
+        g.FillRectangle(Brushes.White, s.X - handleR, s.Y - radiusPx - handleR, HandlePx, HandlePx);
+        g.DrawRectangle(Pens.SteelBlue, s.X - handleR, s.Y - radiusPx - handleR, HandlePx, HandlePx);
+        g.FillRectangle(Brushes.White, s.X - handleR, s.Y + radiusPx - handleR, HandlePx, HandlePx);
+        g.DrawRectangle(Pens.SteelBlue, s.X - handleR, s.Y + radiusPx - handleR, HandlePx, HandlePx);
+        g.SmoothingMode = SmoothingMode.None;
+    }
+
     // ── Handle geometry ───────────────────────────────────────────────────────
     private Dictionary<ResizeHandle, RectangleF> GetHandleRects(float wx, float wy, float ww, float wh)
     {
@@ -848,6 +968,48 @@ public sealed class MapCanvas : Control
         return WaypointDrag.None;
     }
 
+    private LightData? HitLight(PointF world)
+    {
+        if (Map?.Lights == null) return null;
+        float hitRadius = Math.Max(14f, 18f / _zoom);
+        float hr2 = hitRadius * hitRadius;
+        LightData? best = null;
+        float bestDist = float.MaxValue;
+        for (int i = Map.Lights.Count - 1; i >= 0; i--)
+        {
+            var lt = Map.Lights[i];
+            float dx = world.X - lt.X;
+            float dy = world.Y - lt.Y;
+            float dist = dx * dx + dy * dy;
+            if (dist <= hr2 && dist < bestDist)
+            {
+                bestDist = dist;
+                best = lt;
+            }
+        }
+        return best;
+    }
+
+    private bool HitLightRadiusHandle(PointF world)
+    {
+        if (_selectedLight == null) return false;
+        float handleDist = Math.Max(8f, 12f / _zoom);
+        float r = _selectedLight.Radius;
+        float cx = _selectedLight.X, cy = _selectedLight.Y;
+        // Check four cardinal handles
+        PointF[] handles = {
+            new(cx + r, cy), new(cx - r, cy),
+            new(cx, cy - r), new(cx, cy + r)
+        };
+        foreach (var h in handles)
+        {
+            float dx = world.X - h.X;
+            float dy = world.Y - h.Y;
+            if (dx * dx + dy * dy <= handleDist * handleDist) return true;
+        }
+        return false;
+    }
+
     // ── Mouse ─────────────────────────────────────────────────────────────────
     protected override void OnMouseWheel(MouseEventArgs e)
     {
@@ -947,6 +1109,22 @@ public sealed class MapCanvas : Control
             MapChanged?.Invoke(this, EventArgs.Empty);
             Invalidate();
         }
+        else if (_tool == EditorTool.DrawLight)
+        {
+            int nextId = (Map.Lights?.Count ?? 0) + 1;
+            var lt = new LightData
+            {
+                Name = $"light_{nextId}",
+                Type = "point",
+                X = Snap(local.X), Y = Snap(local.Y),
+                Z = 80f, R = 1f, G = 1f, B = 1f,
+                Intensity = 1f, Radius = 200f
+            };
+            Map!.Lights.Add(lt);
+            SelectLight(lt);
+            MapChanged?.Invoke(this, EventArgs.Empty);
+            Invalidate();
+        }
         else
         {
             var handle = HitHandle(e.Location);
@@ -986,7 +1164,17 @@ public sealed class MapCanvas : Control
                 }
                 else
                 {
-                // Hit-test spawns first (drawn on top of other objects)
+                // Hit-test light radius handles first
+                if (HitLightRadiusHandle(local))
+                {
+                    _isDragging          = true;
+                    _draggingLightRadius = true;
+                    _activeHandle        = ResizeHandle.Move;
+                    _dragStartWorld      = local;
+                }
+                // Hit-test spawns (drawn on top of other objects)
+                else
+                {
                 var hitNamedSpawn = HitNamedSpawn(local);
                 if (hitNamedSpawn != null)
                 {
@@ -1051,6 +1239,18 @@ public sealed class MapCanvas : Control
                         }
                         else
                         {
+                            var hitLight = HitLight(local);
+                            if (hitLight != null)
+                            {
+                                SelectLight(hitLight);
+                                _isDragging     = true;
+                                _activeHandle   = ResizeHandle.Move;
+                                _moveOffX       = local.X - hitLight.X;
+                                _moveOffY       = local.Y - hitLight.Y;
+                                _dragStartWorld = local;
+                            }
+                            else
+                            {
                             // Nothing hit on active map — check if
                             // click is inside another map's bounds
                             var hitMap = HitMap(world);
@@ -1062,8 +1262,10 @@ public sealed class MapCanvas : Control
                             {
                                 ClearSelection();
                             }
+                            }
                         }
                     }
+                }
                 }
                 }
                 }
@@ -1112,7 +1314,7 @@ public sealed class MapCanvas : Control
             return;
         }
 
-        if (_isDragging && (_selected != null || _selectedEnemy != null || _selectedPickup != null || _selectedDefaultSpawn || _selectedSpawnKey != null))
+        if (_isDragging && (_selected != null || _selectedEnemy != null || _selectedPickup != null || _selectedDefaultSpawn || _selectedSpawnKey != null || _selectedLight != null || _draggingLightRadius))
         {
             if (_selected != null)
             {
@@ -1178,6 +1380,17 @@ public sealed class MapCanvas : Control
                 sp.X = Snap(local.X - _moveOffX);
                 sp.Y = Snap(local.Y - _moveOffY);
             }
+            else if (_draggingLightRadius && _selectedLight != null)
+            {
+                float dx = local.X - _selectedLight.X;
+                float dy = local.Y - _selectedLight.Y;
+                _selectedLight.Radius = MathF.Max(10f, Snap(MathF.Sqrt(dx * dx + dy * dy)));
+            }
+            else if (_selectedLight != null)
+            {
+                _selectedLight.X = Snap(local.X - _moveOffX);
+                _selectedLight.Y = Snap(local.Y - _moveOffY);
+            }
             MapChanged?.Invoke(this, EventArgs.Empty);
             Invalidate();
             return;
@@ -1219,7 +1432,7 @@ public sealed class MapCanvas : Control
             return;
         }
 
-        if (_isDragging) { _isDragging = false; _activeHandle = ResizeHandle.None; _draggingWaypoint = WaypointDrag.None; }
+        if (_isDragging) { _isDragging = false; _activeHandle = ResizeHandle.None; _draggingWaypoint = WaypointDrag.None; _draggingLightRadius = false; }
     }
 
     // ── Resize ────────────────────────────────────────────────────────────────
@@ -1268,12 +1481,12 @@ public sealed class MapCanvas : Control
     }
 
     // ── Cursor ────────────────────────────────────────────────────────────────
-    private void UpdateCursorForTool() => Cursor = _tool == EditorTool.MoveMap ? Cursors.SizeAll : (_tool == EditorTool.Draw || _tool == EditorTool.DrawEnemy || _tool == EditorTool.DrawPickup || _tool == EditorTool.DrawSpawnPoint) ? Cursors.Cross : Cursors.Default;
+    private void UpdateCursorForTool() => Cursor = _tool == EditorTool.MoveMap ? Cursors.SizeAll : (_tool == EditorTool.Draw || _tool == EditorTool.DrawEnemy || _tool == EditorTool.DrawPickup || _tool == EditorTool.DrawSpawnPoint || _tool == EditorTool.DrawLight) ? Cursors.Cross : Cursors.Default;
 
     private void UpdateCursor(Point screen, PointF world)
     {
         if (_tool == EditorTool.MoveMap) { Cursor = Cursors.SizeAll; return; }
-        if (_tool == EditorTool.Draw || _tool == EditorTool.DrawEnemy || _tool == EditorTool.DrawPickup || _tool == EditorTool.DrawSpawnPoint) { Cursor = Cursors.Cross; return; }
+        if (_tool == EditorTool.Draw || _tool == EditorTool.DrawEnemy || _tool == EditorTool.DrawPickup || _tool == EditorTool.DrawSpawnPoint || _tool == EditorTool.DrawLight) { Cursor = Cursors.Cross; return; }
         var h = HitHandle(screen);
         if (h != ResizeHandle.None) { Cursor = GetResizeCursor(h); return; }
         if (Map != null && HitWaypoint(world) != WaypointDrag.None) { Cursor = Cursors.SizeAll; return; }
@@ -1282,6 +1495,8 @@ public sealed class MapCanvas : Control
         if (Map != null && HitPlatform(world) != null) { Cursor = Cursors.SizeAll; return; }
         if (Map != null && HitEnemy(world) != null) { Cursor = Cursors.SizeAll; return; }
         if (Map != null && HitPickup(world) != null) { Cursor = Cursors.SizeAll; return; }
+        if (Map != null && HitLight(world) != null) { Cursor = Cursors.SizeAll; return; }
+        if (Map != null && HitLightRadiusHandle(world)) { Cursor = Cursors.SizeWE; return; }
         Cursor = Cursors.Default;
     }
 
@@ -1337,6 +1552,13 @@ public sealed class MapCanvas : Control
             MapChanged?.Invoke(this, EventArgs.Empty);
             Invalidate();
         }
+        else if (_selectedLight != null)
+        {
+            Map.Lights.Remove(_selectedLight);
+            ClearSelection();
+            MapChanged?.Invoke(this, EventArgs.Empty);
+            Invalidate();
+        }
     }
 
     private void SelectPlatform(PlatformData plat)
@@ -1346,6 +1568,7 @@ public sealed class MapCanvas : Control
         _selectedPickup     = null;
         _selectedDefaultSpawn = false;
         _selectedSpawnKey   = null;
+        _selectedLight      = null;
         SelectionChanged?.Invoke(this, EventArgs.Empty);
         Invalidate();
     }
@@ -1357,6 +1580,7 @@ public sealed class MapCanvas : Control
         _selectedPickup     = null;
         _selectedDefaultSpawn = false;
         _selectedSpawnKey   = null;
+        _selectedLight      = null;
         SelectionChanged?.Invoke(this, EventArgs.Empty);
         Invalidate();
     }
@@ -1368,6 +1592,7 @@ public sealed class MapCanvas : Control
         _selectedPickup     = pickup;
         _selectedDefaultSpawn = false;
         _selectedSpawnKey   = null;
+        _selectedLight      = null;
         SelectionChanged?.Invoke(this, EventArgs.Empty);
         Invalidate();
     }
@@ -1379,6 +1604,7 @@ public sealed class MapCanvas : Control
         _selectedPickup     = null;
         _selectedDefaultSpawn = true;
         _selectedSpawnKey   = null;
+        _selectedLight      = null;
         SelectionChanged?.Invoke(this, EventArgs.Empty);
         Invalidate();
     }
@@ -1390,6 +1616,19 @@ public sealed class MapCanvas : Control
         _selectedPickup     = null;
         _selectedDefaultSpawn = false;
         _selectedSpawnKey   = key;
+        _selectedLight      = null;
+        SelectionChanged?.Invoke(this, EventArgs.Empty);
+        Invalidate();
+    }
+
+    private void SelectLight(LightData light)
+    {
+        _selected           = null;
+        _selectedEnemy      = null;
+        _selectedPickup     = null;
+        _selectedDefaultSpawn = false;
+        _selectedSpawnKey   = null;
+        _selectedLight      = light;
         SelectionChanged?.Invoke(this, EventArgs.Empty);
         Invalidate();
     }
@@ -1408,6 +1647,7 @@ public sealed class MapCanvas : Control
         _selectedPickup     = null;
         _selectedDefaultSpawn = false;
         _selectedSpawnKey   = null;
+        _selectedLight      = null;
         SelectionChanged?.Invoke(this, EventArgs.Empty);
         Invalidate();
     }

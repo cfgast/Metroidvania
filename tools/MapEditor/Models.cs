@@ -28,6 +28,9 @@ public class MapData
 
     [JsonPropertyName("abilityPickups")]
     public List<AbilityPickupData> AbilityPickups { get; set; } = new();
+
+    [JsonPropertyName("lights")]
+    public List<LightData> Lights { get; set; } = new();
 }
 
 public class BoundsData
@@ -90,6 +93,24 @@ public class AbilityPickupData
     [JsonPropertyName("y")]       public float  Y       { get; set; }
     [JsonPropertyName("width")]   public float  Width   { get; set; } = 30f;
     [JsonPropertyName("height")]  public float  Height  { get; set; } = 30f;
+}
+
+public class LightData
+{
+    [JsonPropertyName("name")]       public string Name       { get; set; } = "";
+    [JsonPropertyName("type")]       public string Type       { get; set; } = "point";
+    [JsonPropertyName("x")]          public float  X          { get; set; }
+    [JsonPropertyName("y")]          public float  Y          { get; set; }
+    [JsonPropertyName("z")]          public float  Z          { get; set; } = 80f;
+    [JsonPropertyName("r")]          public float  R          { get; set; } = 1f;
+    [JsonPropertyName("g")]          public float  G          { get; set; } = 1f;
+    [JsonPropertyName("b")]          public float  B          { get; set; } = 1f;
+    [JsonPropertyName("intensity")]  public float  Intensity  { get; set; } = 1f;
+    [JsonPropertyName("radius")]     public float  Radius     { get; set; } = 200f;
+    [JsonPropertyName("directionX")] public float  DirectionX { get; set; } = 0f;
+    [JsonPropertyName("directionY")] public float  DirectionY { get; set; } = 1f;
+    [JsonPropertyName("innerCone")]  public float  InnerCone  { get; set; } = 30f;
+    [JsonPropertyName("outerCone")]  public float  OuterCone  { get; set; } = 45f;
 }
 
 /// <summary>
