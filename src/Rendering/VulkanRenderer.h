@@ -109,6 +109,8 @@ private:
     void initVulkan();
     void createSwapchain();
     void destroySwapchain();
+    void createOffscreenImage();
+    void destroyOffscreenImage();
     void createCommandPool();
     void createSyncObjects();
     void cleanupVulkan();
@@ -228,6 +230,12 @@ private:
     // ── Clear color ───────────────────────────────────────────────────
     VkClearColorValue m_clearColor = {{0.0f, 0.0f, 0.0f, 1.0f}};
 
+    // ── Off-screen render target ──────────────────────────────────────
+    VkImage       m_offscreenImage      = VK_NULL_HANDLE;
+    VmaAllocation m_offscreenAllocation = VK_NULL_HANDLE;
+    VkImageView   m_offscreenView       = VK_NULL_HANDLE;
+    VkSampler     m_offscreenSampler    = VK_NULL_HANDLE;
+
     // ── Flat-color pipeline ───────────────────────────────────────────
     VkDescriptorSetLayout m_flatDescriptorSetLayout = VK_NULL_HANDLE;
     VkPipelineLayout      m_flatPipelineLayout      = VK_NULL_HANDLE;
@@ -269,6 +277,7 @@ private:
 
     // ── Frame recording state ────────────────────────────────────────
     bool     m_frameStarted      = false;
+    bool     m_worldPass         = false;
     uint32_t m_currentImageIndex = 0;
 
     // ── Projection matrix ────────────────────────────────────────────

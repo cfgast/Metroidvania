@@ -1591,3 +1591,29 @@ bool filled):
 - Upload to dynamic buffer, draw
 
 ==============================================================================
+
+==============================================================================
+Task 15: Off-screen render target
+==============================================================================
+Implemented: true
+
+Create a VkImage to serve as the off-screen world render target (equivalent
+to GLRenderer's m_fboColorTex):
+- Format: same as swap chain (B8G8R8A8_SRGB)
+- Usage: COLOR_ATTACHMENT | SAMPLED (will be sampled during blit pass)
+- Create VkImageView and VkSampler for the blit pass to read from
+
+Implement beginFrame():
+- Set m_worldPass = true
+- Transition off-screen image to COLOR_ATTACHMENT_OPTIMAL
+- Begin dynamic rendering targeting the off-screen image
+- Set viewport and scissor to off-screen image dimensions
+- Apply clear color
+
+The off-screen image must be recreated when the window resizes (same
+dimensions as the swap chain).
+
+Store the off-screen image, view, sampler, and VMA allocation as members.
+Clean up in destructor and before recreation on resize.
+
+==============================================================================

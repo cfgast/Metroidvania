@@ -76,30 +76,6 @@ The project should still compile and run with the OpenGL backend after this
 task. No rendering code changes — build system only.
 
 ==============================================================================
-Task 15: Off-screen render target
-==============================================================================
-Implemented: false
-
-Create a VkImage to serve as the off-screen world render target (equivalent
-to GLRenderer's m_fboColorTex):
-- Format: same as swap chain (B8G8R8A8_SRGB)
-- Usage: COLOR_ATTACHMENT | SAMPLED (will be sampled during blit pass)
-- Create VkImageView and VkSampler for the blit pass to read from
-
-Implement beginFrame():
-- Set m_worldPass = true
-- Transition off-screen image to COLOR_ATTACHMENT_OPTIMAL
-- Begin dynamic rendering targeting the off-screen image
-- Set viewport and scissor to off-screen image dimensions
-- Apply clear color
-
-The off-screen image must be recreated when the window resizes (same
-dimensions as the swap chain).
-
-Store the off-screen image, view, sampler, and VMA allocation as members.
-Clean up in destructor and before recreation on resize.
-
-==============================================================================
 Task 16: Lighting uniform buffer
 ==============================================================================
 Implemented: false

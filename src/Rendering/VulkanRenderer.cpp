@@ -197,6 +197,82 @@ void VulkanRenderer::destroySwapchain()
     }
 }
 
+// ── Off-screen render target ─────────────────────────────────────────────────
+
+void VulkanRenderer::createOffscreenImage()
+{
+    VkImageCreateInfo imageInfo{};
+    imageInfo.sType         = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO;
+    imageInfo.imageType     = VK_IMAGE_TYPE_2D;
+    imageInfo.format        = m_swapchainFormat;
+    imageInfo.extent        = {m_swapchainExtent.width, m_swapchainExtent.height, 1};
+    imageInfo.mipLevels     = 1;
+    imageInfo.arrayLayers   = 1;
+    imageInfo.samples       = VK_SAMPLE_COUNT_1_BIT;
+    imageInfo.tiling        = VK_IMAGE_TILING_OPTIMAL;
+    imageInfo.usage         = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT |
+                              VK_IMAGE_USAGE_SAMPLED_BIT;
+    imageInfo.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
+
+    VmaAllocationCreateInfo allocCI{};
+    allocCI.usage = VMA_MEMORY_USAGE_AUTO;
+    allocCI.flags = VMA_ALLOCATION_CREATE_DEDICATED_MEMORY_BIT;
+
+    if (vmaCreateImage(m_allocator, &imageInfo, &allocCI,
+                       &m_offscreenImage, &m_offscreenAllocation, nullptr) != VK_SUCCESS)
+        throw std::runtime_error("VulkanRenderer: failed to create off-screen image");
+
+    VkImageViewCreateInfo viewInfo{};
+    viewInfo.sType                           = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO;
+    viewInfo.image                           = m_offscreenImage;
+    viewInfo.viewType                        = VK_IMAGE_VIEW_TYPE_2D;
+    viewInfo.format                          = m_swapchainFormat;
+    viewInfo.subresourceRange.aspectMask     = VK_IMAGE_ASPECT_COLOR_BIT;
+    viewInfo.subresourceRange.baseMipLevel   = 0;
+    viewInfo.subresourceRange.levelCount     = 1;
+    viewInfo.subresourceRange.baseArrayLayer = 0;
+    viewInfo.subresourceRange.layerCount     = 1;
+
+    if (vkCreateImageView(m_device, &viewInfo, nullptr, &m_offscreenView) != VK_SUCCESS)
+        throw std::runtime_error("VulkanRenderer: failed to create off-screen image view");
+
+    VkSamplerCreateInfo samplerInfo{};
+    samplerInfo.sType        = VK_STRUCTURE_TYPE_SAMPLER_CREATE_INFO;
+    samplerInfo.magFilter    = VK_FILTER_LINEAR;
+    samplerInfo.minFilter    = VK_FILTER_LINEAR;
+    samplerInfo.addressModeU = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE;
+    samplerInfo.addressModeV = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE;
+    samplerInfo.addressModeW = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE;
+
+    if (vkCreateSampler(m_device, &samplerInfo, nullptr, &m_offscreenSampler) != VK_SUCCESS)
+        throw std::runtime_error("VulkanRenderer: failed to create off-screen sampler");
+
+    std::cout << "[Vulkan] Off-screen render target created: "
+              << m_swapchainExtent.width << "x" << m_swapchainExtent.height << "\n";
+}
+
+void VulkanRenderer::destroyOffscreenImage()
+{
+    if (m_offscreenSampler != VK_NULL_HANDLE)
+    {
+        vkDestroySampler(m_device, m_offscreenSampler, nullptr);
+        m_offscreenSampler = VK_NULL_HANDLE;
+    }
+    if (m_offscreenView != VK_NULL_HANDLE)
+    {
+        vkDestroyImageView(m_device, m_offscreenView, nullptr);
+        m_offscreenView = VK_NULL_HANDLE;
+    }
+    if (m_offscreenImage != VK_NULL_HANDLE)
+    {
+        vmaDestroyImage(m_allocator, m_offscreenImage, m_offscreenAllocation);
+        m_offscreenImage      = VK_NULL_HANDLE;
+        m_offscreenAllocation = VK_NULL_HANDLE;
+    }
+}
+
+// ── Command pool ─────────────────────────────────────────────────────────────
+
 void VulkanRenderer::createCommandPool()
 {
     VkCommandPoolCreateInfo poolInfo{};
@@ -245,6 +321,9 @@ void VulkanRenderer::cleanupVulkan()
 
         // ── Destroy texture resources ───────────────────────────────
         cleanupTextureResources();
+
+        // ── Destroy off-screen render target ────────────────────────
+        destroyOffscreenImage();
 
         // ── Destroy dynamic vertex buffers ───────────────────────────
         for (uint32_t i = 0; i < MAX_FRAMES_IN_FLIGHT; ++i)
@@ -350,7 +429,9 @@ void VulkanRenderer::recreateSwapchain()
     }
 
     vkDeviceWaitIdle(m_device);
+    destroyOffscreenImage();
     createSwapchain();
+    createOffscreenImage();
 
     m_windowW = static_cast<float>(m_swapchainExtent.width);
     m_windowH = static_cast<float>(m_swapchainExtent.height);
@@ -383,6 +464,14 @@ void VulkanRenderer::transitionImageLayout(VkCommandBuffer cmd, VkImage image,
         barrier.srcAccessMask = VK_ACCESS_2_COLOR_ATTACHMENT_WRITE_BIT;
         barrier.dstStageMask  = VK_PIPELINE_STAGE_2_BOTTOM_OF_PIPE_BIT;
         barrier.dstAccessMask = 0;
+    }
+    else if (oldLayout == VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL &&
+             newLayout == VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL)
+    {
+        barrier.srcStageMask  = VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT;
+        barrier.srcAccessMask = VK_ACCESS_2_COLOR_ATTACHMENT_WRITE_BIT;
+        barrier.dstStageMask  = VK_PIPELINE_STAGE_2_FRAGMENT_SHADER_BIT;
+        barrier.dstAccessMask = VK_ACCESS_2_SHADER_READ_BIT;
     }
 
     VkDependencyInfo depInfo{};
@@ -1658,6 +1747,7 @@ VulkanRenderer::VulkanRenderer(const std::string& title, unsigned int width,
     initVulkan();
     initAllocator();
     createSwapchain();
+    createOffscreenImage();
     createCommandPool();
     createSyncObjects();
     createFlatPipeline();
@@ -1786,24 +1876,28 @@ void VulkanRenderer::ensureFrameStarted()
                           VK_IMAGE_LAYOUT_UNDEFINED,
                           VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL);
 
-    // 6. Begin dynamic rendering
-    VkRenderingAttachmentInfo colorAttachment{};
-    colorAttachment.sType       = VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO;
-    colorAttachment.imageView   = m_swapchainImageViews[m_currentImageIndex];
-    colorAttachment.imageLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
-    colorAttachment.loadOp      = VK_ATTACHMENT_LOAD_OP_CLEAR;
-    colorAttachment.storeOp     = VK_ATTACHMENT_STORE_OP_STORE;
-    colorAttachment.clearValue.color = m_clearColor;
+    // 6. Begin dynamic rendering to swap chain (skip if world pass —
+    //    beginFrame() will start rendering to the off-screen image instead)
+    if (!m_worldPass)
+    {
+        VkRenderingAttachmentInfo colorAttachment{};
+        colorAttachment.sType       = VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO;
+        colorAttachment.imageView   = m_swapchainImageViews[m_currentImageIndex];
+        colorAttachment.imageLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
+        colorAttachment.loadOp      = VK_ATTACHMENT_LOAD_OP_CLEAR;
+        colorAttachment.storeOp     = VK_ATTACHMENT_STORE_OP_STORE;
+        colorAttachment.clearValue.color = m_clearColor;
 
-    VkRenderingInfo renderInfo{};
-    renderInfo.sType                = VK_STRUCTURE_TYPE_RENDERING_INFO;
-    renderInfo.renderArea.offset    = {0, 0};
-    renderInfo.renderArea.extent    = m_swapchainExtent;
-    renderInfo.layerCount           = 1;
-    renderInfo.colorAttachmentCount = 1;
-    renderInfo.pColorAttachments    = &colorAttachment;
+        VkRenderingInfo renderInfo{};
+        renderInfo.sType                = VK_STRUCTURE_TYPE_RENDERING_INFO;
+        renderInfo.renderArea.offset    = {0, 0};
+        renderInfo.renderArea.extent    = m_swapchainExtent;
+        renderInfo.layerCount           = 1;
+        renderInfo.colorAttachmentCount = 1;
+        renderInfo.pColorAttachments    = &colorAttachment;
 
-    vkCmdBeginRendering(cmd, &renderInfo);
+        vkCmdBeginRendering(cmd, &renderInfo);
+    }
 }
 
 void VulkanRenderer::display()
@@ -1813,17 +1907,17 @@ void VulkanRenderer::display()
 
     VkCommandBuffer cmd = m_commandBuffers[m_currentFrame];
 
-    // 7. End dynamic rendering
+    // End whatever dynamic rendering pass is active
     vkCmdEndRendering(cmd);
 
-    // 8. Transition image for presentation: COLOR_ATTACHMENT_OPTIMAL → PRESENT_SRC
+    // Transition swap chain image for presentation
     transitionImageLayout(cmd, m_swapchainImages[m_currentImageIndex],
                           VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
                           VK_IMAGE_LAYOUT_PRESENT_SRC_KHR);
 
     vkEndCommandBuffer(cmd);
 
-    // 9. Submit command buffer
+    // Submit command buffer
     VkPipelineStageFlags waitStage = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
 
     VkSubmitInfo submitInfo{};
@@ -1839,7 +1933,7 @@ void VulkanRenderer::display()
     if (vkQueueSubmit(m_graphicsQueue, 1, &submitInfo, m_inFlight[m_currentFrame]) != VK_SUCCESS)
         throw std::runtime_error("VulkanRenderer: failed to submit command buffer");
 
-    // 10. Present
+    // Present
     VkPresentInfoKHR presentInfo{};
     presentInfo.sType              = VK_STRUCTURE_TYPE_PRESENT_INFO_KHR;
     presentInfo.waitSemaphoreCount = 1;
@@ -1861,12 +1955,58 @@ void VulkanRenderer::display()
         throw std::runtime_error("VulkanRenderer: failed to present swap chain image");
     }
 
+    m_worldPass = false;
     m_currentFrame = (m_currentFrame + 1) % MAX_FRAMES_IN_FLIGHT;
 }
 
 // ── Frame / lighting pass ────────────────────────────────────────────────────
 
-void VulkanRenderer::beginFrame() {}
+void VulkanRenderer::beginFrame()
+{
+    m_worldPass = true;
+    ensureFrameStarted();
+
+    VkCommandBuffer cmd = m_commandBuffers[m_currentFrame];
+
+    // Transition off-screen image to color attachment
+    transitionImageLayout(cmd, m_offscreenImage,
+                          VK_IMAGE_LAYOUT_UNDEFINED,
+                          VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL);
+
+    // Begin dynamic rendering targeting the off-screen image
+    VkRenderingAttachmentInfo colorAttachment{};
+    colorAttachment.sType       = VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO;
+    colorAttachment.imageView   = m_offscreenView;
+    colorAttachment.imageLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
+    colorAttachment.loadOp      = VK_ATTACHMENT_LOAD_OP_CLEAR;
+    colorAttachment.storeOp     = VK_ATTACHMENT_STORE_OP_STORE;
+    colorAttachment.clearValue.color = m_clearColor;
+
+    VkRenderingInfo renderInfo{};
+    renderInfo.sType                = VK_STRUCTURE_TYPE_RENDERING_INFO;
+    renderInfo.renderArea.offset    = {0, 0};
+    renderInfo.renderArea.extent    = m_swapchainExtent;
+    renderInfo.layerCount           = 1;
+    renderInfo.colorAttachmentCount = 1;
+    renderInfo.pColorAttachments    = &colorAttachment;
+
+    vkCmdBeginRendering(cmd, &renderInfo);
+
+    // Set viewport and scissor to off-screen image dimensions
+    VkViewport viewport{};
+    viewport.x        = 0.f;
+    viewport.y        = 0.f;
+    viewport.width    = static_cast<float>(m_swapchainExtent.width);
+    viewport.height   = static_cast<float>(m_swapchainExtent.height);
+    viewport.minDepth = 0.f;
+    viewport.maxDepth = 1.f;
+    vkCmdSetViewport(cmd, 0, 1, &viewport);
+
+    VkRect2D scissor{};
+    scissor.offset = {0, 0};
+    scissor.extent = m_swapchainExtent;
+    vkCmdSetScissor(cmd, 0, 1, &scissor);
+}
 void VulkanRenderer::endFrame() {}
 void VulkanRenderer::addLight(const Light& /*light*/) {}
 void VulkanRenderer::clearLights() {}
