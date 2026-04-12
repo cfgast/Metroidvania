@@ -131,18 +131,14 @@ add_executable(Metroidvania
     src/UI/SaveSlotScreen.cpp
     src/UI/PauseMenu.cpp
     src/UI/ControlsMenu.cpp
-    src/Rendering/GLRenderer.cpp
     src/Rendering/VulkanRenderer.cpp
     src/Rendering/VmaImpl.cpp
-    src/Rendering/Shader.cpp
     src/Input/GLFWInput.cpp
-    third_party/glad/src/gl.c
     third_party/stb/stb_image_impl.cpp
 )
 
 target_include_directories(Metroidvania PRIVATE
     ${PHYSX_ROOT}/include
-    third_party/glad/include
     third_party/stb
 )
 
@@ -155,7 +151,6 @@ target_link_libraries(Metroidvania
         Vulkan::Vulkan
         GPUOpen::VulkanMemoryAllocator
         vk-bootstrap::vk-bootstrap
-        $<$<PLATFORM_ID:Windows>:opengl32>
         $<$<PLATFORM_ID:Windows>:comdlg32>
         ${PHYSX_LIB_DIR}/PhysX.lib
         ${PHYSX_LIB_DIR}/PhysXFoundation.lib

@@ -1758,3 +1758,25 @@ After this task, the input system (keyboard, mouse, gamepad) should work
 identically under both backends.
 
 ==============================================================================
+
+==============================================================================
+Task 21: Remove OpenGL backend
+==============================================================================
+Implemented: true
+
+With all Renderer methods fully implemented in VulkanRenderer:
+
+1. Deleted src/Rendering/GLRenderer.h and GLRenderer.cpp
+2. Deleted src/Rendering/Shader.h and Shader.cpp
+3. Removed third_party/glad/ directory entirely
+4. Updated CMakeLists.txt:
+   - Removed GLRenderer.cpp, Shader.cpp from add_executable sources
+   - Removed third_party/glad/src/gl.c from sources
+   - Removed third_party/glad/include from include directories
+   - Removed $<$<PLATFORM_ID:Windows>:opengl32> from link libraries
+5. Removed the #define USE_VULKAN guard from main.cpp — VulkanRenderer
+   is now the only renderer
+6. Removed any remaining #include <glad/gl.h> from the codebase
+7. Verified the project compiles and links without any OpenGL references
+
+==============================================================================

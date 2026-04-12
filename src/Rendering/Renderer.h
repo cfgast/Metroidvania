@@ -8,7 +8,7 @@ struct Light;
 class InputSystem;
 
 // Pure-virtual rendering interface.
-// All game code draws through this API so the back-end (e.g. OpenGL)
+// All game code draws through this API so the back-end (Vulkan)
 // can be swapped without touching callers.
 class Renderer
 {

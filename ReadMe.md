@@ -8,7 +8,7 @@ Project Parts
 ==============================================================================
 The game should have a component based object structure that makes is easy to create game objects that are a group of funtionality.
 
-Game Renderer: OpenGL 3.3 Core (via GLFW + GLAD)
+Game Renderer: Vulkan 1.3 (via GLFW + VMA + vk-bootstrap)
 Game Physics: Nvidia PhysX (integrated via PhysXWorld singleton; PhysX SDK in third_party/PhysX-src)
 
 ==============================================================================

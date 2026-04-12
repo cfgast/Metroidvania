@@ -6,11 +6,7 @@
 
 #include <glm/vec2.hpp>
 
-#ifdef USE_VULKAN
 #include "Rendering/VulkanRenderer.h"
-#else
-#include "Rendering/GLRenderer.h"
-#endif
 #include "Rendering/Light.h"
 #include "Input/InputSystem.h"
 #include "Core/GameObject.h"
@@ -40,11 +36,7 @@ int main()
     PhysXWorld::instance().init();
     InputBindings::instance().load();
 
-#ifdef USE_VULKAN
     VulkanRenderer renderer("Metroidvania", 800, 600, 60);
-#else
-    GLRenderer renderer("Metroidvania", 800, 600, 60);
-#endif
     renderer.setMouseCursorVisible(false);
 
     // --- Game state ---

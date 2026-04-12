@@ -102,26 +102,6 @@ constants. The camera-follows-player behavior in main.cpp calls setView()
 each frame with the player's position — no changes needed in main.cpp.
 
 ==============================================================================
-Task 21: Remove OpenGL backend
-==============================================================================
-Implemented: false
-
-With all Renderer methods fully implemented in VulkanRenderer:
-
-1. Delete src/Rendering/GLRenderer.h and GLRenderer.cpp
-2. Delete src/Rendering/Shader.h and Shader.cpp
-3. Remove third_party/glad/ directory entirely
-4. Update CMakeLists.txt:
-   - Remove GLRenderer.cpp, Shader.cpp from add_executable sources
-   - Remove third_party/glad/src/gl.c from sources
-   - Remove third_party/glad/include from include directories
-   - Remove $<$<PLATFORM_ID:Windows>:opengl32> from link libraries
-5. Remove the #define USE_VULKAN guard from main.cpp — VulkanRenderer
-   becomes the only renderer
-6. Remove any remaining #include <glad/gl.h> from the codebase
-7. Verify the project compiles and links without any OpenGL references
-
-==============================================================================
 Task 22: Validation and testing
 ==============================================================================
 Implemented: false
