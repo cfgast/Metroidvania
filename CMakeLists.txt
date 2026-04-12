@@ -74,18 +74,31 @@ set(PHYSX_ROOT "${CMAKE_SOURCE_DIR}/third_party/PhysX-src/physx")
 set(PHYSX_LIB_DIR "${CMAKE_SOURCE_DIR}/third_party/PhysX-install/bin/win.x86_64.vc143.md/debug")
 
 # --- Compile GLSL shaders to SPIR-V ---
-# Usage: compile_shaders(TARGET <target> SOURCES shader1.glsl shader2.glsl ...)
-# Compiled .spv files are placed next to the source .glsl files in the build output.
+# Usage: compile_shaders(TARGET <target> SOURCES shader1.glsl ...
+#                        [INCLUDE_DIRS dir1 ...] [DEPENDS header.glsl ...])
+# Compiled .spv files are placed in ${CMAKE_CURRENT_BINARY_DIR}/assets/shaders/.
+# INCLUDE_DIRS are passed as -I flags to glslc (for #include support).
+# DEPENDS lists header files that all shaders depend on (e.g. lighting.glsl).
 function(compile_shaders)
-    cmake_parse_arguments(SHADER "" "TARGET" "SOURCES" ${ARGN})
+    cmake_parse_arguments(SHADER "" "TARGET" "SOURCES;INCLUDE_DIRS;DEPENDS" ${ARGN})
+
+    # Build -I flags from include directories
+    set(INCLUDE_FLAGS)
+    foreach(INC_DIR ${SHADER_INCLUDE_DIRS})
+        list(APPEND INCLUDE_FLAGS "-I${INC_DIR}")
+    endforeach()
+
     foreach(GLSL_FILE ${SHADER_SOURCES})
         get_filename_component(FILE_NAME ${GLSL_FILE} NAME)
         set(SPV_FILE "${CMAKE_CURRENT_BINARY_DIR}/assets/shaders/${FILE_NAME}.spv")
         add_custom_command(
             OUTPUT  ${SPV_FILE}
             COMMAND ${CMAKE_COMMAND} -E make_directory "${CMAKE_CURRENT_BINARY_DIR}/assets/shaders"
-            COMMAND Vulkan::glslc ${GLSL_FILE} -o ${SPV_FILE}
-            DEPENDS ${GLSL_FILE}
+            COMMAND Vulkan::glslc
+                    --target-env=vulkan1.3
+                    ${INCLUDE_FLAGS}
+                    ${GLSL_FILE} -o ${SPV_FILE}
+            DEPENDS ${GLSL_FILE} ${SHADER_DEPENDS}
             COMMENT "Compiling SPIR-V: ${FILE_NAME} -> ${FILE_NAME}.spv"
             VERBATIM
         )
@@ -151,6 +164,25 @@ target_link_libraries(Metroidvania
         ${PHYSX_LIB_DIR}/PhysXPvdSDK_static.lib
 )
 
+# --- Compile Vulkan GLSL shaders to SPIR-V ---
+set(SHADER_DIR "${CMAKE_SOURCE_DIR}/assets/shaders")
+compile_shaders(
+    TARGET       Metroidvania
+    SOURCES
+        ${SHADER_DIR}/flat.vert
+        ${SHADER_DIR}/flat.frag
+        ${SHADER_DIR}/textured.vert
+        ${SHADER_DIR}/textured.frag
+        ${SHADER_DIR}/text.vert
+        ${SHADER_DIR}/text.frag
+        ${SHADER_DIR}/vertcolor.vert
+        ${SHADER_DIR}/vertcolor.frag
+        ${SHADER_DIR}/blit.vert
+        ${SHADER_DIR}/blit.frag
+    INCLUDE_DIRS ${SHADER_DIR}
+    DEPENDS      ${SHADER_DIR}/lighting.glsl
+)
+
 # GLM Vulkan-compatible settings
 target_compile_definitions(Metroidvania PRIVATE
     GLM_FORCE_DEPTH_ZERO_TO_ONE
@@ -181,4 +213,11 @@ add_custom_command(TARGET Metroidvania POST_BUILD
     COMMAND ${CMAKE_COMMAND} -E copy_directory
         ${CMAKE_SOURCE_DIR}/assets
         $<TARGET_FILE_DIR:Metroidvania>/assets
+)
+
+# Copy compiled SPIR-V shaders next to the executable
+add_custom_command(TARGET Metroidvania POST_BUILD
+    COMMAND ${CMAKE_COMMAND} -E copy_directory
+        ${CMAKE_CURRENT_BINARY_DIR}/assets/shaders
+        $<TARGET_FILE_DIR:Metroidvania>/assets/shaders
 )

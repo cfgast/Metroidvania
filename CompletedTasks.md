@@ -1332,3 +1332,35 @@ Implement the core frame loop in display():
 After this task, the window should clear to a solid color each frame.
 
 ==============================================================================
+
+==============================================================================
+Task 5: Port shaders to Vulkan GLSL and build SPIR-V
+==============================================================================
+Implemented: true
+
+Extract all 5 shader programs currently embedded as inline C++ strings in
+GLRenderer.cpp into separate .glsl files under assets/shaders/:
+
+  assets/shaders/flat.vert          — flat-color vertex shader
+  assets/shaders/flat.frag          — flat-color fragment shader (with lighting)
+  assets/shaders/textured.vert      — sprite vertex shader
+  assets/shaders/textured.frag      — sprite fragment shader (with lighting + normal maps)
+  assets/shaders/text.vert          — text vertex shader
+  assets/shaders/text.frag          — text fragment shader
+  assets/shaders/vertcolor.vert     — vertex-color vertex shader
+  assets/shaders/vertcolor.frag     — vertex-color fragment shader
+  assets/shaders/blit.vert          — fullscreen blit vertex shader
+  assets/shaders/blit.frag          — fullscreen blit fragment shader
+  assets/shaders/lighting.glsl      — shared lighting library (included by flat + textured frags)
+
+Convert from GLSL 330 (OpenGL) to GLSL 450 (Vulkan):
+- Change #version 330 core → #version 450
+- Replace "uniform mat4 uProjection" with push constants or UBO bindings
+- Use layout(set=N, binding=M) for all uniform/sampler bindings
+- Use layout(push_constant) for per-draw data (projection, model, color)
+- Use layout(std140, set=0, binding=0) for the lighting UBO
+- Samplers use layout(set=1, binding=0) etc.
+
+Add CMake rules using the function from Task 1 to compile each .glsl to
+.spv at build time. Add a post-build step to copy .spv files to the output
+directory alongside assets/shaders/.
