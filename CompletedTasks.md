@@ -1504,3 +1504,28 @@ specialization constant. The fragment shader uses this to decide whether
 to sample the normal map or use the flat (0, 0, 1) default.
 
 ==============================================================================
+
+==============================================================================
+Task 12: FreeType glyph atlas as VkImage
+==============================================================================
+Implemented: true
+
+Port glyph atlas creation from GLRenderer to Vulkan:
+1. Keep FreeType initialization (FT_Init_FreeType, FT_New_Face) unchanged
+2. Keep the per-font-size atlas building logic: iterate ASCII 32-126,
+   measure glyph bitmaps, compute atlas dimensions
+3. Instead of glTexImage2D + glTexSubImage2D:
+   - Create VkImage (R8_UNORM, usage: SAMPLED | TRANSFER_DST) via VMA
+   - Create staging buffer sized to atlasWidth x atlasHeight
+   - Rasterize glyphs into the staging buffer (memcpy each glyph bitmap)
+   - Submit copy command (vkCmdCopyBufferToImage)
+   - Transition layout to SHADER_READ_ONLY_OPTIMAL
+   - Create VkImageView and VkSampler (linear filtering, clamp-to-edge)
+4. Store atlas texture handle and GlyphInfo array (UV coords, bearing,
+   advance) in FontData -- same data structures as GLRenderer
+5. Cache atlases per (font, size) pair
+
+Implement loadFont(const std::string& path) -> FontHandle matching the
+existing pattern (FT_New_Face, assign handle, store in font map).
+
+==============================================================================

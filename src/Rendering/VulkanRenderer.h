@@ -6,7 +6,12 @@
 #include <vk_mem_alloc.h>
 #include <GLFW/glfw3.h>
 #include <glm/glm.hpp>
+
+#include <ft2build.h>
+#include FT_FREETYPE_H
+
 #include <array>
+#include <map>
 #include <memory>
 #include <string>
 #include <unordered_map>
@@ -131,6 +136,35 @@ private:
     void createFlatNormalTexture();
     VkDescriptorSet getOrCreateTextureDescriptorSet(TextureHandle diffuse,
                                                      TextureHandle normal);
+
+    // ── Font / glyph atlas helpers ───────────────────────────────────
+    struct GlyphInfo {
+        float u0 = 0, v0 = 0, u1 = 0, v1 = 0;
+        int   width = 0, height = 0;
+        int   bearingX = 0, bearingY = 0;
+        int   advance = 0;
+    };
+
+    struct GlyphAtlas {
+        VkImage       image      = VK_NULL_HANDLE;
+        VmaAllocation allocation = VK_NULL_HANDLE;
+        VkImageView   view       = VK_NULL_HANDLE;
+        VkSampler     sampler    = VK_NULL_HANDLE;
+        int           atlasWidth  = 0;
+        int           atlasHeight = 0;
+        int           lineHeight  = 0;
+        int           ascender    = 0;
+        GlyphInfo     glyphs[128]; // ASCII 0-127; only 32-126 populated
+    };
+
+    struct FontData {
+        FT_Face face = nullptr;
+        std::map<unsigned int, GlyphAtlas> atlases;
+    };
+
+    void initFreeType();
+    void cleanupFontResources();
+    GlyphAtlas& getOrBuildAtlas(FontData& font, unsigned int size);
 
     // ── Frame recording helpers ──────────────────────────────────────
     void ensureFrameStarted();
@@ -273,4 +307,10 @@ private:
 
     // ── Default flat normal texture ──────────────────────────────────
     TextureHandle m_flatNormalTexture = 0;
+
+    // ── FreeType / font system ───────────────────────────────────────
+    FT_Library m_ftLib = nullptr;
+    std::unordered_map<FontHandle, FontData>  m_fonts;
+    std::unordered_map<std::string, FontHandle> m_fontPaths;
+    FontHandle m_nextFontHandle = 1;
 };

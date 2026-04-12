@@ -1298,6 +1298,8 @@ VulkanRenderer::VulkanRenderer(const std::string& title, unsigned int width,
     createFlatNormalTexture();
     createTexturedPipeline();
 
+    initFreeType();
+
     m_input = std::make_unique<VulkanInput>(m_window);
 
     // Initialize default projection (screen-space, Y-down)
@@ -1310,6 +1312,7 @@ VulkanRenderer::~VulkanRenderer()
 {
     m_input.reset();
 
+    cleanupFontResources();
     cleanupVulkan();
 
     if (m_window)
@@ -2116,18 +2119,343 @@ void VulkanRenderer::drawSprite(TextureHandle tex, float x, float y,
 
 // ── Text ─────────────────────────────────────────────────────────────────────
 
-Renderer::FontHandle VulkanRenderer::loadFont(const std::string& /*path*/) { return 0; }
+void VulkanRenderer::initFreeType()
+{
+    if (FT_Init_FreeType(&m_ftLib))
+    {
+        std::cerr << "VulkanRenderer: failed to initialize FreeType\n";
+        m_ftLib = nullptr;
+    }
+}
+
+void VulkanRenderer::cleanupFontResources()
+{
+    if (m_device != VK_NULL_HANDLE)
+        vkDeviceWaitIdle(m_device);
+
+    for (auto& [handle, fontData] : m_fonts)
+    {
+        for (auto& [size, atlas] : fontData.atlases)
+        {
+            if (atlas.sampler != VK_NULL_HANDLE)
+                vkDestroySampler(m_device, atlas.sampler, nullptr);
+            if (atlas.view != VK_NULL_HANDLE)
+                vkDestroyImageView(m_device, atlas.view, nullptr);
+            if (atlas.image != VK_NULL_HANDLE)
+                vmaDestroyImage(m_allocator, atlas.image, atlas.allocation);
+        }
+        if (fontData.face)
+            FT_Done_Face(fontData.face);
+    }
+    m_fonts.clear();
+    m_fontPaths.clear();
+
+    if (m_ftLib)
+    {
+        FT_Done_FreeType(m_ftLib);
+        m_ftLib = nullptr;
+    }
+}
+
+VulkanRenderer::GlyphAtlas& VulkanRenderer::getOrBuildAtlas(FontData& font,
+                                                             unsigned int size)
+{
+    auto it = font.atlases.find(size);
+    if (it != font.atlases.end())
+        return it->second;
+
+    FT_Set_Pixel_Sizes(font.face, 0, size);
+
+    // First pass: measure total atlas dimensions
+    int totalWidth = 0;
+    int maxHeight  = 0;
+    for (int c = 32; c < 127; ++c)
+    {
+        if (FT_Load_Char(font.face, c, FT_LOAD_RENDER))
+            continue;
+        totalWidth += static_cast<int>(font.face->glyph->bitmap.width) + 1;
+        int h = static_cast<int>(font.face->glyph->bitmap.rows);
+        if (h > maxHeight) maxHeight = h;
+    }
+
+    GlyphAtlas atlas{};
+    atlas.atlasWidth  = totalWidth > 0 ? totalWidth : 1;
+    atlas.atlasHeight = maxHeight  > 0 ? maxHeight  : 1;
+    atlas.ascender    = static_cast<int>(font.face->size->metrics.ascender >> 6);
+    atlas.lineHeight  = static_cast<int>((font.face->size->metrics.ascender -
+                                          font.face->size->metrics.descender) >> 6);
+
+    VkDeviceSize bufferSize = static_cast<VkDeviceSize>(atlas.atlasWidth) *
+                              static_cast<VkDeviceSize>(atlas.atlasHeight);
+
+    // Create staging buffer
+    VkBufferCreateInfo stagingBufInfo{};
+    stagingBufInfo.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
+    stagingBufInfo.size  = bufferSize;
+    stagingBufInfo.usage = VK_BUFFER_USAGE_TRANSFER_SRC_BIT;
+
+    VmaAllocationCreateInfo stagingAllocInfo{};
+    stagingAllocInfo.usage = VMA_MEMORY_USAGE_AUTO;
+    stagingAllocInfo.flags = VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT;
+
+    VkBuffer      stagingBuffer;
+    VmaAllocation stagingAllocation;
+    if (vmaCreateBuffer(m_allocator, &stagingBufInfo, &stagingAllocInfo,
+                        &stagingBuffer, &stagingAllocation, nullptr) != VK_SUCCESS)
+    {
+        std::cerr << "VulkanRenderer: failed to create glyph atlas staging buffer\n";
+        auto [insertIt, _] = font.atlases.emplace(size, atlas);
+        return insertIt->second;
+    }
+
+    // Map and clear to zero
+    void* mapped = nullptr;
+    vmaMapMemory(m_allocator, stagingAllocation, &mapped);
+    std::memset(mapped, 0, bufferSize);
+
+    // Second pass: rasterize each glyph into the staging buffer
+    int xOffset = 0;
+    for (int c = 32; c < 127; ++c)
+    {
+        if (FT_Load_Char(font.face, c, FT_LOAD_RENDER))
+        {
+            atlas.glyphs[c] = {};
+            continue;
+        }
+
+        FT_GlyphSlot g = font.face->glyph;
+        int bw = static_cast<int>(g->bitmap.width);
+        int bh = static_cast<int>(g->bitmap.rows);
+
+        if (bw > 0 && bh > 0)
+        {
+            // Copy glyph bitmap row-by-row into the staging buffer
+            auto* dst = static_cast<unsigned char*>(mapped);
+            for (int row = 0; row < bh; ++row)
+            {
+                std::memcpy(dst + row * atlas.atlasWidth + xOffset,
+                            g->bitmap.buffer + row * g->bitmap.pitch,
+                            static_cast<size_t>(bw));
+            }
+        }
+
+        GlyphInfo& gi = atlas.glyphs[c];
+        gi.width    = bw;
+        gi.height   = bh;
+        gi.bearingX = g->bitmap_left;
+        gi.bearingY = g->bitmap_top;
+        gi.advance  = static_cast<int>(g->advance.x);
+        gi.u0 = static_cast<float>(xOffset) / atlas.atlasWidth;
+        gi.v0 = 0.f;
+        gi.u1 = static_cast<float>(xOffset + bw) / atlas.atlasWidth;
+        gi.v1 = static_cast<float>(bh) / atlas.atlasHeight;
+
+        xOffset += bw + 1;
+    }
+
+    vmaUnmapMemory(m_allocator, stagingAllocation);
+
+    // Create VkImage (R8_UNORM, SAMPLED | TRANSFER_DST) via VMA
+    VkImageCreateInfo imageInfo{};
+    imageInfo.sType         = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO;
+    imageInfo.imageType     = VK_IMAGE_TYPE_2D;
+    imageInfo.format        = VK_FORMAT_R8_UNORM;
+    imageInfo.extent.width  = static_cast<uint32_t>(atlas.atlasWidth);
+    imageInfo.extent.height = static_cast<uint32_t>(atlas.atlasHeight);
+    imageInfo.extent.depth  = 1;
+    imageInfo.mipLevels     = 1;
+    imageInfo.arrayLayers   = 1;
+    imageInfo.samples       = VK_SAMPLE_COUNT_1_BIT;
+    imageInfo.tiling        = VK_IMAGE_TILING_OPTIMAL;
+    imageInfo.usage         = VK_IMAGE_USAGE_SAMPLED_BIT |
+                              VK_IMAGE_USAGE_TRANSFER_DST_BIT;
+    imageInfo.sharingMode   = VK_SHARING_MODE_EXCLUSIVE;
+    imageInfo.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
+
+    VmaAllocationCreateInfo imgAllocInfo{};
+    imgAllocInfo.usage = VMA_MEMORY_USAGE_AUTO_PREFER_DEVICE;
+
+    if (vmaCreateImage(m_allocator, &imageInfo, &imgAllocInfo,
+                       &atlas.image, &atlas.allocation, nullptr) != VK_SUCCESS)
+    {
+        vmaDestroyBuffer(m_allocator, stagingBuffer, stagingAllocation);
+        std::cerr << "VulkanRenderer: failed to create glyph atlas VkImage\n";
+        auto [insertIt, _] = font.atlases.emplace(size, atlas);
+        return insertIt->second;
+    }
+
+    // Transition UNDEFINED → TRANSFER_DST, copy, then → SHADER_READ_ONLY
+    VkCommandBuffer cmd = beginOneTimeCommands();
+
+    VkImageMemoryBarrier2 toTransferBarrier{};
+    toTransferBarrier.sType               = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2;
+    toTransferBarrier.oldLayout           = VK_IMAGE_LAYOUT_UNDEFINED;
+    toTransferBarrier.newLayout           = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL;
+    toTransferBarrier.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+    toTransferBarrier.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+    toTransferBarrier.image               = atlas.image;
+    toTransferBarrier.subresourceRange    = {VK_IMAGE_ASPECT_COLOR_BIT, 0, 1, 0, 1};
+    toTransferBarrier.srcStageMask        = VK_PIPELINE_STAGE_2_TOP_OF_PIPE_BIT;
+    toTransferBarrier.srcAccessMask       = 0;
+    toTransferBarrier.dstStageMask        = VK_PIPELINE_STAGE_2_TRANSFER_BIT;
+    toTransferBarrier.dstAccessMask       = VK_ACCESS_2_TRANSFER_WRITE_BIT;
+
+    VkDependencyInfo depInfo1{};
+    depInfo1.sType                   = VK_STRUCTURE_TYPE_DEPENDENCY_INFO;
+    depInfo1.imageMemoryBarrierCount = 1;
+    depInfo1.pImageMemoryBarriers    = &toTransferBarrier;
+    vkCmdPipelineBarrier2(cmd, &depInfo1);
+
+    VkBufferImageCopy region{};
+    region.bufferOffset      = 0;
+    region.bufferRowLength   = 0;
+    region.bufferImageHeight = 0;
+    region.imageSubresource  = {VK_IMAGE_ASPECT_COLOR_BIT, 0, 0, 1};
+    region.imageOffset       = {0, 0, 0};
+    region.imageExtent       = {static_cast<uint32_t>(atlas.atlasWidth),
+                                static_cast<uint32_t>(atlas.atlasHeight), 1};
+
+    vkCmdCopyBufferToImage(cmd, stagingBuffer, atlas.image,
+                           VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 1, &region);
+
+    VkImageMemoryBarrier2 toShaderBarrier{};
+    toShaderBarrier.sType               = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2;
+    toShaderBarrier.oldLayout           = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL;
+    toShaderBarrier.newLayout           = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+    toShaderBarrier.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+    toShaderBarrier.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+    toShaderBarrier.image               = atlas.image;
+    toShaderBarrier.subresourceRange    = {VK_IMAGE_ASPECT_COLOR_BIT, 0, 1, 0, 1};
+    toShaderBarrier.srcStageMask        = VK_PIPELINE_STAGE_2_TRANSFER_BIT;
+    toShaderBarrier.srcAccessMask       = VK_ACCESS_2_TRANSFER_WRITE_BIT;
+    toShaderBarrier.dstStageMask        = VK_PIPELINE_STAGE_2_FRAGMENT_SHADER_BIT;
+    toShaderBarrier.dstAccessMask       = VK_ACCESS_2_SHADER_SAMPLED_READ_BIT;
+
+    VkDependencyInfo depInfo2{};
+    depInfo2.sType                   = VK_STRUCTURE_TYPE_DEPENDENCY_INFO;
+    depInfo2.imageMemoryBarrierCount = 1;
+    depInfo2.pImageMemoryBarriers    = &toShaderBarrier;
+    vkCmdPipelineBarrier2(cmd, &depInfo2);
+
+    endOneTimeCommands(cmd);
+    vmaDestroyBuffer(m_allocator, stagingBuffer, stagingAllocation);
+
+    // Create VkImageView
+    VkImageViewCreateInfo viewInfo{};
+    viewInfo.sType                           = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO;
+    viewInfo.image                           = atlas.image;
+    viewInfo.viewType                        = VK_IMAGE_VIEW_TYPE_2D;
+    viewInfo.format                          = VK_FORMAT_R8_UNORM;
+    viewInfo.subresourceRange.aspectMask     = VK_IMAGE_ASPECT_COLOR_BIT;
+    viewInfo.subresourceRange.baseMipLevel   = 0;
+    viewInfo.subresourceRange.levelCount     = 1;
+    viewInfo.subresourceRange.baseArrayLayer = 0;
+    viewInfo.subresourceRange.layerCount     = 1;
+
+    if (vkCreateImageView(m_device, &viewInfo, nullptr, &atlas.view) != VK_SUCCESS)
+        std::cerr << "VulkanRenderer: failed to create glyph atlas image view\n";
+
+    // Create VkSampler: linear filtering, clamp-to-edge
+    VkSamplerCreateInfo samplerInfo{};
+    samplerInfo.sType                   = VK_STRUCTURE_TYPE_SAMPLER_CREATE_INFO;
+    samplerInfo.magFilter               = VK_FILTER_LINEAR;
+    samplerInfo.minFilter               = VK_FILTER_LINEAR;
+    samplerInfo.mipmapMode              = VK_SAMPLER_MIPMAP_MODE_LINEAR;
+    samplerInfo.addressModeU            = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE;
+    samplerInfo.addressModeV            = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE;
+    samplerInfo.addressModeW            = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE;
+    samplerInfo.anisotropyEnable        = VK_FALSE;
+    samplerInfo.maxAnisotropy           = 1.0f;
+    samplerInfo.borderColor             = VK_BORDER_COLOR_INT_OPAQUE_BLACK;
+    samplerInfo.unnormalizedCoordinates = VK_FALSE;
+    samplerInfo.compareEnable           = VK_FALSE;
+    samplerInfo.compareOp               = VK_COMPARE_OP_ALWAYS;
+    samplerInfo.mipLodBias              = 0.f;
+    samplerInfo.minLod                  = 0.f;
+    samplerInfo.maxLod                  = 0.f;
+
+    if (vkCreateSampler(m_device, &samplerInfo, nullptr, &atlas.sampler) != VK_SUCCESS)
+        std::cerr << "VulkanRenderer: failed to create glyph atlas sampler\n";
+
+    std::cout << "[Vulkan] Glyph atlas built: size=" << size
+              << " (" << atlas.atlasWidth << "x" << atlas.atlasHeight << ")\n";
+
+    auto [insertIt, _] = font.atlases.emplace(size, atlas);
+    return insertIt->second;
+}
+
+Renderer::FontHandle VulkanRenderer::loadFont(const std::string& path)
+{
+    // Return cached handle if already loaded
+    auto it = m_fontPaths.find(path);
+    if (it != m_fontPaths.end())
+        return it->second;
+
+    if (!m_ftLib)
+    {
+        std::cerr << "VulkanRenderer: FreeType not initialized, cannot load font: "
+                  << path << "\n";
+        return 0;
+    }
+
+    FontData fontData;
+    if (FT_New_Face(m_ftLib, path.c_str(), 0, &fontData.face))
+    {
+        std::cerr << "VulkanRenderer: failed to load font: " << path << "\n";
+        return 0;
+    }
+
+    FontHandle handle = m_nextFontHandle++;
+    m_fonts[handle] = std::move(fontData);
+    m_fontPaths[path] = handle;
+
+    std::cout << "[Vulkan] Font loaded: " << path << " handle=" << handle << "\n";
+    return handle;
+}
 
 void VulkanRenderer::drawText(FontHandle /*font*/, const std::string& /*str*/,
                               float /*x*/, float /*y*/, unsigned int /*size*/,
                               float /*r*/, float /*g*/, float /*b*/, float /*a*/) {}
 
-void VulkanRenderer::measureText(FontHandle /*font*/, const std::string& /*str*/,
-                                 unsigned int /*size*/,
+void VulkanRenderer::measureText(FontHandle font, const std::string& str,
+                                 unsigned int size,
                                  float& outWidth, float& outHeight)
 {
-    outWidth  = 0.f;
-    outHeight = 0.f;
+    outWidth = outHeight = 0.f;
+
+    auto fontIt = m_fonts.find(font);
+    if (fontIt == m_fonts.end() || str.empty())
+        return;
+
+    GlyphAtlas& atlas = getOrBuildAtlas(fontIt->second, size);
+
+    float maxLineWidth = 0.f;
+    float curLineWidth = 0.f;
+    int lineCount = 1;
+
+    for (char ch : str)
+    {
+        if (ch == '\n')
+        {
+            if (curLineWidth > maxLineWidth)
+                maxLineWidth = curLineWidth;
+            curLineWidth = 0.f;
+            ++lineCount;
+            continue;
+        }
+
+        int c = static_cast<unsigned char>(ch);
+        if (c < 32 || c >= 127)
+            c = '?';
+
+        curLineWidth += static_cast<float>(atlas.glyphs[c].advance >> 6);
+    }
+
+    if (curLineWidth > maxLineWidth)
+        maxLineWidth = curLineWidth;
+
+    outWidth  = maxLineWidth;
+    outHeight = static_cast<float>(atlas.lineHeight * lineCount);
 }
 
 // ── Vertex-colored geometry ──────────────────────────────────────────────────
