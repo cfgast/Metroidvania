@@ -36,6 +36,9 @@ _CPack_Packages/
 *.obj
 *.o
 
+# Compiled SPIR-V shaders
+*.spv
+
 # VS Code (keep workspace settings, ignore local overrides)
 .vscode/ipch/
 .vscode/*.db

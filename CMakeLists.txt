@@ -6,6 +6,9 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
 include(FetchContent)
 
+# --- Vulkan SDK ---
+find_package(Vulkan REQUIRED COMPONENTS glslc)
+
 set(JSON_BuildTests OFF CACHE INTERNAL "")
 set(JSON_Install    OFF CACHE INTERNAL "")
 FetchContent_Declare(
@@ -24,6 +27,26 @@ FetchContent_Declare(
 )
 set(GLM_BUILD_LIBRARY OFF CACHE BOOL "" FORCE)
 FetchContent_MakeAvailable(glm)
+
+# --- VMA (Vulkan Memory Allocator) ---
+FetchContent_Declare(
+    VulkanMemoryAllocator
+    GIT_REPOSITORY https://github.com/GPUOpen-LibrariesAndSDKs/VulkanMemoryAllocator.git
+    GIT_TAG        v3.1.0
+    GIT_SHALLOW    TRUE
+)
+set(VMA_STATIC_VULKAN_FUNCTIONS  OFF CACHE BOOL "" FORCE)
+set(VMA_DYNAMIC_VULKAN_FUNCTIONS ON  CACHE BOOL "" FORCE)
+FetchContent_MakeAvailable(VulkanMemoryAllocator)
+
+# --- vk-bootstrap ---
+FetchContent_Declare(
+    vk-bootstrap
+    GIT_REPOSITORY https://github.com/charles-lunarg/vk-bootstrap.git
+    GIT_TAG        v1.3.295
+    GIT_SHALLOW    TRUE
+)
+FetchContent_MakeAvailable(vk-bootstrap)
 
 # --- GLFW ---
 set(GLFW_BUILD_DOCS OFF CACHE BOOL "" FORCE)
@@ -49,6 +72,28 @@ FetchContent_MakeAvailable(freetype)
 # --- PhysX (pre-built) ---
 set(PHYSX_ROOT "${CMAKE_SOURCE_DIR}/third_party/PhysX-src/physx")
 set(PHYSX_LIB_DIR "${CMAKE_SOURCE_DIR}/third_party/PhysX-install/bin/win.x86_64.vc143.md/debug")
+
+# --- Compile GLSL shaders to SPIR-V ---
+# Usage: compile_shaders(TARGET <target> SOURCES shader1.glsl shader2.glsl ...)
+# Compiled .spv files are placed next to the source .glsl files in the build output.
+function(compile_shaders)
+    cmake_parse_arguments(SHADER "" "TARGET" "SOURCES" ${ARGN})
+    foreach(GLSL_FILE ${SHADER_SOURCES})
+        get_filename_component(FILE_NAME ${GLSL_FILE} NAME)
+        set(SPV_FILE "${CMAKE_CURRENT_BINARY_DIR}/assets/shaders/${FILE_NAME}.spv")
+        add_custom_command(
+            OUTPUT  ${SPV_FILE}
+            COMMAND ${CMAKE_COMMAND} -E make_directory "${CMAKE_CURRENT_BINARY_DIR}/assets/shaders"
+            COMMAND Vulkan::glslc ${GLSL_FILE} -o ${SPV_FILE}
+            DEPENDS ${GLSL_FILE}
+            COMMENT "Compiling SPIR-V: ${FILE_NAME} -> ${FILE_NAME}.spv"
+            VERBATIM
+        )
+        list(APPEND SPV_FILES ${SPV_FILE})
+    endforeach()
+    add_custom_target(${SHADER_TARGET}_shaders DEPENDS ${SPV_FILES})
+    add_dependencies(${SHADER_TARGET} ${SHADER_TARGET}_shaders)
+endfunction()
 
 add_executable(Metroidvania
     src/main.cpp
@@ -92,6 +137,9 @@ target_link_libraries(Metroidvania
         glm::glm
         glfw
         freetype
+        Vulkan::Vulkan
+        GPUOpen::VulkanMemoryAllocator
+        vk-bootstrap::vk-bootstrap
         $<$<PLATFORM_ID:Windows>:opengl32>
         $<$<PLATFORM_ID:Windows>:comdlg32>
         ${PHYSX_LIB_DIR}/PhysX.lib
@@ -100,6 +148,12 @@ target_link_libraries(Metroidvania
         ${PHYSX_LIB_DIR}/PhysXCooking.lib
         ${PHYSX_LIB_DIR}/PhysXExtensions_static.lib
         ${PHYSX_LIB_DIR}/PhysXPvdSDK_static.lib
+)
+
+# GLM Vulkan-compatible settings
+target_compile_definitions(Metroidvania PRIVATE
+    GLM_FORCE_DEPTH_ZERO_TO_ONE
+    GLM_FORCE_RADIANS
 )
 
 # Copy PhysX DLLs next to the executable on Windows

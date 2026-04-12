@@ -1,6 +1,8 @@
 # Architecture Overview
 
-A 4–8 player 2D Metroidvania platformer written in C++17. Built with **OpenGL 3.3 Core** (rendering via GLFW + GLAD), **a custom InputSystem abstraction** (input, with GLFW backend), **GLM 1.0.1** (math types), **Nvidia PhysX** (collision/physics), and **nlohmann/json** (serialization). Uses **CMake ≥ 3.20** with `FetchContent` for GLM, JSON, GLFW, and FreeType; PhysX is pre-built in `third_party/`; GLAD and stb_image are vendored in `third_party/`.
+A 4–8 player 2D Metroidvania platformer written in C++17. Built with **OpenGL 3.3 Core** (rendering via GLFW + GLAD), **a custom InputSystem abstraction** (input, with GLFW backend), **GLM 1.0.1** (math types), **Nvidia PhysX** (collision/physics), and **nlohmann/json** (serialization). Uses **CMake ≥ 3.20** with `FetchContent` for GLM, JSON, GLFW, FreeType, VMA, and vk-bootstrap; PhysX is pre-built in `third_party/`; GLAD and stb_image are vendored in `third_party/`.
+
+**Vulkan migration in progress:** The build system includes Vulkan SDK (`find_package(Vulkan)`), VMA (Vulkan Memory Allocator, v3.1.0), and vk-bootstrap (v1.3.295) via FetchContent. A `compile_shaders()` CMake function compiles GLSL 450 shaders to SPIR-V using `glslc`. GLM is configured with `GLM_FORCE_DEPTH_ZERO_TO_ONE` and `GLM_FORCE_RADIANS` for Vulkan compatibility. The OpenGL backend remains active and functional.
 
 ---
 
@@ -18,7 +20,7 @@ Metroidvania/
 │   ├── Rendering/             # Renderer abstraction and back-end implementations
 │   ├── Debug/                 # F1 debug map-loader dialog
 │   └── UI/                    # Menus (pause, save-slot, controls), shared styling
-├── assets/                    # Sprite sheets (player, slime)
+├── assets/                    # Sprite sheets (player, slime), shaders (GLSL→SPIR-V)
 ├── maps/                      # JSON level files (world_01–03)
 ├── saves/                     # Per-slot JSON save files + controls.json
 ├── docs/                      # Design docs (GameObjects, Map, Physics)

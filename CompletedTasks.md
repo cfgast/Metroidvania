@@ -1243,3 +1243,22 @@ Update tools/MapEditor/MapCanvas.cs:
 The editor should serialize lights to JSON alongside existing map data.
 
 ==============================================================================
+
+==============================================================================
+Task 1: Add Vulkan dependencies to CMake
+==============================================================================
+Implemented: true
+
+Add find_package(Vulkan REQUIRED) to CMakeLists.txt. Vendor VMA (Vulkan
+Memory Allocator) and vk-bootstrap via FetchContent. Add a CMake function
+that compiles .glsl files to .spv using Vulkan::glslc (the glslc compiler
+bundled with the Vulkan SDK). Define GLM_FORCE_DEPTH_ZERO_TO_ONE and
+GLM_FORCE_RADIANS as compile definitions.
+
+Keep all existing OpenGL dependencies (GLAD, GLFW, opengl32) intact — they
+will be removed in a later task after the migration is complete.
+
+The project should still compile and run with the OpenGL backend after this
+task. No rendering code changes — build system only.
+
+==============================================================================
