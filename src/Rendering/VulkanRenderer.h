@@ -122,6 +122,7 @@ private:
     VkShaderModule createShaderModule(const std::vector<char>& code);
     void createFlatPipeline();
     void createTexturedPipeline();
+    void createTextPipeline();
 
     // ── Texture helpers ──────────────────────────────────────────────
     void createTextureDescriptorResources();
@@ -154,7 +155,8 @@ private:
         int           atlasHeight = 0;
         int           lineHeight  = 0;
         int           ascender    = 0;
-        GlyphInfo     glyphs[128]; // ASCII 0-127; only 32-126 populated
+        GlyphInfo        glyphs[128]; // ASCII 0-127; only 32-126 populated
+        VkDescriptorSet  descriptorSet = VK_NULL_HANDLE;
     };
 
     struct FontData {
@@ -233,6 +235,12 @@ private:
     // ── Textured sprite pipeline ──────────────────────────────────────
     VkPipelineLayout m_texturedPipelineLayout = VK_NULL_HANDLE;
     VkPipeline       m_texturedPipeline       = VK_NULL_HANDLE;
+
+    // ── Text pipeline ─────────────────────────────────────────────────
+    VkDescriptorSetLayout m_textDescriptorSetLayout = VK_NULL_HANDLE;
+    VkPipelineLayout      m_textPipelineLayout      = VK_NULL_HANDLE;
+    VkPipeline            m_textPipeline            = VK_NULL_HANDLE;
+    VkDescriptorPool      m_textDescriptorPool      = VK_NULL_HANDLE;
 
     // ── VMA allocator ─────────────────────────────────────────────────
     VmaAllocator m_allocator = VK_NULL_HANDLE;

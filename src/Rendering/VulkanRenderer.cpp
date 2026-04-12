@@ -282,6 +282,15 @@ void VulkanRenderer::cleanupVulkan()
         if (m_texturedPipelineLayout != VK_NULL_HANDLE)
             vkDestroyPipelineLayout(m_device, m_texturedPipelineLayout, nullptr);
 
+        if (m_textPipeline != VK_NULL_HANDLE)
+            vkDestroyPipeline(m_device, m_textPipeline, nullptr);
+        if (m_textPipelineLayout != VK_NULL_HANDLE)
+            vkDestroyPipelineLayout(m_device, m_textPipelineLayout, nullptr);
+        if (m_textDescriptorPool != VK_NULL_HANDLE)
+            vkDestroyDescriptorPool(m_device, m_textDescriptorPool, nullptr);
+        if (m_textDescriptorSetLayout != VK_NULL_HANDLE)
+            vkDestroyDescriptorSetLayout(m_device, m_textDescriptorSetLayout, nullptr);
+
         if (m_lightingDescriptorPool != VK_NULL_HANDLE)
             vkDestroyDescriptorPool(m_device, m_lightingDescriptorPool, nullptr);
         if (m_lightingUBO != VK_NULL_HANDLE)
@@ -712,6 +721,186 @@ void VulkanRenderer::createTexturedPipeline()
     vkDestroyShaderModule(m_device, fragModule, nullptr);
 
     std::cout << "[Vulkan] Textured sprite pipeline created\n";
+}
+
+void VulkanRenderer::createTextPipeline()
+{
+    // ── Descriptor set layout for glyph atlas (set 1, binding 0) ─────
+    VkDescriptorSetLayoutBinding atlasBinding{};
+    atlasBinding.binding         = 0;
+    atlasBinding.descriptorType  = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
+    atlasBinding.descriptorCount = 1;
+    atlasBinding.stageFlags      = VK_SHADER_STAGE_FRAGMENT_BIT;
+
+    VkDescriptorSetLayoutCreateInfo setLayoutInfo{};
+    setLayoutInfo.sType        = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO;
+    setLayoutInfo.bindingCount = 1;
+    setLayoutInfo.pBindings    = &atlasBinding;
+
+    if (vkCreateDescriptorSetLayout(m_device, &setLayoutInfo, nullptr,
+                                    &m_textDescriptorSetLayout) != VK_SUCCESS)
+        throw std::runtime_error("VulkanRenderer: failed to create text descriptor set layout");
+
+    // ── Descriptor pool for glyph atlas sets ─────────────────────────
+    VkDescriptorPoolSize poolSize{};
+    poolSize.type            = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
+    poolSize.descriptorCount = 64;
+
+    VkDescriptorPoolCreateInfo poolInfo{};
+    poolInfo.sType         = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO;
+    poolInfo.maxSets       = 64;
+    poolInfo.poolSizeCount = 1;
+    poolInfo.pPoolSizes    = &poolSize;
+
+    if (vkCreateDescriptorPool(m_device, &poolInfo, nullptr,
+                               &m_textDescriptorPool) != VK_SUCCESS)
+        throw std::runtime_error("VulkanRenderer: failed to create text descriptor pool");
+
+    // ── Pipeline layout: set 0 = lighting UBO, set 1 = glyph atlas ──
+    VkDescriptorSetLayout setLayouts[] = {
+        m_flatDescriptorSetLayout, m_textDescriptorSetLayout
+    };
+
+    // Push constants: mat4 projection (64) + vec4 textColor (16) = 80 bytes
+    VkPushConstantRange pushRange{};
+    pushRange.stageFlags = VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT;
+    pushRange.offset     = 0;
+    pushRange.size       = 80;
+
+    VkPipelineLayoutCreateInfo layoutInfo{};
+    layoutInfo.sType                  = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO;
+    layoutInfo.setLayoutCount         = 2;
+    layoutInfo.pSetLayouts            = setLayouts;
+    layoutInfo.pushConstantRangeCount = 1;
+    layoutInfo.pPushConstantRanges    = &pushRange;
+
+    if (vkCreatePipelineLayout(m_device, &layoutInfo, nullptr,
+                               &m_textPipelineLayout) != VK_SUCCESS)
+        throw std::runtime_error("VulkanRenderer: failed to create text pipeline layout");
+
+    // ── Load shader modules ──────────────────────────────────────────
+    auto vertCode = readSPVFile("assets/shaders/text.vert.spv");
+    auto fragCode = readSPVFile("assets/shaders/text.frag.spv");
+    VkShaderModule vertModule = createShaderModule(vertCode);
+    VkShaderModule fragModule = createShaderModule(fragCode);
+
+    VkPipelineShaderStageCreateInfo shaderStages[2]{};
+    shaderStages[0].sType  = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
+    shaderStages[0].stage  = VK_SHADER_STAGE_VERTEX_BIT;
+    shaderStages[0].module = vertModule;
+    shaderStages[0].pName  = "main";
+
+    shaderStages[1].sType  = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
+    shaderStages[1].stage  = VK_SHADER_STAGE_FRAGMENT_BIT;
+    shaderStages[1].module = fragModule;
+    shaderStages[1].pName  = "main";
+
+    // ── Vertex input: vec2 position (loc 0) + vec2 texcoord (loc 1) ─
+    VkVertexInputBindingDescription bindingDesc{};
+    bindingDesc.binding   = 0;
+    bindingDesc.stride    = sizeof(float) * 4; // x, y, u, v
+    bindingDesc.inputRate = VK_VERTEX_INPUT_RATE_VERTEX;
+
+    VkVertexInputAttributeDescription attrDescs[2]{};
+    attrDescs[0].binding  = 0;
+    attrDescs[0].location = 0;
+    attrDescs[0].format   = VK_FORMAT_R32G32_SFLOAT;
+    attrDescs[0].offset   = 0;
+
+    attrDescs[1].binding  = 0;
+    attrDescs[1].location = 1;
+    attrDescs[1].format   = VK_FORMAT_R32G32_SFLOAT;
+    attrDescs[1].offset   = sizeof(float) * 2;
+
+    VkPipelineVertexInputStateCreateInfo vertexInputInfo{};
+    vertexInputInfo.sType                           = VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO;
+    vertexInputInfo.vertexBindingDescriptionCount    = 1;
+    vertexInputInfo.pVertexBindingDescriptions       = &bindingDesc;
+    vertexInputInfo.vertexAttributeDescriptionCount  = 2;
+    vertexInputInfo.pVertexAttributeDescriptions     = attrDescs;
+
+    VkPipelineInputAssemblyStateCreateInfo inputAssembly{};
+    inputAssembly.sType                  = VK_STRUCTURE_TYPE_PIPELINE_INPUT_ASSEMBLY_STATE_CREATE_INFO;
+    inputAssembly.topology               = VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST;
+    inputAssembly.primitiveRestartEnable = VK_FALSE;
+
+    VkPipelineViewportStateCreateInfo viewportState{};
+    viewportState.sType         = VK_STRUCTURE_TYPE_PIPELINE_VIEWPORT_STATE_CREATE_INFO;
+    viewportState.viewportCount = 1;
+    viewportState.scissorCount  = 1;
+
+    VkDynamicState dynamicStates[] = {VK_DYNAMIC_STATE_VIEWPORT, VK_DYNAMIC_STATE_SCISSOR};
+    VkPipelineDynamicStateCreateInfo dynamicState{};
+    dynamicState.sType             = VK_STRUCTURE_TYPE_PIPELINE_DYNAMIC_STATE_CREATE_INFO;
+    dynamicState.dynamicStateCount = 2;
+    dynamicState.pDynamicStates    = dynamicStates;
+
+    VkPipelineRasterizationStateCreateInfo rasterizer{};
+    rasterizer.sType                   = VK_STRUCTURE_TYPE_PIPELINE_RASTERIZATION_STATE_CREATE_INFO;
+    rasterizer.depthClampEnable        = VK_FALSE;
+    rasterizer.rasterizerDiscardEnable = VK_FALSE;
+    rasterizer.polygonMode             = VK_POLYGON_MODE_FILL;
+    rasterizer.lineWidth               = 1.0f;
+    rasterizer.cullMode                = VK_CULL_MODE_NONE;
+    rasterizer.frontFace               = VK_FRONT_FACE_COUNTER_CLOCKWISE;
+    rasterizer.depthBiasEnable         = VK_FALSE;
+
+    VkPipelineMultisampleStateCreateInfo multisampling{};
+    multisampling.sType                = VK_STRUCTURE_TYPE_PIPELINE_MULTISAMPLE_STATE_CREATE_INFO;
+    multisampling.sampleShadingEnable  = VK_FALSE;
+    multisampling.rasterizationSamples = VK_SAMPLE_COUNT_1_BIT;
+
+    VkPipelineColorBlendAttachmentState colorBlendAttachment{};
+    colorBlendAttachment.colorWriteMask = VK_COLOR_COMPONENT_R_BIT | VK_COLOR_COMPONENT_G_BIT |
+                                          VK_COLOR_COMPONENT_B_BIT | VK_COLOR_COMPONENT_A_BIT;
+    colorBlendAttachment.blendEnable         = VK_TRUE;
+    colorBlendAttachment.srcColorBlendFactor = VK_BLEND_FACTOR_SRC_ALPHA;
+    colorBlendAttachment.dstColorBlendFactor = VK_BLEND_FACTOR_ONE_MINUS_SRC_ALPHA;
+    colorBlendAttachment.colorBlendOp        = VK_BLEND_OP_ADD;
+    colorBlendAttachment.srcAlphaBlendFactor = VK_BLEND_FACTOR_ONE;
+    colorBlendAttachment.dstAlphaBlendFactor = VK_BLEND_FACTOR_ONE_MINUS_SRC_ALPHA;
+    colorBlendAttachment.alphaBlendOp        = VK_BLEND_OP_ADD;
+
+    VkPipelineColorBlendStateCreateInfo colorBlending{};
+    colorBlending.sType           = VK_STRUCTURE_TYPE_PIPELINE_COLOR_BLEND_STATE_CREATE_INFO;
+    colorBlending.logicOpEnable   = VK_FALSE;
+    colorBlending.attachmentCount = 1;
+    colorBlending.pAttachments    = &colorBlendAttachment;
+
+    VkPipelineRenderingCreateInfo renderingInfo{};
+    renderingInfo.sType                   = VK_STRUCTURE_TYPE_PIPELINE_RENDERING_CREATE_INFO;
+    renderingInfo.colorAttachmentCount    = 1;
+    renderingInfo.pColorAttachmentFormats = &m_swapchainFormat;
+
+    VkGraphicsPipelineCreateInfo pipelineInfo{};
+    pipelineInfo.sType               = VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_CREATE_INFO;
+    pipelineInfo.pNext               = &renderingInfo;
+    pipelineInfo.stageCount          = 2;
+    pipelineInfo.pStages             = shaderStages;
+    pipelineInfo.pVertexInputState   = &vertexInputInfo;
+    pipelineInfo.pInputAssemblyState = &inputAssembly;
+    pipelineInfo.pViewportState      = &viewportState;
+    pipelineInfo.pRasterizationState = &rasterizer;
+    pipelineInfo.pMultisampleState   = &multisampling;
+    pipelineInfo.pDepthStencilState  = nullptr;
+    pipelineInfo.pColorBlendState    = &colorBlending;
+    pipelineInfo.pDynamicState       = &dynamicState;
+    pipelineInfo.layout              = m_textPipelineLayout;
+    pipelineInfo.renderPass          = VK_NULL_HANDLE;
+    pipelineInfo.subpass             = 0;
+
+    if (vkCreateGraphicsPipelines(m_device, VK_NULL_HANDLE, 1, &pipelineInfo,
+                                  nullptr, &m_textPipeline) != VK_SUCCESS)
+    {
+        vkDestroyShaderModule(m_device, vertModule, nullptr);
+        vkDestroyShaderModule(m_device, fragModule, nullptr);
+        throw std::runtime_error("VulkanRenderer: failed to create text graphics pipeline");
+    }
+
+    vkDestroyShaderModule(m_device, vertModule, nullptr);
+    vkDestroyShaderModule(m_device, fragModule, nullptr);
+
+    std::cout << "[Vulkan] Text pipeline created\n";
 }
 
 // ── VMA / buffer helpers ─────────────────────────────────────────────────────
@@ -1297,6 +1486,7 @@ VulkanRenderer::VulkanRenderer(const std::string& title, unsigned int width,
     createLightingResources();
     createFlatNormalTexture();
     createTexturedPipeline();
+    createTextPipeline();
 
     initFreeType();
 
@@ -2377,6 +2567,42 @@ VulkanRenderer::GlyphAtlas& VulkanRenderer::getOrBuildAtlas(FontData& font,
     if (vkCreateSampler(m_device, &samplerInfo, nullptr, &atlas.sampler) != VK_SUCCESS)
         std::cerr << "VulkanRenderer: failed to create glyph atlas sampler\n";
 
+    // Allocate and update descriptor set for this atlas
+    if (m_textDescriptorPool != VK_NULL_HANDLE &&
+        m_textDescriptorSetLayout != VK_NULL_HANDLE &&
+        atlas.view != VK_NULL_HANDLE && atlas.sampler != VK_NULL_HANDLE)
+    {
+        VkDescriptorSetAllocateInfo dsAllocInfo{};
+        dsAllocInfo.sType              = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO;
+        dsAllocInfo.descriptorPool     = m_textDescriptorPool;
+        dsAllocInfo.descriptorSetCount = 1;
+        dsAllocInfo.pSetLayouts        = &m_textDescriptorSetLayout;
+
+        if (vkAllocateDescriptorSets(m_device, &dsAllocInfo,
+                                     &atlas.descriptorSet) == VK_SUCCESS)
+        {
+            VkDescriptorImageInfo imageInfo{};
+            imageInfo.sampler     = atlas.sampler;
+            imageInfo.imageView   = atlas.view;
+            imageInfo.imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+
+            VkWriteDescriptorSet write{};
+            write.sType           = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+            write.dstSet          = atlas.descriptorSet;
+            write.dstBinding      = 0;
+            write.dstArrayElement = 0;
+            write.descriptorType  = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
+            write.descriptorCount = 1;
+            write.pImageInfo      = &imageInfo;
+
+            vkUpdateDescriptorSets(m_device, 1, &write, 0, nullptr);
+        }
+        else
+        {
+            std::cerr << "VulkanRenderer: failed to allocate text descriptor set\n";
+        }
+    }
+
     std::cout << "[Vulkan] Glyph atlas built: size=" << size
               << " (" << atlas.atlasWidth << "x" << atlas.atlasHeight << ")\n";
 
@@ -2413,9 +2639,116 @@ Renderer::FontHandle VulkanRenderer::loadFont(const std::string& path)
     return handle;
 }
 
-void VulkanRenderer::drawText(FontHandle /*font*/, const std::string& /*str*/,
-                              float /*x*/, float /*y*/, unsigned int /*size*/,
-                              float /*r*/, float /*g*/, float /*b*/, float /*a*/) {}
+void VulkanRenderer::drawText(FontHandle font, const std::string& str,
+                              float x, float y, unsigned int size,
+                              float r, float g, float b, float a)
+{
+    auto fontIt = m_fonts.find(font);
+    if (fontIt == m_fonts.end() || str.empty())
+        return;
+
+    GlyphAtlas& atlas = getOrBuildAtlas(fontIt->second, size);
+    if (atlas.view == VK_NULL_HANDLE || atlas.descriptorSet == VK_NULL_HANDLE)
+        return;
+
+    // Build vertex data: 6 vertices per character (x, y, u, v)
+    std::vector<float> vertices;
+    vertices.reserve(str.size() * 6 * 4);
+
+    float cursorX = x;
+    float cursorY = y + static_cast<float>(atlas.ascender);
+
+    for (char ch : str)
+    {
+        if (ch == '\n')
+        {
+            cursorX = x;
+            cursorY += static_cast<float>(atlas.lineHeight);
+            continue;
+        }
+
+        int c = static_cast<unsigned char>(ch);
+        if (c < 32 || c >= 127)
+            c = '?';
+
+        const GlyphInfo& gi = atlas.glyphs[c];
+
+        float xpos = cursorX + static_cast<float>(gi.bearingX);
+        float ypos = cursorY - static_cast<float>(gi.bearingY);
+        float w = static_cast<float>(gi.width);
+        float h = static_cast<float>(gi.height);
+
+        if (w > 0 && h > 0)
+        {
+            vertices.insert(vertices.end(), {xpos,     ypos,     gi.u0, gi.v0});
+            vertices.insert(vertices.end(), {xpos + w, ypos,     gi.u1, gi.v0});
+            vertices.insert(vertices.end(), {xpos + w, ypos + h, gi.u1, gi.v1});
+
+            vertices.insert(vertices.end(), {xpos,     ypos,     gi.u0, gi.v0});
+            vertices.insert(vertices.end(), {xpos + w, ypos + h, gi.u1, gi.v1});
+            vertices.insert(vertices.end(), {xpos,     ypos + h, gi.u0, gi.v1});
+        }
+
+        cursorX += static_cast<float>(gi.advance >> 6);
+    }
+
+    if (vertices.empty())
+        return;
+
+    VkDeviceSize dataSize = static_cast<VkDeviceSize>(vertices.size() * sizeof(float));
+    DynamicAllocation alloc = dynamicAllocate(dataSize);
+    if (!alloc.data)
+        return;
+    std::memcpy(alloc.data, vertices.data(), dataSize);
+
+    ensureFrameStarted();
+
+    VkCommandBuffer cmd = m_commandBuffers[m_currentFrame];
+
+    vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, m_textPipeline);
+
+    VkViewport viewport{};
+    viewport.x        = 0.f;
+    viewport.y        = 0.f;
+    viewport.width    = static_cast<float>(m_swapchainExtent.width);
+    viewport.height   = static_cast<float>(m_swapchainExtent.height);
+    viewport.minDepth = 0.f;
+    viewport.maxDepth = 1.f;
+    vkCmdSetViewport(cmd, 0, 1, &viewport);
+
+    VkRect2D scissor{};
+    scissor.offset = {0, 0};
+    scissor.extent = m_swapchainExtent;
+    vkCmdSetScissor(cmd, 0, 1, &scissor);
+
+    // Push constants: projection (mat4) + text color (vec4) = 80 bytes
+    struct TextPushConstants {
+        glm::mat4 projection;
+        glm::vec4 textColor;
+    } pc{};
+    pc.projection = m_projection;
+    pc.textColor  = glm::vec4(r, g, b, a);
+
+    vkCmdPushConstants(cmd, m_textPipelineLayout,
+                       VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT,
+                       0, sizeof(pc), &pc);
+
+    // Bind lighting UBO (set 0) — required by pipeline layout
+    vkCmdBindDescriptorSets(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS,
+                            m_textPipelineLayout, 0, 1,
+                            &m_lightingDescriptorSet, 0, nullptr);
+
+    // Bind glyph atlas descriptor set (set 1)
+    vkCmdBindDescriptorSets(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS,
+                            m_textPipelineLayout, 1, 1,
+                            &atlas.descriptorSet, 0, nullptr);
+
+    VkDeviceSize offset = alloc.offset;
+    vkCmdBindVertexBuffers(cmd, 0, 1, &alloc.buffer, &offset);
+
+    uint32_t vertexCount = static_cast<uint32_t>(vertices.size()) / 4;
+    vkCmdDraw(cmd, vertexCount, 1, 0, 0);
+}
 
 void VulkanRenderer::measureText(FontHandle font, const std::string& str,
                                  unsigned int size,

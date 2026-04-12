@@ -76,32 +76,6 @@ The project should still compile and run with the OpenGL backend after this
 task. No rendering code changes — build system only.
 
 ==============================================================================
-Task 13: Text rendering pipeline
-==============================================================================
-Implemented: false
-
-Create a VkPipeline for text rendering:
-- Vertex input: vec2 position (location 0) + vec2 texcoord (location 1)
-- Push constants: projection matrix (mat4) + text color (vec4)
-- Descriptor set: glyph atlas combined image sampler (binding 0)
-- Alpha blending enabled, dynamic viewport/scissor
-- Dynamic rendering with swap chain color format
-- Load text.vert.spv + text.frag.spv
-
-Implement drawText(FontHandle font, const std::string& str, float x, y,
-unsigned int size, float r, g, b, float a):
-- Get or build glyph atlas for the requested size
-- Build vertex array: for each character, create a textured quad using
-  the glyph's atlas UV, bearing, and advance (same math as GLRenderer)
-- Upload batched vertices to dynamic buffer
-- Bind text pipeline, push projection + color, bind atlas descriptor
-- vkCmdDraw(vertexCount)
-
-Implement measureText(FontHandle font, const std::string& str,
-unsigned int size, float& outWidth, float& outHeight):
-- CPU-only calculation using glyph advance/bearing — no Vulkan calls
-
-==============================================================================
 Task 14: Vertex-color pipeline and primitives
 ==============================================================================
 Implemented: false
