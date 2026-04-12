@@ -1648,3 +1648,36 @@ When m_worldPass is false (UI rendering after endFrame), upload
 ambient=(1,1,1) and numLights=0 so UI renders at full brightness.
 
 ==============================================================================
+
+==============================================================================
+Task 17: Lighting shader integration and blit pass
+==============================================================================
+Implemented: true
+
+Integrate the lighting UBO into the flat and textured fragment shaders:
+- Both shaders #include lighting.glsl (or inline the shared code)
+- Read ambient + lights from the UBO bound at set 0, binding 0
+- calcLighting() function: per-pixel Lambertian diffuse, quadratic
+  attenuation, spot-light angular falloff -- same math as GLRenderer
+
+Implement endFrame():
+1. End the off-screen dynamic rendering pass
+2. Transition off-screen image: COLOR_ATTACHMENT -> SHADER_READ_ONLY
+3. Transition swap chain image: UNDEFINED -> COLOR_ATTACHMENT
+4. Begin dynamic rendering targeting the swap chain image
+5. Bind the blit pipeline (fullscreen quad)
+6. Bind descriptor set with the off-screen image as sampled texture
+7. Draw fullscreen quad (6 vertices in NDC)
+8. Set m_worldPass = false (subsequent draws go directly to swap chain
+   without lighting -- for UI overlay)
+
+After endFrame(), any drawRect/drawText/etc. calls (UI) should render
+directly to the swap chain image with full-brightness lighting (ambient=1,
+numLights=0), matching GLRenderer's behavior.
+
+display() must:
+- End the swap chain dynamic rendering (if still active)
+- Transition swap chain image for presentation
+- Submit command buffer and present
+
+==============================================================================

@@ -127,6 +127,9 @@ private:
     void createTexturedPipeline();
     void createTextPipeline();
     void createVertexColorPipelines();
+    void createBlitPipeline();
+    void createBlitQuadBuffer();
+    void updateBlitDescriptorSet();
 
     // ── Texture helpers ──────────────────────────────────────────────
     void createTextureDescriptorResources();
@@ -258,6 +261,18 @@ private:
     VkPipeline       m_vertColorTriListPipeline    = VK_NULL_HANDLE;
     VkPipeline       m_vertColorTriStripPipeline   = VK_NULL_HANDLE;
     VkPipeline       m_vertColorLineListPipeline   = VK_NULL_HANDLE;
+
+    // ── Blit pipeline ─────────────────────────────────────────────────
+    VkDescriptorSetLayout m_blitDescriptorSetLayout = VK_NULL_HANDLE;
+    VkPipelineLayout      m_blitPipelineLayout      = VK_NULL_HANDLE;
+    VkPipeline            m_blitPipeline             = VK_NULL_HANDLE;
+    VkDescriptorPool      m_blitDescriptorPool       = VK_NULL_HANDLE;
+    VkDescriptorSet       m_blitDescriptorSet        = VK_NULL_HANDLE;
+
+    // ── Fullscreen blit quad vertex buffer (NDC pos + texcoord) ───────
+    VkBuffer      m_blitQuadBuffer     = VK_NULL_HANDLE;
+    VmaAllocation m_blitQuadAllocation = VK_NULL_HANDLE;
+    static constexpr uint32_t BLIT_QUAD_VERTEX_COUNT = 6;
 
     // ── VMA allocator ─────────────────────────────────────────────────
     VmaAllocator m_allocator = VK_NULL_HANDLE;

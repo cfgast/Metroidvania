@@ -406,6 +406,17 @@ void VulkanRenderer::cleanupVulkan()
         if (m_vertColorPipelineLayout != VK_NULL_HANDLE)
             vkDestroyPipelineLayout(m_device, m_vertColorPipelineLayout, nullptr);
 
+        if (m_blitPipeline != VK_NULL_HANDLE)
+            vkDestroyPipeline(m_device, m_blitPipeline, nullptr);
+        if (m_blitPipelineLayout != VK_NULL_HANDLE)
+            vkDestroyPipelineLayout(m_device, m_blitPipelineLayout, nullptr);
+        if (m_blitDescriptorPool != VK_NULL_HANDLE)
+            vkDestroyDescriptorPool(m_device, m_blitDescriptorPool, nullptr);
+        if (m_blitDescriptorSetLayout != VK_NULL_HANDLE)
+            vkDestroyDescriptorSetLayout(m_device, m_blitDescriptorSetLayout, nullptr);
+        if (m_blitQuadBuffer != VK_NULL_HANDLE)
+            vmaDestroyBuffer(m_allocator, m_blitQuadBuffer, m_blitQuadAllocation);
+
         if (m_lightingDescriptorPool != VK_NULL_HANDLE)
             vkDestroyDescriptorPool(m_device, m_lightingDescriptorPool, nullptr);
         for (uint32_t i = 0; i < MAX_FRAMES_IN_FLIGHT; ++i)
@@ -462,6 +473,9 @@ void VulkanRenderer::recreateSwapchain()
     destroyOffscreenImage();
     createSwapchain();
     createOffscreenImage();
+
+    if (m_blitDescriptorSet != VK_NULL_HANDLE)
+        updateBlitDescriptorSet();
 
     m_windowW = static_cast<float>(m_swapchainExtent.width);
     m_windowH = static_cast<float>(m_swapchainExtent.height);
@@ -1203,6 +1217,269 @@ void VulkanRenderer::createVertexColorPipelines()
     std::cout << "[Vulkan] Vertex-color pipelines created (tri-list, tri-strip, line-list)\n";
 }
 
+// ── Blit pipeline ────────────────────────────────────────────────────────────
+
+void VulkanRenderer::createBlitPipeline()
+{
+    // ── Descriptor set layout for blit texture (set 1, binding 0)
+    VkDescriptorSetLayoutBinding blitBinding{};
+    blitBinding.binding         = 0;
+    blitBinding.descriptorType  = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
+    blitBinding.descriptorCount = 1;
+    blitBinding.stageFlags      = VK_SHADER_STAGE_FRAGMENT_BIT;
+
+    VkDescriptorSetLayoutCreateInfo setLayoutInfo{};
+    setLayoutInfo.sType        = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO;
+    setLayoutInfo.bindingCount = 1;
+    setLayoutInfo.pBindings    = &blitBinding;
+
+    if (vkCreateDescriptorSetLayout(m_device, &setLayoutInfo, nullptr,
+                                     &m_blitDescriptorSetLayout) != VK_SUCCESS)
+        throw std::runtime_error("VulkanRenderer: failed to create blit descriptor set layout");
+
+    // ── Descriptor pool (1 combined image sampler, 1 set)
+    VkDescriptorPoolSize poolSize{};
+    poolSize.type            = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
+    poolSize.descriptorCount = 1;
+
+    VkDescriptorPoolCreateInfo poolInfo{};
+    poolInfo.sType         = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO;
+    poolInfo.maxSets       = 1;
+    poolInfo.poolSizeCount = 1;
+    poolInfo.pPoolSizes    = &poolSize;
+
+    if (vkCreateDescriptorPool(m_device, &poolInfo, nullptr,
+                                &m_blitDescriptorPool) != VK_SUCCESS)
+        throw std::runtime_error("VulkanRenderer: failed to create blit descriptor pool");
+
+    // ── Allocate descriptor set
+    VkDescriptorSetAllocateInfo setAllocInfo{};
+    setAllocInfo.sType              = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO;
+    setAllocInfo.descriptorPool     = m_blitDescriptorPool;
+    setAllocInfo.descriptorSetCount = 1;
+    setAllocInfo.pSetLayouts        = &m_blitDescriptorSetLayout;
+
+    if (vkAllocateDescriptorSets(m_device, &setAllocInfo,
+                                  &m_blitDescriptorSet) != VK_SUCCESS)
+        throw std::runtime_error("VulkanRenderer: failed to allocate blit descriptor set");
+
+    // ── Pipeline layout: set 0 = lighting UBO (unused), set 1 = blit texture
+    VkDescriptorSetLayout setLayouts[] = {
+        m_flatDescriptorSetLayout, m_blitDescriptorSetLayout
+    };
+
+    VkPipelineLayoutCreateInfo layoutInfo{};
+    layoutInfo.sType                  = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO;
+    layoutInfo.setLayoutCount         = 2;
+    layoutInfo.pSetLayouts            = setLayouts;
+    layoutInfo.pushConstantRangeCount = 0;
+
+    if (vkCreatePipelineLayout(m_device, &layoutInfo, nullptr,
+                                &m_blitPipelineLayout) != VK_SUCCESS)
+        throw std::runtime_error("VulkanRenderer: failed to create blit pipeline layout");
+
+    // ── Load shader modules
+    auto vertCode = readSPVFile("assets/shaders/blit.vert.spv");
+    auto fragCode = readSPVFile("assets/shaders/blit.frag.spv");
+    VkShaderModule vertModule = createShaderModule(vertCode);
+    VkShaderModule fragModule = createShaderModule(fragCode);
+
+    VkPipelineShaderStageCreateInfo shaderStages[2]{};
+    shaderStages[0].sType  = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
+    shaderStages[0].stage  = VK_SHADER_STAGE_VERTEX_BIT;
+    shaderStages[0].module = vertModule;
+    shaderStages[0].pName  = "main";
+
+    shaderStages[1].sType  = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
+    shaderStages[1].stage  = VK_SHADER_STAGE_FRAGMENT_BIT;
+    shaderStages[1].module = fragModule;
+    shaderStages[1].pName  = "main";
+
+    // ── Vertex input: vec2 pos (location 0) + vec2 texcoord (location 1)
+    VkVertexInputBindingDescription bindingDesc{};
+    bindingDesc.binding   = 0;
+    bindingDesc.stride    = sizeof(float) * 4;
+    bindingDesc.inputRate = VK_VERTEX_INPUT_RATE_VERTEX;
+
+    VkVertexInputAttributeDescription attrDescs[2]{};
+    attrDescs[0].binding  = 0;
+    attrDescs[0].location = 0;
+    attrDescs[0].format   = VK_FORMAT_R32G32_SFLOAT;
+    attrDescs[0].offset   = 0;
+
+    attrDescs[1].binding  = 0;
+    attrDescs[1].location = 1;
+    attrDescs[1].format   = VK_FORMAT_R32G32_SFLOAT;
+    attrDescs[1].offset   = sizeof(float) * 2;
+
+    VkPipelineVertexInputStateCreateInfo vertexInputInfo{};
+    vertexInputInfo.sType                           = VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO;
+    vertexInputInfo.vertexBindingDescriptionCount    = 1;
+    vertexInputInfo.pVertexBindingDescriptions       = &bindingDesc;
+    vertexInputInfo.vertexAttributeDescriptionCount  = 2;
+    vertexInputInfo.pVertexAttributeDescriptions     = attrDescs;
+
+    VkPipelineInputAssemblyStateCreateInfo inputAssembly{};
+    inputAssembly.sType                  = VK_STRUCTURE_TYPE_PIPELINE_INPUT_ASSEMBLY_STATE_CREATE_INFO;
+    inputAssembly.topology               = VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST;
+    inputAssembly.primitiveRestartEnable = VK_FALSE;
+
+    VkPipelineViewportStateCreateInfo viewportState{};
+    viewportState.sType         = VK_STRUCTURE_TYPE_PIPELINE_VIEWPORT_STATE_CREATE_INFO;
+    viewportState.viewportCount = 1;
+    viewportState.scissorCount  = 1;
+
+    VkDynamicState dynamicStates[] = {VK_DYNAMIC_STATE_VIEWPORT, VK_DYNAMIC_STATE_SCISSOR};
+    VkPipelineDynamicStateCreateInfo dynamicState{};
+    dynamicState.sType             = VK_STRUCTURE_TYPE_PIPELINE_DYNAMIC_STATE_CREATE_INFO;
+    dynamicState.dynamicStateCount = 2;
+    dynamicState.pDynamicStates    = dynamicStates;
+
+    VkPipelineRasterizationStateCreateInfo rasterizer{};
+    rasterizer.sType                   = VK_STRUCTURE_TYPE_PIPELINE_RASTERIZATION_STATE_CREATE_INFO;
+    rasterizer.depthClampEnable        = VK_FALSE;
+    rasterizer.rasterizerDiscardEnable = VK_FALSE;
+    rasterizer.polygonMode             = VK_POLYGON_MODE_FILL;
+    rasterizer.lineWidth               = 1.0f;
+    rasterizer.cullMode                = VK_CULL_MODE_NONE;
+    rasterizer.frontFace               = VK_FRONT_FACE_COUNTER_CLOCKWISE;
+    rasterizer.depthBiasEnable         = VK_FALSE;
+
+    VkPipelineMultisampleStateCreateInfo multisampling{};
+    multisampling.sType                = VK_STRUCTURE_TYPE_PIPELINE_MULTISAMPLE_STATE_CREATE_INFO;
+    multisampling.sampleShadingEnable  = VK_FALSE;
+    multisampling.rasterizationSamples = VK_SAMPLE_COUNT_1_BIT;
+
+    // Opaque fullscreen blit — no blending needed
+    VkPipelineColorBlendAttachmentState colorBlendAttachment{};
+    colorBlendAttachment.colorWriteMask = VK_COLOR_COMPONENT_R_BIT | VK_COLOR_COMPONENT_G_BIT |
+                                          VK_COLOR_COMPONENT_B_BIT | VK_COLOR_COMPONENT_A_BIT;
+    colorBlendAttachment.blendEnable = VK_FALSE;
+
+    VkPipelineColorBlendStateCreateInfo colorBlending{};
+    colorBlending.sType           = VK_STRUCTURE_TYPE_PIPELINE_COLOR_BLEND_STATE_CREATE_INFO;
+    colorBlending.logicOpEnable   = VK_FALSE;
+    colorBlending.attachmentCount = 1;
+    colorBlending.pAttachments    = &colorBlendAttachment;
+
+    VkPipelineRenderingCreateInfo renderingInfo{};
+    renderingInfo.sType                   = VK_STRUCTURE_TYPE_PIPELINE_RENDERING_CREATE_INFO;
+    renderingInfo.colorAttachmentCount    = 1;
+    renderingInfo.pColorAttachmentFormats = &m_swapchainFormat;
+
+    VkGraphicsPipelineCreateInfo pipelineInfo{};
+    pipelineInfo.sType               = VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_CREATE_INFO;
+    pipelineInfo.pNext               = &renderingInfo;
+    pipelineInfo.stageCount          = 2;
+    pipelineInfo.pStages             = shaderStages;
+    pipelineInfo.pVertexInputState   = &vertexInputInfo;
+    pipelineInfo.pInputAssemblyState = &inputAssembly;
+    pipelineInfo.pViewportState      = &viewportState;
+    pipelineInfo.pRasterizationState = &rasterizer;
+    pipelineInfo.pMultisampleState   = &multisampling;
+    pipelineInfo.pDepthStencilState  = nullptr;
+    pipelineInfo.pColorBlendState    = &colorBlending;
+    pipelineInfo.pDynamicState       = &dynamicState;
+    pipelineInfo.layout              = m_blitPipelineLayout;
+    pipelineInfo.renderPass          = VK_NULL_HANDLE;
+    pipelineInfo.subpass             = 0;
+
+    if (vkCreateGraphicsPipelines(m_device, VK_NULL_HANDLE, 1, &pipelineInfo,
+                                   nullptr, &m_blitPipeline) != VK_SUCCESS)
+    {
+        vkDestroyShaderModule(m_device, vertModule, nullptr);
+        vkDestroyShaderModule(m_device, fragModule, nullptr);
+        throw std::runtime_error("VulkanRenderer: failed to create blit graphics pipeline");
+    }
+
+    vkDestroyShaderModule(m_device, vertModule, nullptr);
+    vkDestroyShaderModule(m_device, fragModule, nullptr);
+
+    std::cout << "[Vulkan] Blit pipeline created\n";
+}
+
+void VulkanRenderer::createBlitQuadBuffer()
+{
+    // Fullscreen quad in NDC: 2 triangles with position + texcoord
+    float blitVertices[] = {
+        // pos (x,y)    texcoord (u,v)
+        -1.f, -1.f,     0.f, 0.f,
+         1.f, -1.f,     1.f, 0.f,
+         1.f,  1.f,     1.f, 1.f,
+
+        -1.f, -1.f,     0.f, 0.f,
+         1.f,  1.f,     1.f, 1.f,
+        -1.f,  1.f,     0.f, 1.f,
+    };
+    VkDeviceSize bufferSize = sizeof(blitVertices);
+
+    // Staging buffer
+    VkBufferCreateInfo stagingBufInfo{};
+    stagingBufInfo.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
+    stagingBufInfo.size  = bufferSize;
+    stagingBufInfo.usage = VK_BUFFER_USAGE_TRANSFER_SRC_BIT;
+
+    VmaAllocationCreateInfo stagingAllocInfo{};
+    stagingAllocInfo.usage = VMA_MEMORY_USAGE_AUTO;
+    stagingAllocInfo.flags = VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT;
+
+    VkBuffer      stagingBuffer;
+    VmaAllocation stagingAllocation;
+    if (vmaCreateBuffer(m_allocator, &stagingBufInfo, &stagingAllocInfo,
+                         &stagingBuffer, &stagingAllocation, nullptr) != VK_SUCCESS)
+        throw std::runtime_error("VulkanRenderer: failed to create blit quad staging buffer");
+
+    void* data;
+    vmaMapMemory(m_allocator, stagingAllocation, &data);
+    std::memcpy(data, blitVertices, bufferSize);
+    vmaUnmapMemory(m_allocator, stagingAllocation);
+
+    // GPU-local vertex buffer
+    VkBufferCreateInfo bufInfo{};
+    bufInfo.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
+    bufInfo.size  = bufferSize;
+    bufInfo.usage = VK_BUFFER_USAGE_VERTEX_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT;
+
+    VmaAllocationCreateInfo allocInfo{};
+    allocInfo.usage = VMA_MEMORY_USAGE_AUTO_PREFER_DEVICE;
+
+    if (vmaCreateBuffer(m_allocator, &bufInfo, &allocInfo,
+                         &m_blitQuadBuffer, &m_blitQuadAllocation, nullptr) != VK_SUCCESS)
+    {
+        vmaDestroyBuffer(m_allocator, stagingBuffer, stagingAllocation);
+        throw std::runtime_error("VulkanRenderer: failed to create blit quad vertex buffer");
+    }
+
+    VkCommandBuffer cmd = beginOneTimeCommands();
+    VkBufferCopy copyRegion{};
+    copyRegion.size = bufferSize;
+    vkCmdCopyBuffer(cmd, stagingBuffer, m_blitQuadBuffer, 1, &copyRegion);
+    endOneTimeCommands(cmd);
+
+    vmaDestroyBuffer(m_allocator, stagingBuffer, stagingAllocation);
+
+    std::cout << "[Vulkan] Blit quad buffer created (" << BLIT_QUAD_VERTEX_COUNT
+              << " vertices, " << bufferSize << " bytes)\n";
+}
+
+void VulkanRenderer::updateBlitDescriptorSet()
+{
+    VkDescriptorImageInfo imageInfo{};
+    imageInfo.sampler     = m_offscreenSampler;
+    imageInfo.imageView   = m_offscreenView;
+    imageInfo.imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+
+    VkWriteDescriptorSet write{};
+    write.sType           = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+    write.dstSet          = m_blitDescriptorSet;
+    write.dstBinding      = 0;
+    write.descriptorCount = 1;
+    write.descriptorType  = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
+    write.pImageInfo      = &imageInfo;
+
+    vkUpdateDescriptorSets(m_device, 1, &write, 0, nullptr);
+}
+
 // ── VMA / buffer helpers ─────────────────────────────────────────────────────
 
 void VulkanRenderer::initAllocator()
@@ -1800,6 +2077,9 @@ VulkanRenderer::VulkanRenderer(const std::string& title, unsigned int width,
     createTexturedPipeline();
     createTextPipeline();
     createVertexColorPipelines();
+    createBlitPipeline();
+    createBlitQuadBuffer();
+    updateBlitDescriptorSet();
 
     initFreeType();
 
@@ -1943,6 +2223,9 @@ void VulkanRenderer::ensureFrameStarted()
 
 void VulkanRenderer::display()
 {
+    if (m_worldPass)
+        endFrame();
+
     ensureFrameStarted();
     m_frameStarted = false;
 
@@ -2048,7 +2331,76 @@ void VulkanRenderer::beginFrame()
     scissor.extent = m_swapchainExtent;
     vkCmdSetScissor(cmd, 0, 1, &scissor);
 }
-void VulkanRenderer::endFrame() {}
+void VulkanRenderer::endFrame()
+{
+    if (!m_worldPass || !m_frameStarted)
+        return;
+
+    VkCommandBuffer cmd = m_commandBuffers[m_currentFrame];
+
+    // 1. End the off-screen dynamic rendering pass
+    vkCmdEndRendering(cmd);
+
+    // 2. Transition off-screen image: COLOR_ATTACHMENT → SHADER_READ_ONLY
+    transitionImageLayout(cmd, m_offscreenImage,
+                          VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
+                          VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
+
+    // 3. Begin dynamic rendering targeting the swap chain image
+    //    (swap chain was already transitioned to COLOR_ATTACHMENT in ensureFrameStarted)
+    VkRenderingAttachmentInfo colorAttachment{};
+    colorAttachment.sType       = VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO;
+    colorAttachment.imageView   = m_swapchainImageViews[m_currentImageIndex];
+    colorAttachment.imageLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
+    colorAttachment.loadOp      = VK_ATTACHMENT_LOAD_OP_CLEAR;
+    colorAttachment.storeOp     = VK_ATTACHMENT_STORE_OP_STORE;
+    colorAttachment.clearValue.color = m_clearColor;
+
+    VkRenderingInfo renderInfo{};
+    renderInfo.sType                = VK_STRUCTURE_TYPE_RENDERING_INFO;
+    renderInfo.renderArea.offset    = {0, 0};
+    renderInfo.renderArea.extent    = m_swapchainExtent;
+    renderInfo.layerCount           = 1;
+    renderInfo.colorAttachmentCount = 1;
+    renderInfo.pColorAttachments    = &colorAttachment;
+
+    vkCmdBeginRendering(cmd, &renderInfo);
+
+    // 4. Set viewport and scissor
+    VkViewport viewport{};
+    viewport.x        = 0.f;
+    viewport.y        = 0.f;
+    viewport.width    = static_cast<float>(m_swapchainExtent.width);
+    viewport.height   = static_cast<float>(m_swapchainExtent.height);
+    viewport.minDepth = 0.f;
+    viewport.maxDepth = 1.f;
+    vkCmdSetViewport(cmd, 0, 1, &viewport);
+
+    VkRect2D scissor{};
+    scissor.offset = {0, 0};
+    scissor.extent = m_swapchainExtent;
+    vkCmdSetScissor(cmd, 0, 1, &scissor);
+
+    // 5. Bind the blit pipeline (fullscreen quad)
+    vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, m_blitPipeline);
+
+    // 6. Bind descriptor sets: set 0 = lighting UBO (required by layout), set 1 = off-screen texture
+    VkDescriptorSet descriptorSets[] = {
+        m_lightingUBOs[m_currentFrame].descriptorSet,
+        m_blitDescriptorSet
+    };
+    vkCmdBindDescriptorSets(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS,
+                            m_blitPipelineLayout, 0, 2,
+                            descriptorSets, 0, nullptr);
+
+    // 7. Draw fullscreen quad (6 vertices in NDC)
+    VkDeviceSize offset = 0;
+    vkCmdBindVertexBuffers(cmd, 0, 1, &m_blitQuadBuffer, &offset);
+    vkCmdDraw(cmd, BLIT_QUAD_VERTEX_COUNT, 1, 0, 0);
+
+    // 8. Subsequent draws go directly to swap chain without lighting (UI overlay)
+    m_worldPass = false;
+}
 
 void VulkanRenderer::addLight(const Light& light)
 {
