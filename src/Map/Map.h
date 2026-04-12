@@ -11,6 +11,7 @@
 #include "EnemyDefinition.h"
 #include "TransitionZone.h"
 #include "AbilityPickupDefinition.h"
+#include "LightDefinition.h"
 
 class Renderer;
 
@@ -40,6 +41,10 @@ public:
     // Returns pointer to the TransitionZone the rectangle overlaps, or nullptr.
     const TransitionZone* checkTransition(glm::vec2 position, glm::vec2 size) const;
 
+    // Lights.
+    void addLight(const LightDefinition& def) { m_lights.push_back(def); }
+    const std::vector<LightDefinition>& getLights() const { return m_lights; }
+
     // Ability pick-ups.
     void addAbilityPickup(const AbilityPickupDefinition& def) { m_abilityPickups.push_back(def); }
     const std::vector<AbilityPickupDefinition>& getAbilityPickups() const { return m_abilityPickups; }
@@ -60,6 +65,7 @@ private:
     std::vector<EnemyDefinition>         m_enemyDefinitions;
     std::vector<TransitionZone>          m_transitionZones;
     std::vector<AbilityPickupDefinition> m_abilityPickups;
+    std::vector<LightDefinition>         m_lights;
     std::unordered_map<std::string, glm::vec2> m_namedSpawns;
     glm::vec2                    m_spawnPoint { 0.f, 0.f };
     Rect                         m_bounds     { 0.f, 0.f, 3200.f, 1200.f };

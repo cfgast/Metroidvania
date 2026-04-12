@@ -138,5 +138,34 @@ Map MapLoader::loadFromFile(const std::string& filePath)
         }
     }
 
+    // Lights (optional).
+    if (j.contains("lights"))
+    {
+        for (const auto& l : j["lights"])
+        {
+            LightDefinition def;
+            def.name      = l.value("name", "");
+            def.x         = l.value("x", 0.f);
+            def.y         = l.value("y", 0.f);
+            def.z         = l.value("z", 80.f);
+            def.r         = l.value("r", 1.f);
+            def.g         = l.value("g", 1.f);
+            def.b         = l.value("b", 1.f);
+            def.intensity = l.value("intensity", 1.f);
+            def.radius    = l.value("radius", 200.f);
+
+            std::string typeStr = l.value("type", "point");
+            def.type = (typeStr == "spot") ? LightType::Spot : LightType::Point;
+
+            // Spot-light extras.
+            def.directionX     = l.value("directionX", 0.f);
+            def.directionY     = l.value("directionY", 1.f);
+            def.innerConeAngle = l.value("innerCone", 30.f);
+            def.outerConeAngle = l.value("outerCone", 45.f);
+
+            map.addLight(def);
+        }
+    }
+
     return map;
 }

@@ -491,6 +491,10 @@ int main()
                 renderer.addLight(playerLight);
             }
 
+            // Add map-defined lights.
+            for (const auto& ld : map.getLights())
+                renderer.addLight(ld.toLight());
+
             renderer.setView(cx, cy, viewW, viewH);
             renderer.clear(30/255.f, 30/255.f, 50/255.f);
             map.render(renderer);
@@ -625,6 +629,10 @@ int main()
             playerLight.type      = LightType::Point;
             renderer.addLight(playerLight);
         }
+
+        // Add map-defined lights.
+        for (const auto& ld : map.getLights())
+            renderer.addLight(ld.toLight());
 
         renderer.setView(cx, cy, viewW, viewH);
         renderer.clear(30/255.f, 30/255.f, 50/255.f);

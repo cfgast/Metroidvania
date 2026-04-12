@@ -60,50 +60,6 @@ Task 3: Lighting compositing pass
 Implemented: true
 
 ==============================================================================
-Task 4: Map light definitions and MapLoader integration
-==============================================================================
-Implemented: false
-
-Add light data to the map JSON format and load them at runtime.
-
-Create src/Map/LightDefinition.h:
-  struct LightDefinition {
-      std::string name;
-      LightType   type = LightType::Point;
-      float x, y, z = 80.f;
-      float r = 1.f, g = 1.f, b = 1.f;
-      float intensity = 1.f;
-      float radius = 200.f;
-      // Spot-only:
-      float directionX = 0.f, directionY = 1.f;
-      float innerConeAngle = 30.f;  // degrees, converted to cos at load
-      float outerConeAngle = 45.f;
-  };
-
-Update Map.h / Map.cpp:
-- Add m_lights vector, addLight(), getLights() accessors
-
-Update MapLoader.cpp:
-- Parse optional "lights" array from JSON:
-    {
-        "name": "torch_01",
-        "type": "point",
-        "x": 500, "y": 200, "z": 80,
-        "r": 1.0, "g": 0.8, "b": 0.3,
-        "intensity": 1.2,
-        "radius": 250
-    }
-  For spot lights, also: directionX, directionY, innerCone, outerCone
-
-Update main.cpp:
-- After loading a map, iterate map.getLights() and call renderer.addLight()
-  for each one every frame (before drawing)
-- Keep the hardcoded player light from Task 3
-
-Add a test light to maps/world_01.json in the "lights" array near a platform
-so the effect can be seen immediately.
-
-==============================================================================
 Task 5: LightComponent for player dynamic light
 ==============================================================================
 Implemented: false

@@ -82,7 +82,8 @@ Enemies replace `CombatComponent` with `EnemyAIComponent` (+ optional `SlimeAtta
 | `EnemyDefinition.h` | Data struct: position, waypoints, speed, damage, HP, size. |
 | `TransitionZone.h` | Data struct: trigger bounds, target map path, target spawn name, relative-positioning fields (`edgeAxis`, `targetBaseX`, `targetBaseY`). |
 | `AbilityPickupDefinition.h` | Data struct: id, ability enum, position, size. |
-| `Map.h/.cpp` | Aggregates all level data. Provides AABB checks for transitions and pickups. `registerPhysXStatics()` creates `PxRigidStatic` actors for platforms. |
+| `LightDefinition.h` | Data struct: name, type, position (x/y/z), color (r/g/b), intensity, radius, spot-light cone angles. `toLight()` converts to renderable `Light`. |
+| `Map.h/.cpp` | Aggregates all level data. Provides AABB checks for transitions and pickups. `registerPhysXStatics()` creates `PxRigidStatic` actors for platforms. Stores `LightDefinition` vector accessible via `getLights()`. |
 | `MapLoader.h/.cpp` | Static `loadFromFile()` → parses JSON via nlohmann/json → returns `Map`. |
 | `TransitionManager.h/.cpp` | State machine `Idle → FadingOut (0.4 s) → FadingIn (0.4 s)`. Fires a load callback at midpoint (screen fully black). The load callback in `main.cpp` supports **relative positioning**: when a zone has `edgeAxis` set, the player's offset along the shared edge is preserved (clamped to zone bounds); otherwise falls back to `targetSpawn` (legacy). Pending zone data and player position are captured in `main.cpp` before starting the fade. |
 
@@ -100,7 +101,11 @@ Enemies replace `CombatComponent` with `EnemyAIComponent` (+ optional `SlimeAtta
   // edgeAxis: "vertical" (left/right adjacency) or "horizontal" (top/bottom).
   //   Empty/missing = legacy mode (uses targetSpawn).
   // targetBaseX/Y: origin in target map for relative player positioning.
-  "abilityPickups": [{ "id","ability","x","y","width","height" }]
+  "abilityPickups": [{ "id","ability","x","y","width","height" }],
+  "lights": [{ "name","type","x","y","z","r","g","b","intensity","radius",
+               "directionX","directionY","innerCone","outerCone" }]
+  // lights: optional array. type is "point" (default) or "spot".
+  //   Spot-only fields: directionX, directionY, innerCone, outerCone (degrees).
 }
 ```
 
