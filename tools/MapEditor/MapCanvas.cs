@@ -69,6 +69,7 @@ public sealed class MapCanvas : Control
     public event EventHandler? SelectionChanged;
     public event EventHandler? MapChanged;
     public event EventHandler? ZoomChanged;
+    public event EventHandler? ActiveMapChanged;
 
     // ── Drag state ────────────────────────────────────────────────────────────
     private bool         _isPanning;
@@ -178,6 +179,74 @@ public sealed class MapCanvas : Control
         => new((x - _panX) * _zoom, (y - _panY) * _zoom, w * _zoom, h * _zoom);
     private float Snap(float v) => SnapToGrid ? MathF.Round(v / GridSize) * GridSize : v;
 
+    /// <summary>Active map world offset X (0 when no active map).</summary>
+    private float ActiveOX => _activeMap?.WorldX ?? 0;
+    /// <summary>Active map world offset Y (0 when no active map).</summary>
+    private float ActiveOY => _activeMap?.WorldY ?? 0;
+
+    /// <summary>
+    /// Converts a world-space point to the active map's local coordinate space.
+    /// </summary>
+    private PointF WorldToLocal(PointF world) => new(world.X - ActiveOX, world.Y - ActiveOY);
+
+    /// <summary>
+    /// Returns the topmost EditorMap whose world-offset bounds contain the
+    /// given world point. Prefers the active map if the point is inside it.
+    /// If multiple inactive maps overlap, returns the last in list (rendered on top).
+    /// </summary>
+    public EditorMap? HitMap(PointF worldPoint)
+    {
+        // Prefer active map if point is inside its bounds
+        if (_activeMap != null)
+        {
+            var b = _activeMap.Map.Bounds;
+            float bx = b.X + _activeMap.WorldX;
+            float by = b.Y + _activeMap.WorldY;
+            if (worldPoint.X >= bx && worldPoint.X <= bx + b.Width &&
+                worldPoint.Y >= by && worldPoint.Y <= by + b.Height)
+                return _activeMap;
+        }
+
+        // Check inactive maps (last in list = rendered on top)
+        for (int i = _editorMaps.Count - 1; i >= 0; i--)
+        {
+            var em = _editorMaps[i];
+            if (em == _activeMap) continue;
+            var b = em.Map.Bounds;
+            float bx = b.X + em.WorldX;
+            float by = b.Y + em.WorldY;
+            if (worldPoint.X >= bx && worldPoint.X <= bx + b.Width &&
+                worldPoint.Y >= by && worldPoint.Y <= by + b.Height)
+                return em;
+        }
+
+        return null;
+    }
+
+    /// <summary>
+    /// Switches the active map, clears selection, and fires events.
+    /// </summary>
+    public void SetActiveMap(EditorMap? map)
+    {
+        if (map == _activeMap) return;
+        _activeMap = map;
+        ClearSelectionQuiet();
+        ActiveMapChanged?.Invoke(this, EventArgs.Empty);
+        SelectionChanged?.Invoke(this, EventArgs.Empty);
+        Invalidate();
+    }
+
+    /// <summary>Clears selection state without firing events.</summary>
+    private void ClearSelectionQuiet()
+    {
+        _selected             = null;
+        _selectedEnemy        = null;
+        _selectedTransition   = null;
+        _selectedPickup       = null;
+        _selectedDefaultSpawn = false;
+        _selectedSpawnKey     = null;
+    }
+
     // ── Paint ─────────────────────────────────────────────────────────────────
     protected override void OnPaint(PaintEventArgs e)
     {
@@ -193,6 +262,12 @@ public sealed class MapCanvas : Control
             if (em == _activeMap) continue;
             DrawEditorMap(g, em, isActive: false);
         }
+
+        // Apply active map world offset so local-coord draw calls
+        // render at the correct world position.
+        var savedTransform = g.Transform;
+        g.TranslateTransform(ActiveOX * _zoom, ActiveOY * _zoom);
+
         DrawEditorMap(g, _activeMap, isActive: true);
 
         // Active map editing overlays (drawing ghost, selection, handles)
@@ -203,6 +278,9 @@ public sealed class MapCanvas : Control
         if (_selectedPickup != null) { DrawSelectionOutline(g, _selectedPickup.X, _selectedPickup.Y, _selectedPickup.Width, _selectedPickup.Height); DrawSelectionHandles(g, _selectedPickup.X, _selectedPickup.Y, _selectedPickup.Width, _selectedPickup.Height); }
         DrawSpawnPoint(g);
         DrawNamedSpawnPoints(g);
+
+        // Restore transform after active-map drawing
+        g.Transform = savedTransform;
     }
 
     /// <summary>
@@ -629,22 +707,23 @@ public sealed class MapCanvas : Control
 
     private ResizeHandle HitHandle(Point screen)
     {
+        float ox = ActiveOX, oy = ActiveOY;
         float wx, wy, ww, wh;
         if (_selected != null)
         {
-            wx = _selected.X; wy = _selected.Y; ww = _selected.Width; wh = _selected.Height;
+            wx = _selected.X + ox; wy = _selected.Y + oy; ww = _selected.Width; wh = _selected.Height;
         }
         else if (_selectedEnemy != null)
         {
-            wx = _selectedEnemy.X; wy = _selectedEnemy.Y; ww = _selectedEnemy.Width; wh = _selectedEnemy.Height;
+            wx = _selectedEnemy.X + ox; wy = _selectedEnemy.Y + oy; ww = _selectedEnemy.Width; wh = _selectedEnemy.Height;
         }
         else if (_selectedTransition != null)
         {
-            wx = _selectedTransition.X; wy = _selectedTransition.Y; ww = _selectedTransition.Width; wh = _selectedTransition.Height;
+            wx = _selectedTransition.X + ox; wy = _selectedTransition.Y + oy; ww = _selectedTransition.Width; wh = _selectedTransition.Height;
         }
         else if (_selectedPickup != null)
         {
-            wx = _selectedPickup.X; wy = _selectedPickup.Y; ww = _selectedPickup.Width; wh = _selectedPickup.Height;
+            wx = _selectedPickup.X + ox; wy = _selectedPickup.Y + oy; ww = _selectedPickup.Width; wh = _selectedPickup.Height;
         }
         else return ResizeHandle.None;
 
@@ -780,21 +859,24 @@ public sealed class MapCanvas : Control
 
         if (e.Button != MouseButtons.Left || Map == null) return;
 
+        // Convert world coordinates to active map's local space
+        var local = WorldToLocal(world);
+
         if (_tool == EditorTool.Draw)
         {
             _isDrawing      = true;
-            _dragStartWorld = new(Snap(world.X), Snap(world.Y));
+            _dragStartWorld = new(Snap(local.X), Snap(local.Y));
             _drawRect       = new(_dragStartWorld.X, _dragStartWorld.Y, 0, 0);
         }
         else if (_tool == EditorTool.DrawEnemy)
         {
             var en = new EnemyData
             {
-                X = Snap(world.X), Y = Snap(world.Y),
+                X = Snap(local.X), Y = Snap(local.Y),
                 Width = 40, Height = 40,
                 Speed = 100, Damage = 10, Hp = 50,
-                WaypointA = new PointData { X = Snap(world.X) - 100, Y = Snap(world.Y) },
-                WaypointB = new PointData { X = Snap(world.X) + 100, Y = Snap(world.Y) }
+                WaypointA = new PointData { X = Snap(local.X) - 100, Y = Snap(local.Y) },
+                WaypointB = new PointData { X = Snap(local.X) + 100, Y = Snap(local.Y) }
             };
             Map.Enemies.Add(en);
             SelectEnemy(en);
@@ -804,7 +886,7 @@ public sealed class MapCanvas : Control
         else if (_tool == EditorTool.DrawTransition)
         {
             _isDrawing      = true;
-            _dragStartWorld = new(Snap(world.X), Snap(world.Y));
+            _dragStartWorld = new(Snap(local.X), Snap(local.Y));
             _drawRect       = new(_dragStartWorld.X, _dragStartWorld.Y, 0, 0);
         }
         else if (_tool == EditorTool.DrawPickup)
@@ -814,7 +896,7 @@ public sealed class MapCanvas : Control
             {
                 Id = $"pickup_{nextId:D2}",
                 Ability = "DoubleJump",
-                X = Snap(world.X), Y = Snap(world.Y),
+                X = Snap(local.X), Y = Snap(local.Y),
                 Width = 30, Height = 30
             };
             Map!.AbilityPickups.Add(pk);
@@ -831,7 +913,7 @@ public sealed class MapCanvas : Control
                 nextId++;
                 name = $"spawn_{nextId}";
             }
-            var pt = new PointData { X = Snap(world.X), Y = Snap(world.Y) };
+            var pt = new PointData { X = Snap(local.X), Y = Snap(local.Y) };
             Map.SpawnPoints[name] = pt;
             SelectNamedSpawn(name);
             MapChanged?.Invoke(this, EventArgs.Empty);
@@ -862,103 +944,113 @@ public sealed class MapCanvas : Control
                 {
                     _origRect = new(_selectedPickup.X, _selectedPickup.Y, _selectedPickup.Width, _selectedPickup.Height);
                 }
-                _dragStartWorld = world;
+                _dragStartWorld = local;
             }
             else
             {
                 // Hit-test waypoints of selected enemy
-                var hitWp = HitWaypoint(world);
+                var hitWp = HitWaypoint(local);
                 if (hitWp != WaypointDrag.None)
                 {
                     var wp = hitWp == WaypointDrag.A ? _selectedEnemy!.WaypointA : _selectedEnemy!.WaypointB;
                     _isDragging       = true;
                     _draggingWaypoint = hitWp;
                     _activeHandle     = ResizeHandle.Move;
-                    _moveOffX         = world.X - wp.X;
-                    _moveOffY         = world.Y - wp.Y;
-                    _dragStartWorld   = world;
+                    _moveOffX         = local.X - wp.X;
+                    _moveOffY         = local.Y - wp.Y;
+                    _dragStartWorld   = local;
                 }
                 else
                 {
                 // Hit-test spawns first (drawn on top of other objects)
-                var hitNamedSpawn = HitNamedSpawn(world);
+                var hitNamedSpawn = HitNamedSpawn(local);
                 if (hitNamedSpawn != null)
                 {
                     var sp = Map.SpawnPoints[hitNamedSpawn];
                     SelectNamedSpawn(hitNamedSpawn);
                     _isDragging     = true;
                     _activeHandle   = ResizeHandle.Move;
-                    _moveOffX       = world.X - sp.X;
-                    _moveOffY       = world.Y - sp.Y;
-                    _dragStartWorld = world;
+                    _moveOffX       = local.X - sp.X;
+                    _moveOffY       = local.Y - sp.Y;
+                    _dragStartWorld = local;
                 }
-                else if (HitDefaultSpawn(world))
+                else if (HitDefaultSpawn(local))
                 {
                     var sp = Map.SpawnPoint;
                     SelectDefaultSpawn();
                     _isDragging     = true;
                     _activeHandle   = ResizeHandle.Move;
-                    _moveOffX       = world.X - sp.X;
-                    _moveOffY       = world.Y - sp.Y;
-                    _dragStartWorld = world;
+                    _moveOffX       = local.X - sp.X;
+                    _moveOffY       = local.Y - sp.Y;
+                    _dragStartWorld = local;
                 }
                 else
                 {
-                var hit = HitPlatform(world);
+                var hit = HitPlatform(local);
                 if (hit != null)
                 {
                     SelectPlatform(hit);
                     _isDragging     = true;
                     _activeHandle   = ResizeHandle.Move;
-                    _moveOffX       = world.X - hit.X;
-                    _moveOffY       = world.Y - hit.Y;
+                    _moveOffX       = local.X - hit.X;
+                    _moveOffY       = local.Y - hit.Y;
                     _origRect       = new(hit.X, hit.Y, hit.Width, hit.Height);
-                    _dragStartWorld = world;
+                    _dragStartWorld = local;
                 }
                 else
                 {
-                    var hitEnemy = HitEnemy(world);
+                    var hitEnemy = HitEnemy(local);
                     if (hitEnemy != null)
                     {
                         SelectEnemy(hitEnemy);
                         _isDragging     = true;
                         _activeHandle   = ResizeHandle.Move;
-                        _moveOffX       = world.X - hitEnemy.X;
-                        _moveOffY       = world.Y - hitEnemy.Y;
+                        _moveOffX       = local.X - hitEnemy.X;
+                        _moveOffY       = local.Y - hitEnemy.Y;
                         _origRect       = new(hitEnemy.X, hitEnemy.Y, hitEnemy.Width, hitEnemy.Height);
                         _origWaypointA  = new(hitEnemy.WaypointA.X, hitEnemy.WaypointA.Y);
                         _origWaypointB  = new(hitEnemy.WaypointB.X, hitEnemy.WaypointB.Y);
-                        _dragStartWorld = world;
+                        _dragStartWorld = local;
                     }
                     else
                     {
-                        var hitTrans = HitTransition(world);
+                        var hitTrans = HitTransition(local);
                         if (hitTrans != null)
                         {
                             SelectTransition(hitTrans);
                             _isDragging     = true;
                             _activeHandle   = ResizeHandle.Move;
-                            _moveOffX       = world.X - hitTrans.X;
-                            _moveOffY       = world.Y - hitTrans.Y;
+                            _moveOffX       = local.X - hitTrans.X;
+                            _moveOffY       = local.Y - hitTrans.Y;
                             _origRect       = new(hitTrans.X, hitTrans.Y, hitTrans.Width, hitTrans.Height);
-                            _dragStartWorld = world;
+                            _dragStartWorld = local;
                         }
                         else
                         {
-                            var hitPickup = HitPickup(world);
+                            var hitPickup = HitPickup(local);
                             if (hitPickup != null)
                             {
                                 SelectPickup(hitPickup);
                                 _isDragging     = true;
                                 _activeHandle   = ResizeHandle.Move;
-                                _moveOffX       = world.X - hitPickup.X;
-                                _moveOffY       = world.Y - hitPickup.Y;
+                                _moveOffX       = local.X - hitPickup.X;
+                                _moveOffY       = local.Y - hitPickup.Y;
                                 _origRect       = new(hitPickup.X, hitPickup.Y, hitPickup.Width, hitPickup.Height);
-                                _dragStartWorld = world;
+                                _dragStartWorld = local;
                             }
                             else
                             {
-                                ClearSelection();
+                                // Nothing hit on active map — check if
+                                // click is inside another map's bounds
+                                var hitMap = HitMap(world);
+                                if (hitMap != null && hitMap != _activeMap)
+                                {
+                                    SetActiveMap(hitMap);
+                                }
+                                else
+                                {
+                                    ClearSelection();
+                                }
                             }
                         }
                     }
@@ -973,6 +1065,7 @@ public sealed class MapCanvas : Control
     protected override void OnMouseMove(MouseEventArgs e)
     {
         var world = S2W(e.Location);
+        var local = WorldToLocal(world);
 
         if (_isPanning)
         {
@@ -986,8 +1079,8 @@ public sealed class MapCanvas : Control
         if (_isDrawing)
         {
             _drawRect = new(_dragStartWorld.X, _dragStartWorld.Y,
-                Snap(world.X) - _dragStartWorld.X,
-                Snap(world.Y) - _dragStartWorld.Y);
+                Snap(local.X) - _dragStartWorld.X,
+                Snap(local.Y) - _dragStartWorld.Y);
             Invalidate();
             return;
         }
@@ -998,30 +1091,30 @@ public sealed class MapCanvas : Control
             {
                 if (_activeHandle == ResizeHandle.Move)
                 {
-                    _selected.X = Snap(world.X - _moveOffX);
-                    _selected.Y = Snap(world.Y - _moveOffY);
+                    _selected.X = Snap(local.X - _moveOffX);
+                    _selected.Y = Snap(local.Y - _moveOffY);
                 }
                 else
                 {
-                    ApplyResize(world);
+                    ApplyResize(local);
                 }
             }
             else if (_selectedEnemy != null)
             {
                 if (_draggingWaypoint == WaypointDrag.A)
                 {
-                    _selectedEnemy.WaypointA.X = Snap(world.X - _moveOffX);
-                    _selectedEnemy.WaypointA.Y = Snap(world.Y - _moveOffY);
+                    _selectedEnemy.WaypointA.X = Snap(local.X - _moveOffX);
+                    _selectedEnemy.WaypointA.Y = Snap(local.Y - _moveOffY);
                 }
                 else if (_draggingWaypoint == WaypointDrag.B)
                 {
-                    _selectedEnemy.WaypointB.X = Snap(world.X - _moveOffX);
-                    _selectedEnemy.WaypointB.Y = Snap(world.Y - _moveOffY);
+                    _selectedEnemy.WaypointB.X = Snap(local.X - _moveOffX);
+                    _selectedEnemy.WaypointB.Y = Snap(local.Y - _moveOffY);
                 }
                 else if (_activeHandle == ResizeHandle.Move)
                 {
-                    float newX = Snap(world.X - _moveOffX);
-                    float newY = Snap(world.Y - _moveOffY);
+                    float newX = Snap(local.X - _moveOffX);
+                    float newY = Snap(local.Y - _moveOffY);
                     float dx   = newX - _origRect.X;
                     float dy   = newY - _origRect.Y;
                     _selectedEnemy.X = newX;
@@ -1033,49 +1126,49 @@ public sealed class MapCanvas : Control
                 }
                 else
                 {
-                    ApplyResizeEnemy(world);
+                    ApplyResizeEnemy(local);
                 }
             }
             else if (_selectedTransition != null)
             {
                 if (_activeHandle == ResizeHandle.Move)
                 {
-                    _selectedTransition.X = Snap(world.X - _moveOffX);
-                    _selectedTransition.Y = Snap(world.Y - _moveOffY);
+                    _selectedTransition.X = Snap(local.X - _moveOffX);
+                    _selectedTransition.Y = Snap(local.Y - _moveOffY);
                 }
                 else
                 {
-                    ApplyResizeTransition(world);
+                    ApplyResizeTransition(local);
                 }
             }
             else if (_selectedPickup != null)
             {
                 if (_activeHandle == ResizeHandle.Move)
                 {
-                    _selectedPickup.X = Snap(world.X - _moveOffX);
-                    _selectedPickup.Y = Snap(world.Y - _moveOffY);
+                    _selectedPickup.X = Snap(local.X - _moveOffX);
+                    _selectedPickup.Y = Snap(local.Y - _moveOffY);
                 }
                 else
                 {
-                    ApplyResizePickup(world);
+                    ApplyResizePickup(local);
                 }
             }
             else if (_selectedDefaultSpawn)
             {
-                Map!.SpawnPoint.X = Snap(world.X - _moveOffX);
-                Map.SpawnPoint.Y  = Snap(world.Y - _moveOffY);
+                Map!.SpawnPoint.X = Snap(local.X - _moveOffX);
+                Map.SpawnPoint.Y  = Snap(local.Y - _moveOffY);
             }
             else if (_selectedSpawnKey != null && Map!.SpawnPoints.TryGetValue(_selectedSpawnKey, out var sp))
             {
-                sp.X = Snap(world.X - _moveOffX);
-                sp.Y = Snap(world.Y - _moveOffY);
+                sp.X = Snap(local.X - _moveOffX);
+                sp.Y = Snap(local.Y - _moveOffY);
             }
             MapChanged?.Invoke(this, EventArgs.Empty);
             Invalidate();
             return;
         }
 
-        UpdateCursor(e.Location, world);
+        UpdateCursor(e.Location, local);
         _lastScreen = e.Location;
     }
 

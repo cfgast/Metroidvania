@@ -40,7 +40,7 @@ The tasks are ordered so the editor builds and runs after every task.
 
 ==============================================================================
 Task: Implement map focus/activation by clicking.
-Implemented: false
+Implemented: true
 
 Details:
 - In MapCanvas, when the user clicks (left mouse, Select tool) on empty

@@ -103,6 +103,7 @@ public sealed class MainForm : Form
         _canvas.SelectionChanged += OnSelectionChanged;
         _canvas.MapChanged       += OnMapChanged;
         _canvas.ZoomChanged      += OnZoomChanged;
+        _canvas.ActiveMapChanged += OnActiveMapChanged;
         _canvas.MouseMove        += (_, me) =>
         {
             var w = _canvas.WorldAt(me.Location);
@@ -1208,6 +1209,14 @@ public sealed class MainForm : Form
         _lblZoom.Text = $"Zoom: {_canvas.Zoom * 100:F0}%";
     }
 
+    private void OnActiveMapChanged(object? sender, EventArgs e)
+    {
+        // Sync the map settings panel with the new active map
+        if (_canvas.Map != null)
+            SyncMapFields(_canvas.Map);
+        UpdateStatus();
+    }
+
     // ── Tool helpers ──────────────────────────────────────────────────────────
     private void SetTool(EditorTool t)
     {
@@ -1232,6 +1241,7 @@ public sealed class MainForm : Form
     // ── Status / title ────────────────────────────────────────────────────────
     private void UpdateStatus()
     {
+        string mapName = _canvas.ActiveMap?.Map.Name ?? "";
         int    platCount   = _canvas.Map?.Platforms.Count ?? 0;
         int    enemyCount  = _canvas.Map?.Enemies?.Count ?? 0;
         int    transCount  = _canvas.Map?.Transitions?.Count ?? 0;
@@ -1252,7 +1262,8 @@ public sealed class MainForm : Form
                      _canvas.SelectedPickup      != null ? " | Pickup selected"       :
                      _canvas.SelectedDefaultSpawn        ? " | Default spawn selected" :
                      _canvas.SelectedSpawnKey     != null ? $" | Spawn \"{_canvas.SelectedSpawnKey}\" selected" : "";
-        _lblInfo.Text = $"{platCount} platforms, {enemyCount} enemies, {transCount} transitions, {pickupCount} pickups, {spawnCount} spawns{sel} | {tool} mode";
+        string active = !string.IsNullOrEmpty(mapName) ? $"Active: {mapName} | " : "";
+        _lblInfo.Text = $"{active}{platCount} platforms, {enemyCount} enemies, {transCount} transitions, {pickupCount} pickups, {spawnCount} spawns{sel} | {tool} mode";
     }
 
     private void SetStatus(string msg) => _lblInfo.Text = msg;

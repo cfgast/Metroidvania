@@ -126,6 +126,12 @@ World files use the `.world.json` extension and reference individual map files b
 
 `LoadWorld(List<EditorMap>)` replaces the old `LoadMap()` entry point. A single-map `LoadMap(MapData)` overload still works by wrapping the map in a one-entry list. Inactive maps render dimmed with dotted borders; the active map renders at full opacity with a cyan highlighted border. `FitToView()` computes the bounding box of all loaded maps.
 
+### Map Activation & World-Space Coordinate Handling
+
+Clicking on an inactive map in the Select tool switches `ActiveMap` to that map. `HitMap(PointF worldPoint)` determines which map's world-offset bounds contain a point, preferring the active map to avoid accidental switches. `SetActiveMap()` clears selection, fires `ActiveMapChanged` and `SelectionChanged` events, and repaints. `MainForm` subscribes to `ActiveMapChanged` to refresh the properties panel and status bar (which shows `Active: <map name> | ...`).
+
+All active-map drawing uses a `Graphics.TranslateTransform` to offset local coordinates by the active map's `WorldX`/`WorldY`, so maps render at their correct world positions. Hit-testing and element creation convert world coordinates to local coordinates via `WorldToLocal()` before comparing against map-local element data.
+
 ---
 
 ## Physics (`src/Physics/`)
