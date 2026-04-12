@@ -25,12 +25,9 @@ $ErrorActionPreference = "Stop"
 function Get-NextTask {
     param([string]$Path)
     $content = Get-Content $Path -Raw
-    $blocks = $content -split '(?m)^={2,}\s*$'
-    for ($i = 0; $i -lt $blocks.Count; $i++) {
-        $block = $blocks[$i].Trim()
-        if ($block -match '(?s)^Task:\s*(.+?)(?:\r?\n)Implemented:\s*false') {
-            return $Matches[1].Trim()
-        }
+    # Match: ===+ line, then "Task N: <title>" line, then ===+ line, then "Implemented: false"
+    if ($content -match '(?m)={2,}\s*\r?\nTask\s*\d*:\s*(.+?)\s*\r?\n={2,}\s*\r?\nImplemented:\s*false') {
+        return $Matches[1].Trim()
     }
     return $null
 }
@@ -38,13 +35,11 @@ function Get-NextTask {
 function Get-AllPendingTasks {
     param([string]$Path)
     $content = Get-Content $Path -Raw
-    $blocks = $content -split '(?m)^={2,}\s*$'
     $tasks = @()
-    for ($i = 0; $i -lt $blocks.Count; $i++) {
-        $block = $blocks[$i].Trim()
-        if ($block -match '(?s)^Task:\s*(.+?)(?:\r?\n)Implemented:\s*false') {
-            $tasks += $Matches[1].Trim()
-        }
+    $pattern = '(?m)={2,}\s*\r?\nTask\s*\d*:\s*(.+?)\s*\r?\n={2,}\s*\r?\nImplemented:\s*false'
+    $m = [regex]::Matches($content, $pattern)
+    foreach ($match in $m) {
+        $tasks += $match.Groups[1].Value.Trim()
     }
     return $tasks
 }
