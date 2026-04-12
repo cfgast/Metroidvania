@@ -123,11 +123,12 @@ private:
     void cleanupTextureResources();
     VkCommandBuffer beginOneTimeCommands();
     void endOneTimeCommands(VkCommandBuffer cmd);
+    TextureHandle loadNormalMapForDiffuse(const std::string& diffusePath,
+                                         TextureHandle diffuseHandle);
 
     // ── Sprite/lighting resource helpers ──────────────────────────────
     void createLightingResources();
     void createFlatNormalTexture();
-    void createTextureFlagsUBO();
     VkDescriptorSet getOrCreateTextureDescriptorSet(TextureHandle diffuse,
                                                      TextureHandle normal);
 
@@ -236,6 +237,7 @@ private:
 
     std::unordered_map<TextureHandle, VulkanTextureInfo> m_textures;
     std::unordered_map<std::string, TextureHandle>       m_texturePaths;
+    std::unordered_map<TextureHandle, TextureHandle>     m_normalMaps;
     TextureHandle m_nextTexHandle = 1;
 
     // Descriptor set layout for texture binding (set 1):
@@ -268,10 +270,6 @@ private:
     VmaAllocation    m_lightingUBOAllocation    = VK_NULL_HANDLE;
     VkDescriptorPool m_lightingDescriptorPool   = VK_NULL_HANDLE;
     VkDescriptorSet  m_lightingDescriptorSet    = VK_NULL_HANDLE;
-
-    // ── Texture flags UBO (uHasNormalMap) ─────────────────────────────
-    VkBuffer      m_textureFlagsUBO           = VK_NULL_HANDLE;
-    VmaAllocation m_textureFlagsUBOAllocation = VK_NULL_HANDLE;
 
     // ── Default flat normal texture ──────────────────────────────────
     TextureHandle m_flatNormalTexture = 0;

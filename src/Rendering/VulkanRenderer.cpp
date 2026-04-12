@@ -287,9 +287,6 @@ void VulkanRenderer::cleanupVulkan()
         if (m_lightingUBO != VK_NULL_HANDLE)
             vmaDestroyBuffer(m_allocator, m_lightingUBO, m_lightingUBOAllocation);
 
-        if (m_textureFlagsUBO != VK_NULL_HANDLE)
-            vmaDestroyBuffer(m_allocator, m_textureFlagsUBO, m_textureFlagsUBOAllocation);
-
         // ── Destroy VMA allocator ────────────────────────────────────
         if (m_allocator != VK_NULL_HANDLE)
         {
@@ -575,11 +572,11 @@ void VulkanRenderer::createTexturedPipeline()
         m_flatDescriptorSetLayout, m_textureDescriptorSetLayout
     };
 
-    // Push constants: mat4 projection (64 bytes)
+    // Push constants: mat4 projection (64 bytes) + int hasNormalMap (4 bytes) = 68
     VkPushConstantRange pushRange{};
     pushRange.stageFlags = VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT;
     pushRange.offset     = 0;
-    pushRange.size       = 64;
+    pushRange.size       = 68;
 
     VkPipelineLayoutCreateInfo layoutInfo{};
     layoutInfo.sType                  = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO;
@@ -922,9 +919,8 @@ void VulkanRenderer::endOneTimeCommands(VkCommandBuffer cmd)
 
 void VulkanRenderer::createTextureDescriptorResources()
 {
-    // Descriptor set layout: binding 0 = diffuse, binding 1 = normal map,
-    //                        binding 2 = TextureFlags UBO (uHasNormalMap)
-    VkDescriptorSetLayoutBinding bindings[3]{};
+    // Descriptor set layout: binding 0 = diffuse, binding 1 = normal map
+    VkDescriptorSetLayoutBinding bindings[2]{};
 
     bindings[0].binding         = 0;
     bindings[0].descriptorType  = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
@@ -936,32 +932,25 @@ void VulkanRenderer::createTextureDescriptorResources()
     bindings[1].descriptorCount = 1;
     bindings[1].stageFlags      = VK_SHADER_STAGE_FRAGMENT_BIT;
 
-    bindings[2].binding         = 2;
-    bindings[2].descriptorType  = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
-    bindings[2].descriptorCount = 1;
-    bindings[2].stageFlags      = VK_SHADER_STAGE_FRAGMENT_BIT;
-
     VkDescriptorSetLayoutCreateInfo layoutInfo{};
     layoutInfo.sType        = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO;
-    layoutInfo.bindingCount = 3;
+    layoutInfo.bindingCount = 2;
     layoutInfo.pBindings    = bindings;
 
     if (vkCreateDescriptorSetLayout(m_device, &layoutInfo, nullptr,
                                     &m_textureDescriptorSetLayout) != VK_SUCCESS)
         throw std::runtime_error("VulkanRenderer: failed to create texture descriptor set layout");
 
-    // Descriptor pool: 2 image samplers + 1 UBO per set
-    VkDescriptorPoolSize poolSizes[2]{};
-    poolSizes[0].type            = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
-    poolSizes[0].descriptorCount = MAX_TEXTURE_DESCRIPTOR_SETS * 2;
-    poolSizes[1].type            = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
-    poolSizes[1].descriptorCount = MAX_TEXTURE_DESCRIPTOR_SETS;
+    // Descriptor pool: 2 image samplers per set
+    VkDescriptorPoolSize poolSize{};
+    poolSize.type            = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
+    poolSize.descriptorCount = MAX_TEXTURE_DESCRIPTOR_SETS * 2;
 
     VkDescriptorPoolCreateInfo poolInfo{};
     poolInfo.sType         = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO;
     poolInfo.maxSets       = MAX_TEXTURE_DESCRIPTOR_SETS;
-    poolInfo.poolSizeCount = 2;
-    poolInfo.pPoolSizes    = poolSizes;
+    poolInfo.poolSizeCount = 1;
+    poolInfo.pPoolSizes    = &poolSize;
 
     if (vkCreateDescriptorPool(m_device, &poolInfo, nullptr,
                                &m_textureDescriptorPool) != VK_SUCCESS)
@@ -974,6 +963,7 @@ void VulkanRenderer::createTextureDescriptorResources()
 void VulkanRenderer::cleanupTextureResources()
 {
     m_textureDescriptorCache.clear();
+    m_normalMaps.clear();
 
     for (auto& [handle, tex] : m_textures)
     {
@@ -1065,29 +1055,6 @@ void VulkanRenderer::createLightingResources()
     vkUpdateDescriptorSets(m_device, 1, &write, 0, nullptr);
 
     std::cout << "[Vulkan] Lighting resources created (dummy UBO)\n";
-}
-
-void VulkanRenderer::createTextureFlagsUBO()
-{
-    VkBufferCreateInfo bufInfo{};
-    bufInfo.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
-    bufInfo.size  = sizeof(int32_t);
-    bufInfo.usage = VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT;
-
-    VmaAllocationCreateInfo allocInfo{};
-    allocInfo.usage = VMA_MEMORY_USAGE_AUTO;
-    allocInfo.flags = VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT |
-                      VMA_ALLOCATION_CREATE_MAPPED_BIT;
-
-    VmaAllocationInfo allocationInfo{};
-    if (vmaCreateBuffer(m_allocator, &bufInfo, &allocInfo,
-                        &m_textureFlagsUBO, &m_textureFlagsUBOAllocation,
-                        &allocationInfo) != VK_SUCCESS)
-        throw std::runtime_error("VulkanRenderer: failed to create texture flags UBO");
-
-    // uHasNormalMap = 0 (no normal maps in this task)
-    int32_t hasNormalMap = 0;
-    std::memcpy(allocationInfo.pMappedData, &hasNormalMap, sizeof(hasNormalMap));
 }
 
 void VulkanRenderer::createFlatNormalTexture()
@@ -1270,12 +1237,7 @@ VkDescriptorSet VulkanRenderer::getOrCreateTextureDescriptorSet(
     normalImgInfo.imageView   = normalInfo.view;
     normalImgInfo.imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
 
-    VkDescriptorBufferInfo flagsBufInfo{};
-    flagsBufInfo.buffer = m_textureFlagsUBO;
-    flagsBufInfo.offset = 0;
-    flagsBufInfo.range  = sizeof(int32_t);
-
-    VkWriteDescriptorSet writes[3]{};
+    VkWriteDescriptorSet writes[2]{};
 
     writes[0].sType           = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
     writes[0].dstSet          = set;
@@ -1291,14 +1253,7 @@ VkDescriptorSet VulkanRenderer::getOrCreateTextureDescriptorSet(
     writes[1].descriptorType  = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
     writes[1].pImageInfo      = &normalImgInfo;
 
-    writes[2].sType           = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
-    writes[2].dstSet          = set;
-    writes[2].dstBinding      = 2;
-    writes[2].descriptorCount = 1;
-    writes[2].descriptorType  = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
-    writes[2].pBufferInfo     = &flagsBufInfo;
-
-    vkUpdateDescriptorSets(m_device, 3, writes, 0, nullptr);
+    vkUpdateDescriptorSets(m_device, 2, writes, 0, nullptr);
 
     m_textureDescriptorCache[key] = set;
     return set;
@@ -1340,7 +1295,6 @@ VulkanRenderer::VulkanRenderer(const std::string& title, unsigned int width,
     createDynamicBuffers();
     createTextureDescriptorResources();
     createLightingResources();
-    createTextureFlagsUBO();
     createFlatNormalTexture();
     createTexturedPipeline();
 
@@ -1854,6 +1808,206 @@ Renderer::TextureHandle VulkanRenderer::loadTexture(const std::string& path)
     std::cout << "[Vulkan] Texture loaded: " << path << " ("
               << texInfo.width << "x" << texInfo.height << ") handle=" << handle << "\n";
 
+    // 10. Auto-load companion normal map (_n.png)
+    loadNormalMapForDiffuse(path, handle);
+
+    return handle;
+}
+
+Renderer::TextureHandle VulkanRenderer::loadNormalMapForDiffuse(
+    const std::string& diffusePath, TextureHandle diffuseHandle)
+{
+    auto it = m_normalMaps.find(diffuseHandle);
+    if (it != m_normalMaps.end())
+        return it->second;
+
+    // Build the _n.png path: "assets/foo.png" → "assets/foo_n.png"
+    std::string normalPath;
+    auto dotPos = diffusePath.rfind('.');
+    if (dotPos != std::string::npos)
+        normalPath = diffusePath.substr(0, dotPos) + "_n" + diffusePath.substr(dotPos);
+    else
+        normalPath = diffusePath + "_n";
+
+    stbi_set_flip_vertically_on_load(0);
+    int w = 0, h = 0, channels = 0;
+    unsigned char* pixels = stbi_load(normalPath.c_str(), &w, &h, &channels, 4);
+
+    if (!pixels)
+    {
+        // No normal map found — store sentinel to avoid re-checking
+        m_normalMaps[diffuseHandle] = 0;
+        return 0;
+    }
+
+    TextureHandle handle = m_nextTexHandle++;
+    VulkanTextureInfo texInfo{};
+    texInfo.width  = w;
+    texInfo.height = h;
+    VkDeviceSize imageSize = static_cast<VkDeviceSize>(w) * static_cast<VkDeviceSize>(h) * 4;
+
+    // Staging buffer
+    VkBufferCreateInfo stagingBufInfo{};
+    stagingBufInfo.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
+    stagingBufInfo.size  = imageSize;
+    stagingBufInfo.usage = VK_BUFFER_USAGE_TRANSFER_SRC_BIT;
+
+    VmaAllocationCreateInfo stagingAllocInfo{};
+    stagingAllocInfo.usage = VMA_MEMORY_USAGE_AUTO;
+    stagingAllocInfo.flags = VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT;
+
+    VkBuffer      stagingBuffer;
+    VmaAllocation stagingAllocation;
+    if (vmaCreateBuffer(m_allocator, &stagingBufInfo, &stagingAllocInfo,
+                        &stagingBuffer, &stagingAllocation, nullptr) != VK_SUCCESS)
+    {
+        stbi_image_free(pixels);
+        m_normalMaps[diffuseHandle] = 0;
+        return 0;
+    }
+
+    void* data;
+    vmaMapMemory(m_allocator, stagingAllocation, &data);
+    std::memcpy(data, pixels, imageSize);
+    vmaUnmapMemory(m_allocator, stagingAllocation);
+    stbi_image_free(pixels);
+
+    // Normal maps use UNORM (linear data, not sRGB)
+    VkImageCreateInfo imageInfo{};
+    imageInfo.sType         = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO;
+    imageInfo.imageType     = VK_IMAGE_TYPE_2D;
+    imageInfo.format        = VK_FORMAT_R8G8B8A8_UNORM;
+    imageInfo.extent.width  = static_cast<uint32_t>(w);
+    imageInfo.extent.height = static_cast<uint32_t>(h);
+    imageInfo.extent.depth  = 1;
+    imageInfo.mipLevels     = 1;
+    imageInfo.arrayLayers   = 1;
+    imageInfo.samples       = VK_SAMPLE_COUNT_1_BIT;
+    imageInfo.tiling        = VK_IMAGE_TILING_OPTIMAL;
+    imageInfo.usage         = VK_IMAGE_USAGE_SAMPLED_BIT |
+                              VK_IMAGE_USAGE_TRANSFER_DST_BIT;
+    imageInfo.sharingMode   = VK_SHARING_MODE_EXCLUSIVE;
+    imageInfo.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
+
+    VmaAllocationCreateInfo imgAllocInfo{};
+    imgAllocInfo.usage = VMA_MEMORY_USAGE_AUTO_PREFER_DEVICE;
+
+    if (vmaCreateImage(m_allocator, &imageInfo, &imgAllocInfo,
+                       &texInfo.image, &texInfo.allocation, nullptr) != VK_SUCCESS)
+    {
+        vmaDestroyBuffer(m_allocator, stagingBuffer, stagingAllocation);
+        m_normalMaps[diffuseHandle] = 0;
+        return 0;
+    }
+
+    // Upload: UNDEFINED → TRANSFER_DST, copy, then → SHADER_READ_ONLY
+    VkCommandBuffer cmd = beginOneTimeCommands();
+
+    VkImageMemoryBarrier2 toTransfer{};
+    toTransfer.sType               = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2;
+    toTransfer.oldLayout           = VK_IMAGE_LAYOUT_UNDEFINED;
+    toTransfer.newLayout           = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL;
+    toTransfer.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+    toTransfer.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+    toTransfer.image               = texInfo.image;
+    toTransfer.subresourceRange    = {VK_IMAGE_ASPECT_COLOR_BIT, 0, 1, 0, 1};
+    toTransfer.srcStageMask        = VK_PIPELINE_STAGE_2_TOP_OF_PIPE_BIT;
+    toTransfer.srcAccessMask       = 0;
+    toTransfer.dstStageMask        = VK_PIPELINE_STAGE_2_TRANSFER_BIT;
+    toTransfer.dstAccessMask       = VK_ACCESS_2_TRANSFER_WRITE_BIT;
+
+    VkDependencyInfo dep1{};
+    dep1.sType                   = VK_STRUCTURE_TYPE_DEPENDENCY_INFO;
+    dep1.imageMemoryBarrierCount = 1;
+    dep1.pImageMemoryBarriers    = &toTransfer;
+    vkCmdPipelineBarrier2(cmd, &dep1);
+
+    VkBufferImageCopy region{};
+    region.bufferOffset      = 0;
+    region.bufferRowLength   = 0;
+    region.bufferImageHeight = 0;
+    region.imageSubresource  = {VK_IMAGE_ASPECT_COLOR_BIT, 0, 0, 1};
+    region.imageOffset       = {0, 0, 0};
+    region.imageExtent       = {static_cast<uint32_t>(w),
+                                static_cast<uint32_t>(h), 1};
+
+    vkCmdCopyBufferToImage(cmd, stagingBuffer, texInfo.image,
+                           VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 1, &region);
+
+    VkImageMemoryBarrier2 toShader{};
+    toShader.sType               = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2;
+    toShader.oldLayout           = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL;
+    toShader.newLayout           = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+    toShader.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+    toShader.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+    toShader.image               = texInfo.image;
+    toShader.subresourceRange    = {VK_IMAGE_ASPECT_COLOR_BIT, 0, 1, 0, 1};
+    toShader.srcStageMask        = VK_PIPELINE_STAGE_2_TRANSFER_BIT;
+    toShader.srcAccessMask       = VK_ACCESS_2_TRANSFER_WRITE_BIT;
+    toShader.dstStageMask        = VK_PIPELINE_STAGE_2_FRAGMENT_SHADER_BIT;
+    toShader.dstAccessMask       = VK_ACCESS_2_SHADER_SAMPLED_READ_BIT;
+
+    VkDependencyInfo dep2{};
+    dep2.sType                   = VK_STRUCTURE_TYPE_DEPENDENCY_INFO;
+    dep2.imageMemoryBarrierCount = 1;
+    dep2.pImageMemoryBarriers    = &toShader;
+    vkCmdPipelineBarrier2(cmd, &dep2);
+
+    endOneTimeCommands(cmd);
+    vmaDestroyBuffer(m_allocator, stagingBuffer, stagingAllocation);
+
+    // Image view (UNORM format for normal map)
+    VkImageViewCreateInfo viewInfo{};
+    viewInfo.sType                           = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO;
+    viewInfo.image                           = texInfo.image;
+    viewInfo.viewType                        = VK_IMAGE_VIEW_TYPE_2D;
+    viewInfo.format                          = VK_FORMAT_R8G8B8A8_UNORM;
+    viewInfo.subresourceRange.aspectMask     = VK_IMAGE_ASPECT_COLOR_BIT;
+    viewInfo.subresourceRange.baseMipLevel   = 0;
+    viewInfo.subresourceRange.levelCount     = 1;
+    viewInfo.subresourceRange.baseArrayLayer = 0;
+    viewInfo.subresourceRange.layerCount     = 1;
+
+    if (vkCreateImageView(m_device, &viewInfo, nullptr, &texInfo.view) != VK_SUCCESS)
+    {
+        vmaDestroyImage(m_allocator, texInfo.image, texInfo.allocation);
+        m_normalMaps[diffuseHandle] = 0;
+        return 0;
+    }
+
+    // Sampler: nearest filtering for pixel art, clamp-to-edge
+    VkSamplerCreateInfo samplerInfo{};
+    samplerInfo.sType                   = VK_STRUCTURE_TYPE_SAMPLER_CREATE_INFO;
+    samplerInfo.magFilter               = VK_FILTER_NEAREST;
+    samplerInfo.minFilter               = VK_FILTER_NEAREST;
+    samplerInfo.mipmapMode              = VK_SAMPLER_MIPMAP_MODE_NEAREST;
+    samplerInfo.addressModeU            = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE;
+    samplerInfo.addressModeV            = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE;
+    samplerInfo.addressModeW            = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE;
+    samplerInfo.anisotropyEnable        = VK_FALSE;
+    samplerInfo.maxAnisotropy           = 1.0f;
+    samplerInfo.borderColor             = VK_BORDER_COLOR_INT_OPAQUE_BLACK;
+    samplerInfo.unnormalizedCoordinates = VK_FALSE;
+    samplerInfo.compareEnable           = VK_FALSE;
+    samplerInfo.compareOp               = VK_COMPARE_OP_ALWAYS;
+    samplerInfo.mipLodBias              = 0.f;
+    samplerInfo.minLod                  = 0.f;
+    samplerInfo.maxLod                  = 0.f;
+
+    if (vkCreateSampler(m_device, &samplerInfo, nullptr, &texInfo.sampler) != VK_SUCCESS)
+    {
+        vkDestroyImageView(m_device, texInfo.view, nullptr);
+        vmaDestroyImage(m_allocator, texInfo.image, texInfo.allocation);
+        m_normalMaps[diffuseHandle] = 0;
+        return 0;
+    }
+
+    m_textures[handle] = texInfo;
+    m_normalMaps[diffuseHandle] = handle;
+
+    std::cout << "[Vulkan] Normal map loaded: " << normalPath << " ("
+              << w << "x" << h << ") handle=" << handle << "\n";
+
     return handle;
 }
 
@@ -1918,18 +2072,35 @@ void VulkanRenderer::drawSprite(TextureHandle tex, float x, float y,
     scissor.extent = m_swapchainExtent;
     vkCmdSetScissor(cmd, 0, 1, &scissor);
 
-    // Push projection matrix
+    // Push projection matrix + hasNormalMap flag
+    struct {
+        glm::mat4 projection;
+        int32_t   hasNormalMap;
+    } pushData;
+
+    // Look up the normal map for this diffuse texture
+    TextureHandle normalHandle = m_flatNormalTexture;
+    int32_t hasNormal = 0;
+    auto normalIt = m_normalMaps.find(tex);
+    if (normalIt != m_normalMaps.end() && normalIt->second != 0)
+    {
+        normalHandle = normalIt->second;
+        hasNormal = 1;
+    }
+
+    pushData.projection   = m_projection;
+    pushData.hasNormalMap  = hasNormal;
     vkCmdPushConstants(cmd, m_texturedPipelineLayout,
                        VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT,
-                       0, sizeof(glm::mat4), &m_projection);
+                       0, sizeof(pushData), &pushData);
 
     // Bind lighting UBO (set 0) — dummy placeholder
     vkCmdBindDescriptorSets(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS,
                             m_texturedPipelineLayout, 0, 1,
                             &m_lightingDescriptorSet, 0, nullptr);
 
-    // Bind texture descriptor set (set 1)
-    VkDescriptorSet texSet = getOrCreateTextureDescriptorSet(tex, m_flatNormalTexture);
+    // Bind texture descriptor set (set 1): diffuse + normal map
+    VkDescriptorSet texSet = getOrCreateTextureDescriptorSet(tex, normalHandle);
     if (texSet == VK_NULL_HANDLE)
         return;
     vkCmdBindDescriptorSets(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS,

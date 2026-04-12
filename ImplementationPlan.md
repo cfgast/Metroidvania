@@ -76,27 +76,6 @@ The project should still compile and run with the OpenGL backend after this
 task. No rendering code changes — build system only.
 
 ==============================================================================
-Task 11: Normal map support
-==============================================================================
-Implemented: false
-
-Implement companion _n.png auto-loading matching GLRenderer's pattern:
-- When loading "assets/foo.png", check for "assets/foo_n.png"
-- If found, load as a separate VkImage (same pipeline as loadTexture)
-- Cache in a normal map table (keyed by diffuse TextureHandle)
-- If not found, store a sentinel (0) to avoid re-checking on every draw
-
-When binding the textured pipeline's descriptor set:
-- Binding 0: diffuse texture
-- Binding 1: normal map if available, else a default flat-normal texture
-  (1-pixel texture with RGBA = (128, 128, 255, 255) representing the
-  flat normal (0, 0, 1) in tangent space)
-
-Port the uHasNormalMap flag: either as a push constant bool or a
-specialization constant. The fragment shader uses this to decide whether
-to sample the normal map or use the flat (0, 0, 1) default.
-
-==============================================================================
 Task 12: FreeType glyph atlas as VkImage
 ==============================================================================
 Implemented: false
