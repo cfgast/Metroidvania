@@ -76,32 +76,6 @@ The project should still compile and run with the OpenGL backend after this
 task. No rendering code changes — build system only.
 
 ==============================================================================
-Task 9: Texture loading pipeline
-==============================================================================
-Implemented: false
-
-Implement loadTexture(const std::string& path) → TextureHandle:
-1. Check texture cache (path → handle map) to avoid reloading
-2. Load image via stbi_load(path, &w, &h, &channels, 4) — force RGBA
-3. If load fails, use 2×2 magenta fallback texture
-4. Create VkImage (R8G8B8A8_SRGB, usage: SAMPLED | TRANSFER_DST) via VMA
-5. Create staging buffer, memcpy pixel data, submit copy command
-6. Transition image layout: UNDEFINED → TRANSFER_DST → SHADER_READ_ONLY
-7. Create VkImageView (2D, RGBA, full mip range)
-8. Create VkSampler: nearest filtering (pixel art), clamp-to-edge wrapping
-9. Assign incrementing TextureHandle, store in cache
-10. Free staging buffer and stbi data
-
-Create a VkDescriptorSetLayout for texture binding:
-- Binding 0: combined image sampler (diffuse texture)
-- Binding 1: combined image sampler (normal map)
-
-Create a VkDescriptorPool sized for expected texture count.
-
-For per-draw texture binding, allocate or update descriptor sets. Consider
-a simple descriptor set cache keyed by (diffuseHandle, normalHandle).
-
-==============================================================================
 Task 10: Port textured sprite pipeline
 ==============================================================================
 Implemented: false

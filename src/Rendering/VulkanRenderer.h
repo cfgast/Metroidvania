@@ -9,6 +9,7 @@
 #include <array>
 #include <memory>
 #include <string>
+#include <unordered_map>
 #include <vector>
 
 class InputSystem;
@@ -116,6 +117,12 @@ private:
     VkShaderModule createShaderModule(const std::vector<char>& code);
     void createFlatPipeline();
 
+    // ── Texture helpers ──────────────────────────────────────────────
+    void createTextureDescriptorResources();
+    void cleanupTextureResources();
+    VkCommandBuffer beginOneTimeCommands();
+    void endOneTimeCommands(VkCommandBuffer cmd);
+
     // ── Frame recording helpers ──────────────────────────────────────
     void ensureFrameStarted();
 
@@ -204,4 +211,43 @@ private:
 
     // ── Projection matrix ────────────────────────────────────────────
     glm::mat4 m_projection{1.f};
+
+    // ── Texture system ───────────────────────────────────────────────
+    struct VulkanTextureInfo {
+        VkImage       image      = VK_NULL_HANDLE;
+        VmaAllocation allocation = VK_NULL_HANDLE;
+        VkImageView   view       = VK_NULL_HANDLE;
+        VkSampler     sampler    = VK_NULL_HANDLE;
+        int           width      = 0;
+        int           height     = 0;
+    };
+
+    std::unordered_map<TextureHandle, VulkanTextureInfo> m_textures;
+    std::unordered_map<std::string, TextureHandle>       m_texturePaths;
+    TextureHandle m_nextTexHandle = 1;
+
+    // Descriptor set layout for texture binding (set 1):
+    //   binding 0: combined image sampler (diffuse)
+    //   binding 1: combined image sampler (normal map)
+    VkDescriptorSetLayout m_textureDescriptorSetLayout = VK_NULL_HANDLE;
+    VkDescriptorPool      m_textureDescriptorPool      = VK_NULL_HANDLE;
+
+    // Descriptor set cache keyed by (diffuseHandle, normalHandle)
+    struct DescriptorSetKey {
+        TextureHandle diffuse = 0;
+        TextureHandle normal  = 0;
+        bool operator==(const DescriptorSetKey& o) const {
+            return diffuse == o.diffuse && normal == o.normal;
+        }
+    };
+    struct DescriptorSetKeyHash {
+        size_t operator()(const DescriptorSetKey& k) const {
+            return std::hash<uint64_t>()(k.diffuse) ^
+                   (std::hash<uint64_t>()(k.normal) << 1);
+        }
+    };
+    std::unordered_map<DescriptorSetKey, VkDescriptorSet,
+                       DescriptorSetKeyHash> m_textureDescriptorCache;
+
+    static constexpr uint32_t MAX_TEXTURE_DESCRIPTOR_SETS = 256;
 };

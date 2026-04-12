@@ -4,6 +4,7 @@
 #include <VkBootstrap.h>
 #include <glm/glm.hpp>
 #include <glm/gtc/matrix_transform.hpp>
+#include <stb_image.h>
 
 #include <cstring>
 #include <fstream>
@@ -240,6 +241,9 @@ void VulkanRenderer::cleanupVulkan()
     if (m_device != VK_NULL_HANDLE)
     {
         vkDeviceWaitIdle(m_device);
+
+        // ── Destroy texture resources ───────────────────────────────
+        cleanupTextureResources();
 
         // ── Destroy dynamic vertex buffers ───────────────────────────
         for (uint32_t i = 0; i < MAX_FRAMES_IN_FLIGHT; ++i)
@@ -716,6 +720,115 @@ VulkanRenderer::dynamicAllocate(VkDeviceSize size, VkDeviceSize alignment)
     return alloc;
 }
 
+// ── One-time command buffer helpers ──────────────────────────────────────────
+
+VkCommandBuffer VulkanRenderer::beginOneTimeCommands()
+{
+    VkCommandBufferAllocateInfo allocInfo{};
+    allocInfo.sType              = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO;
+    allocInfo.commandPool        = m_commandPool;
+    allocInfo.level              = VK_COMMAND_BUFFER_LEVEL_PRIMARY;
+    allocInfo.commandBufferCount = 1;
+
+    VkCommandBuffer cmd;
+    vkAllocateCommandBuffers(m_device, &allocInfo, &cmd);
+
+    VkCommandBufferBeginInfo beginInfo{};
+    beginInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
+    beginInfo.flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT;
+    vkBeginCommandBuffer(cmd, &beginInfo);
+
+    return cmd;
+}
+
+void VulkanRenderer::endOneTimeCommands(VkCommandBuffer cmd)
+{
+    vkEndCommandBuffer(cmd);
+
+    VkSubmitInfo submitInfo{};
+    submitInfo.sType              = VK_STRUCTURE_TYPE_SUBMIT_INFO;
+    submitInfo.commandBufferCount = 1;
+    submitInfo.pCommandBuffers    = &cmd;
+
+    vkQueueSubmit(m_graphicsQueue, 1, &submitInfo, VK_NULL_HANDLE);
+    vkQueueWaitIdle(m_graphicsQueue);
+
+    vkFreeCommandBuffers(m_device, m_commandPool, 1, &cmd);
+}
+
+// ── Texture descriptor resources ─────────────────────────────────────────────
+
+void VulkanRenderer::createTextureDescriptorResources()
+{
+    // Descriptor set layout: binding 0 = diffuse sampler, binding 1 = normal map
+    VkDescriptorSetLayoutBinding bindings[2]{};
+
+    bindings[0].binding         = 0;
+    bindings[0].descriptorType  = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
+    bindings[0].descriptorCount = 1;
+    bindings[0].stageFlags      = VK_SHADER_STAGE_FRAGMENT_BIT;
+
+    bindings[1].binding         = 1;
+    bindings[1].descriptorType  = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
+    bindings[1].descriptorCount = 1;
+    bindings[1].stageFlags      = VK_SHADER_STAGE_FRAGMENT_BIT;
+
+    VkDescriptorSetLayoutCreateInfo layoutInfo{};
+    layoutInfo.sType        = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO;
+    layoutInfo.bindingCount = 2;
+    layoutInfo.pBindings    = bindings;
+
+    if (vkCreateDescriptorSetLayout(m_device, &layoutInfo, nullptr,
+                                    &m_textureDescriptorSetLayout) != VK_SUCCESS)
+        throw std::runtime_error("VulkanRenderer: failed to create texture descriptor set layout");
+
+    // Descriptor pool sized for expected texture count
+    VkDescriptorPoolSize poolSize{};
+    poolSize.type            = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
+    poolSize.descriptorCount = MAX_TEXTURE_DESCRIPTOR_SETS * 2; // 2 samplers per set
+
+    VkDescriptorPoolCreateInfo poolInfo{};
+    poolInfo.sType         = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO;
+    poolInfo.maxSets       = MAX_TEXTURE_DESCRIPTOR_SETS;
+    poolInfo.poolSizeCount = 1;
+    poolInfo.pPoolSizes    = &poolSize;
+
+    if (vkCreateDescriptorPool(m_device, &poolInfo, nullptr,
+                               &m_textureDescriptorPool) != VK_SUCCESS)
+        throw std::runtime_error("VulkanRenderer: failed to create texture descriptor pool");
+
+    std::cout << "[Vulkan] Texture descriptor resources created (max "
+              << MAX_TEXTURE_DESCRIPTOR_SETS << " sets)\n";
+}
+
+void VulkanRenderer::cleanupTextureResources()
+{
+    m_textureDescriptorCache.clear();
+
+    for (auto& [handle, tex] : m_textures)
+    {
+        if (tex.sampler != VK_NULL_HANDLE)
+            vkDestroySampler(m_device, tex.sampler, nullptr);
+        if (tex.view != VK_NULL_HANDLE)
+            vkDestroyImageView(m_device, tex.view, nullptr);
+        if (tex.image != VK_NULL_HANDLE)
+            vmaDestroyImage(m_allocator, tex.image, tex.allocation);
+    }
+    m_textures.clear();
+    m_texturePaths.clear();
+
+    if (m_textureDescriptorPool != VK_NULL_HANDLE)
+    {
+        vkDestroyDescriptorPool(m_device, m_textureDescriptorPool, nullptr);
+        m_textureDescriptorPool = VK_NULL_HANDLE;
+    }
+    if (m_textureDescriptorSetLayout != VK_NULL_HANDLE)
+    {
+        vkDestroyDescriptorSetLayout(m_device, m_textureDescriptorSetLayout, nullptr);
+        m_textureDescriptorSetLayout = VK_NULL_HANDLE;
+    }
+}
+
 // ── Constructor / Destructor ─────────────────────────────────────────────────
 
 VulkanRenderer::VulkanRenderer(const std::string& title, unsigned int width,
@@ -750,6 +863,7 @@ VulkanRenderer::VulkanRenderer(const std::string& title, unsigned int width,
     createFlatPipeline();
     createQuadBuffer();
     createDynamicBuffers();
+    createTextureDescriptorResources();
 
     m_input = std::make_unique<VulkanInput>(m_window);
 
@@ -1067,7 +1181,202 @@ void VulkanRenderer::drawRoundedRect(float /*x*/, float /*y*/, float /*w*/, floa
 
 // ── Textured sprites ─────────────────────────────────────────────────────────
 
-Renderer::TextureHandle VulkanRenderer::loadTexture(const std::string& /*path*/) { return 0; }
+Renderer::TextureHandle VulkanRenderer::loadTexture(const std::string& path)
+{
+    // 1. Check texture cache
+    auto it = m_texturePaths.find(path);
+    if (it != m_texturePaths.end())
+        return it->second;
+
+    TextureHandle handle = m_nextTexHandle++;
+    VulkanTextureInfo texInfo{};
+
+    // 2. Load image via stb_image — force RGBA
+    stbi_set_flip_vertically_on_load(0);
+    int channels = 0;
+    unsigned char* pixels = stbi_load(path.c_str(), &texInfo.width, &texInfo.height,
+                                      &channels, 4);
+
+    bool useFallback = false;
+    if (!pixels)
+    {
+        // 3. Magenta fallback (2×2)
+        std::cerr << "VulkanRenderer: failed to load texture: " << path << "\n";
+        useFallback = true;
+        texInfo.width  = 2;
+        texInfo.height = 2;
+    }
+
+    VkDeviceSize imageSize = static_cast<VkDeviceSize>(texInfo.width) *
+                             static_cast<VkDeviceSize>(texInfo.height) * 4;
+
+    // Prepare pixel data — use magenta fallback if load failed
+    unsigned char magenta[2 * 2 * 4] = {
+        255, 0, 255, 255,   255, 0, 255, 255,
+        255, 0, 255, 255,   255, 0, 255, 255,
+    };
+    unsigned char* srcPixels = useFallback ? magenta : pixels;
+
+    // 5. Create staging buffer
+    VkBufferCreateInfo stagingBufInfo{};
+    stagingBufInfo.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
+    stagingBufInfo.size  = imageSize;
+    stagingBufInfo.usage = VK_BUFFER_USAGE_TRANSFER_SRC_BIT;
+
+    VmaAllocationCreateInfo stagingAllocInfo{};
+    stagingAllocInfo.usage = VMA_MEMORY_USAGE_AUTO;
+    stagingAllocInfo.flags = VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT;
+
+    VkBuffer      stagingBuffer;
+    VmaAllocation stagingAllocation;
+    if (vmaCreateBuffer(m_allocator, &stagingBufInfo, &stagingAllocInfo,
+                        &stagingBuffer, &stagingAllocation, nullptr) != VK_SUCCESS)
+    {
+        if (pixels) stbi_image_free(pixels);
+        throw std::runtime_error("VulkanRenderer: failed to create texture staging buffer");
+    }
+
+    void* data;
+    vmaMapMemory(m_allocator, stagingAllocation, &data);
+    std::memcpy(data, srcPixels, imageSize);
+    vmaUnmapMemory(m_allocator, stagingAllocation);
+
+    // 4. Create VkImage (R8G8B8A8_SRGB, SAMPLED | TRANSFER_DST) via VMA
+    VkImageCreateInfo imageInfo{};
+    imageInfo.sType         = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO;
+    imageInfo.imageType     = VK_IMAGE_TYPE_2D;
+    imageInfo.format        = VK_FORMAT_R8G8B8A8_SRGB;
+    imageInfo.extent.width  = static_cast<uint32_t>(texInfo.width);
+    imageInfo.extent.height = static_cast<uint32_t>(texInfo.height);
+    imageInfo.extent.depth  = 1;
+    imageInfo.mipLevels     = 1;
+    imageInfo.arrayLayers   = 1;
+    imageInfo.samples       = VK_SAMPLE_COUNT_1_BIT;
+    imageInfo.tiling        = VK_IMAGE_TILING_OPTIMAL;
+    imageInfo.usage         = VK_IMAGE_USAGE_SAMPLED_BIT |
+                              VK_IMAGE_USAGE_TRANSFER_DST_BIT;
+    imageInfo.sharingMode   = VK_SHARING_MODE_EXCLUSIVE;
+    imageInfo.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
+
+    VmaAllocationCreateInfo imgAllocInfo{};
+    imgAllocInfo.usage = VMA_MEMORY_USAGE_AUTO_PREFER_DEVICE;
+
+    if (vmaCreateImage(m_allocator, &imageInfo, &imgAllocInfo,
+                       &texInfo.image, &texInfo.allocation, nullptr) != VK_SUCCESS)
+    {
+        vmaDestroyBuffer(m_allocator, stagingBuffer, stagingAllocation);
+        if (pixels) stbi_image_free(pixels);
+        throw std::runtime_error("VulkanRenderer: failed to create VkImage for texture");
+    }
+
+    // 6. Transition UNDEFINED → TRANSFER_DST, copy, then TRANSFER_DST → SHADER_READ_ONLY
+    VkCommandBuffer cmd = beginOneTimeCommands();
+
+    // Transition to TRANSFER_DST_OPTIMAL
+    VkImageMemoryBarrier2 toTransferBarrier{};
+    toTransferBarrier.sType               = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2;
+    toTransferBarrier.oldLayout           = VK_IMAGE_LAYOUT_UNDEFINED;
+    toTransferBarrier.newLayout           = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL;
+    toTransferBarrier.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+    toTransferBarrier.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+    toTransferBarrier.image               = texInfo.image;
+    toTransferBarrier.subresourceRange    = {VK_IMAGE_ASPECT_COLOR_BIT, 0, 1, 0, 1};
+    toTransferBarrier.srcStageMask        = VK_PIPELINE_STAGE_2_TOP_OF_PIPE_BIT;
+    toTransferBarrier.srcAccessMask       = 0;
+    toTransferBarrier.dstStageMask        = VK_PIPELINE_STAGE_2_TRANSFER_BIT;
+    toTransferBarrier.dstAccessMask       = VK_ACCESS_2_TRANSFER_WRITE_BIT;
+
+    VkDependencyInfo depInfo1{};
+    depInfo1.sType                   = VK_STRUCTURE_TYPE_DEPENDENCY_INFO;
+    depInfo1.imageMemoryBarrierCount = 1;
+    depInfo1.pImageMemoryBarriers    = &toTransferBarrier;
+    vkCmdPipelineBarrier2(cmd, &depInfo1);
+
+    // Copy staging buffer to image
+    VkBufferImageCopy region{};
+    region.bufferOffset      = 0;
+    region.bufferRowLength   = 0;
+    region.bufferImageHeight = 0;
+    region.imageSubresource  = {VK_IMAGE_ASPECT_COLOR_BIT, 0, 0, 1};
+    region.imageOffset       = {0, 0, 0};
+    region.imageExtent       = {static_cast<uint32_t>(texInfo.width),
+                                static_cast<uint32_t>(texInfo.height), 1};
+
+    vkCmdCopyBufferToImage(cmd, stagingBuffer, texInfo.image,
+                           VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 1, &region);
+
+    // Transition to SHADER_READ_ONLY_OPTIMAL
+    VkImageMemoryBarrier2 toShaderBarrier{};
+    toShaderBarrier.sType               = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2;
+    toShaderBarrier.oldLayout           = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL;
+    toShaderBarrier.newLayout           = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+    toShaderBarrier.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+    toShaderBarrier.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+    toShaderBarrier.image               = texInfo.image;
+    toShaderBarrier.subresourceRange    = {VK_IMAGE_ASPECT_COLOR_BIT, 0, 1, 0, 1};
+    toShaderBarrier.srcStageMask        = VK_PIPELINE_STAGE_2_TRANSFER_BIT;
+    toShaderBarrier.srcAccessMask       = VK_ACCESS_2_TRANSFER_WRITE_BIT;
+    toShaderBarrier.dstStageMask        = VK_PIPELINE_STAGE_2_FRAGMENT_SHADER_BIT;
+    toShaderBarrier.dstAccessMask       = VK_ACCESS_2_SHADER_SAMPLED_READ_BIT;
+
+    VkDependencyInfo depInfo2{};
+    depInfo2.sType                   = VK_STRUCTURE_TYPE_DEPENDENCY_INFO;
+    depInfo2.imageMemoryBarrierCount = 1;
+    depInfo2.pImageMemoryBarriers    = &toShaderBarrier;
+    vkCmdPipelineBarrier2(cmd, &depInfo2);
+
+    endOneTimeCommands(cmd);
+
+    // 10. Free staging buffer and stbi data
+    vmaDestroyBuffer(m_allocator, stagingBuffer, stagingAllocation);
+    if (pixels) stbi_image_free(pixels);
+
+    // 7. Create VkImageView
+    VkImageViewCreateInfo viewInfo{};
+    viewInfo.sType                           = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO;
+    viewInfo.image                           = texInfo.image;
+    viewInfo.viewType                        = VK_IMAGE_VIEW_TYPE_2D;
+    viewInfo.format                          = VK_FORMAT_R8G8B8A8_SRGB;
+    viewInfo.subresourceRange.aspectMask     = VK_IMAGE_ASPECT_COLOR_BIT;
+    viewInfo.subresourceRange.baseMipLevel   = 0;
+    viewInfo.subresourceRange.levelCount     = 1;
+    viewInfo.subresourceRange.baseArrayLayer = 0;
+    viewInfo.subresourceRange.layerCount     = 1;
+
+    if (vkCreateImageView(m_device, &viewInfo, nullptr, &texInfo.view) != VK_SUCCESS)
+        throw std::runtime_error("VulkanRenderer: failed to create texture image view");
+
+    // 8. Create VkSampler: nearest filtering (pixel art), clamp-to-edge
+    VkSamplerCreateInfo samplerInfo{};
+    samplerInfo.sType                   = VK_STRUCTURE_TYPE_SAMPLER_CREATE_INFO;
+    samplerInfo.magFilter               = VK_FILTER_NEAREST;
+    samplerInfo.minFilter               = VK_FILTER_NEAREST;
+    samplerInfo.mipmapMode              = VK_SAMPLER_MIPMAP_MODE_NEAREST;
+    samplerInfo.addressModeU            = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE;
+    samplerInfo.addressModeV            = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE;
+    samplerInfo.addressModeW            = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE;
+    samplerInfo.anisotropyEnable        = VK_FALSE;
+    samplerInfo.maxAnisotropy           = 1.0f;
+    samplerInfo.borderColor             = VK_BORDER_COLOR_INT_OPAQUE_BLACK;
+    samplerInfo.unnormalizedCoordinates = VK_FALSE;
+    samplerInfo.compareEnable           = VK_FALSE;
+    samplerInfo.compareOp               = VK_COMPARE_OP_ALWAYS;
+    samplerInfo.mipLodBias              = 0.f;
+    samplerInfo.minLod                  = 0.f;
+    samplerInfo.maxLod                  = 0.f;
+
+    if (vkCreateSampler(m_device, &samplerInfo, nullptr, &texInfo.sampler) != VK_SUCCESS)
+        throw std::runtime_error("VulkanRenderer: failed to create texture sampler");
+
+    // 9. Store in cache
+    m_textures[handle]   = texInfo;
+    m_texturePaths[path] = handle;
+
+    std::cout << "[Vulkan] Texture loaded: " << path << " ("
+              << texInfo.width << "x" << texInfo.height << ") handle=" << handle << "\n";
+
+    return handle;
+}
 
 void VulkanRenderer::drawSprite(TextureHandle /*tex*/, float /*x*/, float /*y*/,
                                 int /*frameX*/, int /*frameY*/, int /*frameW*/, int /*frameH*/,
