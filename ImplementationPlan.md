@@ -18,27 +18,283 @@ See architecture.md for the current codebase layout.
 
 ==============================================================================
 ==============================================================================
-==  RELATIVE POSITION TRANSITIONS                                          ==
+==  NORMAL-MAPPED 2D LIGHTING SYSTEM                                       ==
 ==============================================================================
 ==============================================================================
 
-Currently, transitions teleport the player to a fixed named spawn point in
-the target map. These tasks change auto-generated transitions to use
-RELATIVE POSITIONING: the player's offset along the shared edge is preserved
-so they appear at the corresponding position on the adjacent map.
+Add a full normal-mapped 2D lighting system to the game. The world uses a
+bright ambient (fully visible without lights). Lights are decorative and
+atmospheric: point lights and spot lights interact with normal maps on
+sprites to produce depth and material detail. The player emits a subtle
+dynamic light that follows them.
 
-Manual (non-auto) transitions still use targetSpawn for point-to-point
-teleportation. The targetSpawn mechanism remains functional for backward
-compatibility and for cases where a designer wants a fixed landing point.
+Design overview:
+- Render-to-FBO pipeline: draw scene to an off-screen color framebuffer
+- Lighting pass composites lights over the scene using an additive light map
+- Normal maps (optional per-sprite _n.png companion textures) provide surface
+  detail for per-pixel Phong-style lighting in the sprite/flat shaders
+- Lights are defined in map JSON ("lights" array) and loaded by MapLoader
+- Editor gets a "Place Light" tool for positioning lights with properties
+- The player has a dynamic light attached via a new LightComponent
 
-Key design:
-- New TransitionZone fields: edgeAxis, targetBaseX, targetBaseY
-- edgeAxis = "vertical" (left/right adjacency) or "horizontal" (top/bottom)
-- targetBaseX/Y = position in target map where the source zone origin maps to
-- Runtime: target_pos[along_edge] = targetBase[along_edge] + (player[along_edge] - zone.origin[along_edge])
-- Runtime: target_pos[perpendicular] = targetBase[perpendicular] (fixed entry side)
-- If edgeAxis is empty/missing, falls back to targetSpawn (backward compat)
-- Editor auto-transitions stop generating "from_*" spawn points
-- Existing "from_*" spawn points removed from current map files
+Architecture notes for agents:
+- GLRenderer owns the FBO, light-map texture, and light shader
+- Renderer interface gains addLight()/clearLights() and beginFrame()/endFrame()
+- All existing draw calls (drawRect, drawSprite, etc.) render to the FBO
+  during the world pass, then a fullscreen quad composites the result
+- Normal maps use naming convention: assets/player_spritesheet_n.png
+  alongside assets/player_spritesheet.png. If no _n file exists, a flat
+  normal (0.5, 0.5, 1.0) is assumed (no surface detail, still receives light)
+- Sprite shader needs world-space fragment position for per-pixel lighting
+- Flat-color shader also receives light (platforms should be illuminated too)
+- UI rendering (after resetView) bypasses lighting entirely
+
+Coordinate system:
+- 2D world, Y-down. Normals in tangent space: (0.5, 0.5, 1.0) = flat surface
+- Light Z = height above the 2D plane (controls spread and falloff)
+- Light colors are RGB, intensity is a separate multiplier
+
+==============================================================================
+Task 1: Framebuffer infrastructure and light data structures
+==============================================================================
+Implemented: false
+
+Add the FBO render target and light data types that the rest of the system
+will build on. No visual change yet -- scene still renders identically but
+now goes through the FBO path.
+
+Files to create / modify:
+  src/Rendering/Light.h          -- NEW: LightType enum (Point, Spot),
+                                    Light struct (position, color, intensity,
+                                    radius, z, direction, innerCone, outerCone)
+  src/Rendering/Renderer.h       -- Add virtual addLight(), clearLights(),
+                                    beginFrame(), endFrame() methods
+  src/Rendering/GLRenderer.h     -- Add FBO members (m_fbo, m_fboColorTex,
+                                    m_fboDepthRb), m_lights vector,
+                                    light-map texture, fullscreen quad shader
+  src/Rendering/GLRenderer.cpp   -- Implement FBO creation/resize in
+                                    constructor and handleWindowResize(),
+                                    beginFrame() binds FBO, endFrame() resolves
+                                    to default FB with a fullscreen blit,
+                                    addLight/clearLights store into m_lights
+
+Details:
+- FBO size matches window size; recreate on resize
+- beginFrame(): bind FBO, clear it (same clear color)
+- endFrame(): bind default FB, draw fullscreen textured quad from FBO color
+  attachment (simple passthrough for now, no lighting applied yet)
+- display() calls endFrame() internally if not already called
+- The fullscreen blit uses a trivial passthrough shader (sample texture,
+  output as-is) -- lighting compositing comes in Task 3
+
+Update main.cpp:
+- Add renderer.beginFrame() before rendering
+- Add renderer.endFrame() after world rendering, before UI
+- Call renderer.clearLights() at frame start
+
+Test: game should look identical to before (passthrough FBO blit).
+
+==============================================================================
+Task 2: Normal-map-aware sprite and flat-color shaders
+==============================================================================
+Implemented: false
+
+Modify the existing shaders to accept light data and optional normal maps,
+performing per-pixel lighting calculations.
+
+Shader changes (all embedded in GLRenderer.cpp):
+
+1. Flat shader (kFlatVS/kFlatFS):
+   - VS outputs vWorldPos (vec2) = (uModel * vec4(aPos,0,1)).xy
+   - FS receives uniform Light array (max 32 lights), uAmbientColor (vec3),
+     uNumLights (int)
+   - For each light: compute distance, attenuation (quadratic falloff to
+     radius), diffuse contribution using a default flat normal (0, 0, 1)
+   - Final color = uColor * (ambient + sum of light contributions)
+   - Spot light: add angular falloff using direction + cone angles
+
+2. Texture shader (kTexVS/kTexFS):
+   - VS outputs vWorldPos
+   - FS adds uniform sampler2D uNormalMap, uniform bool uHasNormalMap,
+     same Light array uniforms as flat shader
+   - Sample normal from uNormalMap (if present), remap from [0,1] to [-1,1]
+   - Same per-pixel lighting as flat shader but using sampled normal
+   - When uHasNormalMap is false, use default (0, 0, 1) normal
+   - Flip normal Y for Y-down coordinate system
+
+3. Light struct in GLSL:
+   struct Light {
+       vec2  position;    // world-space XY
+       vec3  color;       // RGB
+       float intensity;
+       float radius;      // max influence distance
+       float z;           // height above 2D plane
+       vec2  direction;   // for spot lights (normalized)
+       float innerCone;   // cos(inner angle) -- full intensity
+       float outerCone;   // cos(outer angle) -- falloff to zero
+       int   type;        // 0 = point, 1 = spot
+   };
+
+GLRenderer changes:
+- When drawing sprites: bind normal map texture to unit 1 if available,
+  set uHasNormalMap accordingly
+- Upload light array uniforms before each draw call (or use a UBO)
+- Add loadNormalMap() helper that tries to load "path_n.png" for a given
+  "path.png" texture. Cache result (including "not found" to avoid retrying)
+- Ambient color defaults to (0.8, 0.8, 0.9) -- bright blueish white
+
+Update Renderer.h:
+- Add virtual setAmbientColor(float r, float g, float b)
+
+No map/editor changes yet -- test with a hardcoded light at (0, 0) to verify
+shaders compile and lighting math works.
+
+==============================================================================
+Task 3: Lighting compositing pass
+==============================================================================
+Implemented: false
+
+Wire up the light data to the shaders during rendering so lights actually
+affect the scene visually.
+
+GLRenderer changes:
+- Before each drawRect/drawSprite/drawCircle/drawRoundedRect call, upload
+  the current light array to the active shader uniforms
+- In beginFrame(), set a flag (m_worldPass = true)
+- In endFrame(), set m_worldPass = false
+- When m_worldPass is false (UI rendering), skip light uniform upload and
+  use ambient = (1,1,1) so UI is fully lit
+- clearLights() empties the light vector at frame start
+- addLight() pushes a Light struct into the vector
+
+Update main.cpp:
+- After renderer.beginFrame(), call renderer.clearLights()
+- Add a test point light at the player position:
+    Light playerLight;
+    playerLight.position = player.position;
+    playerLight.color = {1.0, 0.95, 0.8};  // warm white
+    playerLight.intensity = 0.6;
+    playerLight.radius = 300;
+    playerLight.z = 80;
+    playerLight.type = LightType::Point;
+    renderer.addLight(playerLight);
+- Verify lighting is visible and moves with the player
+
+The scene should now show the player emitting a visible warm glow.
+Platforms and sprites near the player should be visibly brighter.
+
+==============================================================================
+Task 4: Map light definitions and MapLoader integration
+==============================================================================
+Implemented: false
+
+Add light data to the map JSON format and load them at runtime.
+
+Create src/Map/LightDefinition.h:
+  struct LightDefinition {
+      std::string name;
+      LightType   type = LightType::Point;
+      float x, y, z = 80.f;
+      float r = 1.f, g = 1.f, b = 1.f;
+      float intensity = 1.f;
+      float radius = 200.f;
+      // Spot-only:
+      float directionX = 0.f, directionY = 1.f;
+      float innerConeAngle = 30.f;  // degrees, converted to cos at load
+      float outerConeAngle = 45.f;
+  };
+
+Update Map.h / Map.cpp:
+- Add m_lights vector, addLight(), getLights() accessors
+
+Update MapLoader.cpp:
+- Parse optional "lights" array from JSON:
+    {
+        "name": "torch_01",
+        "type": "point",
+        "x": 500, "y": 200, "z": 80,
+        "r": 1.0, "g": 0.8, "b": 0.3,
+        "intensity": 1.2,
+        "radius": 250
+    }
+  For spot lights, also: directionX, directionY, innerCone, outerCone
+
+Update main.cpp:
+- After loading a map, iterate map.getLights() and call renderer.addLight()
+  for each one every frame (before drawing)
+- Keep the hardcoded player light from Task 3
+
+Add a test light to maps/world_01.json in the "lights" array near a platform
+so the effect can be seen immediately.
+
+==============================================================================
+Task 5: LightComponent for player dynamic light
+==============================================================================
+Implemented: false
+
+Replace the hardcoded player light in main.cpp with a proper component.
+
+Create src/Components/LightComponent.h / .cpp:
+  class LightComponent : public Component {
+      Light m_light;
+  public:
+      LightComponent(GameObject& owner);
+      void setLight(const Light& l) { m_light = l; }
+      Light getLight() const;  // returns m_light with position = owner.position
+      void update(float dt) override; // optional: animate flicker
+  };
+
+Update main.cpp:
+- Attach a LightComponent to the player with warm white settings
+- In the render section, get the player's LightComponent and addLight()
+- Remove hardcoded player light code
+
+Register the component in the component system if needed. The player should
+have a visible subtle glow that follows them as before, but now via the
+component system.
+
+==============================================================================
+Task 6: Map editor - Place Light tool
+==============================================================================
+Implemented: false
+
+Add light placement and editing to the C# WinForms map editor.
+
+Update tools/MapEditor/Models.cs:
+- Add LightData class:
+    public class LightData {
+        [JsonPropertyName("name")]       public string Name       { get; set; }
+        [JsonPropertyName("type")]       public string Type       { get; set; } = "point";
+        [JsonPropertyName("x")]          public float  X          { get; set; }
+        [JsonPropertyName("y")]          public float  Y          { get; set; }
+        [JsonPropertyName("z")]          public float  Z          { get; set; } = 80f;
+        [JsonPropertyName("r")]          public float  R          { get; set; } = 1f;
+        [JsonPropertyName("g")]          public float  G          { get; set; } = 1f;
+        [JsonPropertyName("b")]          public float  B          { get; set; } = 1f;
+        [JsonPropertyName("intensity")]  public float  Intensity  { get; set; } = 1f;
+        [JsonPropertyName("radius")]     public float  Radius     { get; set; } = 200f;
+        // Spot-only:
+        [JsonPropertyName("directionX")] public float  DirectionX { get; set; } = 0f;
+        [JsonPropertyName("directionY")] public float  DirectionY { get; set; } = 1f;
+        [JsonPropertyName("innerCone")]  public float  InnerCone  { get; set; } = 30f;
+        [JsonPropertyName("outerCone")]  public float  OuterCone  { get; set; } = 45f;
+    }
+- Add to MapData: public List<LightData> Lights { get; set; } = new();
+
+Update tools/MapEditor/MainForm.cs:
+- Add "Place Light" tool button to the toolbar
+- When active, clicking places a new point light at mouse world position
+- Selected light shows a property panel (or use PropertyGrid) for editing
+  color, intensity, radius, type, z, cone angles
+- Delete key removes selected light
+- Right-click context menu on light for quick type switching
+
+Update tools/MapEditor/MapCanvas.cs:
+- Render lights as a small sun/bulb icon with a translucent radius circle
+- Color the radius circle to match the light color
+- Selected light shows grab handles for radius adjustment
+- On hover, show light name tooltip
+
+The editor should serialize lights to JSON alongside existing map data.
 
 ==============================================================================
