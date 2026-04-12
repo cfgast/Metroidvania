@@ -76,30 +76,6 @@ The project should still compile and run with the OpenGL backend after this
 task. No rendering code changes — build system only.
 
 ==============================================================================
-Task 8: Implement drawRect and drawRectOutlined
-==============================================================================
-Implemented: false
-
-Implement drawRect(float x, y, w, h, float r, g, b, a):
-- Bind the flat-color graphics pipeline
-- Set dynamic viewport and scissor
-- Push projection matrix, model matrix (translate + scale), and color
-  as push constants
-- Bind the unit-quad vertex buffer
-- vkCmdDraw(6 vertices)
-
-Implement drawRectOutlined(float x, y, w, h, float r, g, b, a, outR, outG,
-outB, outA, float thickness):
-- Draw filled inner rect via drawRect
-- Draw 4 thin border rects (top, bottom, left, right) at the given thickness
-
-Implement clear(r, g, b, a) by storing the clear color and using it as the
-dynamic rendering clear value in beginFrame/display.
-
-After this task, the game's platforms, HP bars, and solid-color UI elements
-should render correctly under the Vulkan backend.
-
-==============================================================================
 Task 9: Texture loading pipeline
 ==============================================================================
 Implemented: false

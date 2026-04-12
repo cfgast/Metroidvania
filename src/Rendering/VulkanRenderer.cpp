@@ -2,6 +2,8 @@
 #include "../Input/InputSystem.h"
 
 #include <VkBootstrap.h>
+#include <glm/glm.hpp>
+#include <glm/gtc/matrix_transform.hpp>
 
 #include <cstring>
 #include <fstream>
@@ -751,6 +753,9 @@ VulkanRenderer::VulkanRenderer(const std::string& title, unsigned int width,
 
     m_input = std::make_unique<VulkanInput>(m_window);
 
+    // Initialize default projection (screen-space, Y-down)
+    m_projection = glm::ortho(0.f, m_windowW, m_windowH, 0.f, -1.f, 1.f);
+
     std::cout << "[Vulkan] Renderer initialized successfully\n";
 }
 
@@ -814,8 +819,12 @@ void VulkanRenderer::clear(float r, float g, float b, float a)
     m_clearColor = {{r, g, b, a}};
 }
 
-void VulkanRenderer::display()
+void VulkanRenderer::ensureFrameStarted()
 {
+    if (m_frameStarted)
+        return;
+    m_frameStarted = true;
+
     // 1. Wait for this frame's in-flight fence
     vkWaitForFences(m_device, 1, &m_inFlight[m_currentFrame], VK_TRUE, UINT64_MAX);
 
@@ -823,15 +832,17 @@ void VulkanRenderer::display()
     m_dynamicBuffers[m_currentFrame].offset = 0;
 
     // 2. Acquire next swap chain image
-    uint32_t imageIndex = 0;
     VkResult acquireResult = vkAcquireNextImageKHR(
         m_device, m_swapchain, UINT64_MAX,
-        m_imageAvailable[m_currentFrame], VK_NULL_HANDLE, &imageIndex);
+        m_imageAvailable[m_currentFrame], VK_NULL_HANDLE, &m_currentImageIndex);
 
     if (acquireResult == VK_ERROR_OUT_OF_DATE_KHR)
     {
         recreateSwapchain();
-        return;
+        // Retry after recreation
+        acquireResult = vkAcquireNextImageKHR(
+            m_device, m_swapchain, UINT64_MAX,
+            m_imageAvailable[m_currentFrame], VK_NULL_HANDLE, &m_currentImageIndex);
     }
     if (acquireResult != VK_SUCCESS && acquireResult != VK_SUBOPTIMAL_KHR)
         throw std::runtime_error("VulkanRenderer: failed to acquire swap chain image");
@@ -849,14 +860,14 @@ void VulkanRenderer::display()
     vkBeginCommandBuffer(cmd, &beginInfo);
 
     // 5. Transition swap chain image: UNDEFINED → COLOR_ATTACHMENT_OPTIMAL
-    transitionImageLayout(cmd, m_swapchainImages[imageIndex],
+    transitionImageLayout(cmd, m_swapchainImages[m_currentImageIndex],
                           VK_IMAGE_LAYOUT_UNDEFINED,
                           VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL);
 
     // 6. Begin dynamic rendering
     VkRenderingAttachmentInfo colorAttachment{};
     colorAttachment.sType       = VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO;
-    colorAttachment.imageView   = m_swapchainImageViews[imageIndex];
+    colorAttachment.imageView   = m_swapchainImageViews[m_currentImageIndex];
     colorAttachment.imageLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
     colorAttachment.loadOp      = VK_ATTACHMENT_LOAD_OP_CLEAR;
     colorAttachment.storeOp     = VK_ATTACHMENT_STORE_OP_STORE;
@@ -871,14 +882,20 @@ void VulkanRenderer::display()
     renderInfo.pColorAttachments    = &colorAttachment;
 
     vkCmdBeginRendering(cmd, &renderInfo);
+}
 
-    // (Future tasks will insert draw commands here)
+void VulkanRenderer::display()
+{
+    ensureFrameStarted();
+    m_frameStarted = false;
+
+    VkCommandBuffer cmd = m_commandBuffers[m_currentFrame];
 
     // 7. End dynamic rendering
     vkCmdEndRendering(cmd);
 
     // 8. Transition image for presentation: COLOR_ATTACHMENT_OPTIMAL → PRESENT_SRC
-    transitionImageLayout(cmd, m_swapchainImages[imageIndex],
+    transitionImageLayout(cmd, m_swapchainImages[m_currentImageIndex],
                           VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
                           VK_IMAGE_LAYOUT_PRESENT_SRC_KHR);
 
@@ -907,7 +924,7 @@ void VulkanRenderer::display()
     presentInfo.pWaitSemaphores    = &m_renderFinished[m_currentFrame];
     presentInfo.swapchainCount     = 1;
     presentInfo.pSwapchains        = &m_swapchain;
-    presentInfo.pImageIndices      = &imageIndex;
+    presentInfo.pImageIndices      = &m_currentImageIndex;
 
     VkResult presentResult = vkQueuePresentKHR(m_presentQueue, &presentInfo);
 
@@ -935,9 +952,22 @@ void VulkanRenderer::setAmbientColor(float /*r*/, float /*g*/, float /*b*/) {}
 
 // ── View / camera ────────────────────────────────────────────────────────────
 
-void VulkanRenderer::setView(float /*centerX*/, float /*centerY*/,
-                             float /*width*/, float /*height*/) {}
-void VulkanRenderer::resetView() {}
+void VulkanRenderer::setView(float centerX, float centerY,
+                             float width, float height)
+{
+    float halfW = width  * 0.5f;
+    float halfH = height * 0.5f;
+    // Top-left origin: top = centerY - halfH, bottom = centerY + halfH
+    m_projection = glm::ortho(centerX - halfW, centerX + halfW,
+                              centerY + halfH, centerY - halfH,
+                              -1.f, 1.f);
+}
+
+void VulkanRenderer::resetView()
+{
+    // Top-left origin (Y-down) for 2D screen-space drawing
+    m_projection = glm::ortho(0.f, m_windowW, m_windowH, 0.f, -1.f, 1.f);
+}
 
 void VulkanRenderer::getWindowSize(float& w, float& h) const
 {
@@ -947,13 +977,82 @@ void VulkanRenderer::getWindowSize(float& w, float& h) const
 
 // ── Primitives ───────────────────────────────────────────────────────────────
 
-void VulkanRenderer::drawRect(float /*x*/, float /*y*/, float /*w*/, float /*h*/,
-                              float /*r*/, float /*g*/, float /*b*/, float /*a*/) {}
+void VulkanRenderer::drawRect(float x, float y, float w, float h,
+                              float r, float g, float b, float a)
+{
+    ensureFrameStarted();
 
-void VulkanRenderer::drawRectOutlined(float /*x*/, float /*y*/, float /*w*/, float /*h*/,
-                                      float /*fillR*/, float /*fillG*/, float /*fillB*/, float /*fillA*/,
-                                      float /*outR*/, float /*outG*/, float /*outB*/, float /*outA*/,
-                                      float /*outlineThickness*/) {}
+    VkCommandBuffer cmd = m_commandBuffers[m_currentFrame];
+
+    // Bind the flat-color pipeline
+    vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, m_flatPipeline);
+
+    // Set dynamic viewport
+    VkViewport viewport{};
+    viewport.x        = 0.f;
+    viewport.y        = 0.f;
+    viewport.width    = static_cast<float>(m_swapchainExtent.width);
+    viewport.height   = static_cast<float>(m_swapchainExtent.height);
+    viewport.minDepth = 0.f;
+    viewport.maxDepth = 1.f;
+    vkCmdSetViewport(cmd, 0, 1, &viewport);
+
+    // Set dynamic scissor
+    VkRect2D scissor{};
+    scissor.offset = {0, 0};
+    scissor.extent = m_swapchainExtent;
+    vkCmdSetScissor(cmd, 0, 1, &scissor);
+
+    // Build push constants: projection(mat4) + model(mat4) + color(vec4)
+    struct PushConstants {
+        glm::mat4 projection;
+        glm::mat4 model;
+        glm::vec4 color;
+    } pc{};
+
+    pc.projection = m_projection;
+
+    glm::mat4 model(1.f);
+    model = glm::translate(model, glm::vec3(x, y, 0.f));
+    model = glm::scale(model, glm::vec3(w, h, 1.f));
+    pc.model = model;
+
+    pc.color = glm::vec4(r, g, b, a);
+
+    vkCmdPushConstants(cmd, m_flatPipelineLayout,
+                       VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT,
+                       0, sizeof(pc), &pc);
+
+    // Bind the unit-quad vertex buffer
+    VkDeviceSize offset = 0;
+    vkCmdBindVertexBuffers(cmd, 0, 1, &m_quadBuffer, &offset);
+
+    // Draw the quad (6 vertices = 2 triangles)
+    vkCmdDraw(cmd, QUAD_VERTEX_COUNT, 1, 0, 0);
+}
+
+void VulkanRenderer::drawRectOutlined(float x, float y, float w, float h,
+                                      float fillR, float fillG, float fillB, float fillA,
+                                      float outR, float outG, float outB, float outA,
+                                      float outlineThickness)
+{
+    // Draw the filled rectangle
+    drawRect(x, y, w, h, fillR, fillG, fillB, fillA);
+
+    if (outlineThickness <= 0.f)
+        return;
+
+    float t = outlineThickness;
+
+    // Top edge
+    drawRect(x - t, y - t, w + 2 * t, t, outR, outG, outB, outA);
+    // Bottom edge
+    drawRect(x - t, y + h, w + 2 * t, t, outR, outG, outB, outA);
+    // Left edge
+    drawRect(x - t, y, t, h, outR, outG, outB, outA);
+    // Right edge
+    drawRect(x + w, y, t, h, outR, outG, outB, outA);
+}
 
 void VulkanRenderer::drawCircle(float /*cx*/, float /*cy*/, float /*radius*/,
                                 float /*r*/, float /*g*/, float /*b*/, float /*a*/,

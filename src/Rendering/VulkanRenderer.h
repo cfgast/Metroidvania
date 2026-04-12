@@ -5,6 +5,7 @@
 #include <vulkan/vulkan.h>
 #include <vk_mem_alloc.h>
 #include <GLFW/glfw3.h>
+#include <glm/glm.hpp>
 #include <array>
 #include <memory>
 #include <string>
@@ -115,6 +116,9 @@ private:
     VkShaderModule createShaderModule(const std::vector<char>& code);
     void createFlatPipeline();
 
+    // ── Frame recording helpers ──────────────────────────────────────
+    void ensureFrameStarted();
+
     // ── VMA / buffer helpers ─────────────────────────────────────────
     void initAllocator();
     void createQuadBuffer();
@@ -193,4 +197,11 @@ private:
         VkDeviceSize  offset     = 0;
     };
     std::array<FrameDynamicBuffer, MAX_FRAMES_IN_FLIGHT> m_dynamicBuffers{};
+
+    // ── Frame recording state ────────────────────────────────────────
+    bool     m_frameStarted      = false;
+    uint32_t m_currentImageIndex = 0;
+
+    // ── Projection matrix ────────────────────────────────────────────
+    glm::mat4 m_projection{1.f};
 };
