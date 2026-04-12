@@ -187,8 +187,9 @@ A back-end–agnostic rendering abstraction that isolates all draw calls behind 
 
 | File | Role |
 |---|---|
-| `Renderer.h` | Pure-virtual interface. Covers `getInput()` for InputSystem access, window operations (`isOpen`/`close`/`setMouseCursorVisible`/`setWindowSize`/`setWindowPosition`/`getDesktopSize`), lifecycle (`clear`/`display`), camera/view, primitives (rect, circle, rounded-rect), textured sprites via opaque `TextureHandle`, text via `FontHandle`, and raw vertex-colored geometry (`drawTriangleStrip`/`drawLines`). |
-| `GLRenderer.h/.cpp` | OpenGL 3.3 Core implementation (active renderer). Owns a `GLFWwindow*`, a `GLFWInput` instance, flat-color `Shader`, vertex-color `Shader`, textured `Shader`, text `Shader`, persistent unit-quad VAO/VBO, dynamic geometry VAO/VBO (for circles and rounded rects), vertex-color VAO/VBO (for triangle strips and lines), dynamic sprite VAO/VBO, and dynamic text VAO/VBO. Implements all `Renderer` interface methods: `drawRect`, `drawRectOutlined`, `drawCircle` (32-segment triangle fan with optional outline ring), `drawRoundedRect` (4-corner-arc triangle fan with optional outline ring), `drawTriangleStrip` (per-vertex-color GL_TRIANGLE_STRIP), `drawLines` (per-vertex-color GL_LINES), `loadTexture` (via stb_image with GL_NEAREST filtering and magenta fallback), `drawSprite` (dynamic VBO with per-frame UV computation from sprite-sheet frame rects), `loadFont` (FreeType face loading), `drawText` (batched glyph quads from a per-font/size glyph atlas), and `measureText` (advance-based width, line-height-based height). Exposes `handleWindowResize()` and `handleWindowClose()` for GLFWInput callbacks. |
+| `Light.h` | `LightType` enum (`Point`, `Spot`) and `Light` struct: `position` (vec2), `color` (vec3), `intensity`, `radius`, `z`, `direction` (vec2), `innerCone`, `outerCone`, `type`. Data-only header used by the renderer and future light components. |
+| `Renderer.h` | Pure-virtual interface. Covers `getInput()` for InputSystem access, window operations (`isOpen`/`close`/`setMouseCursorVisible`/`setWindowSize`/`setWindowPosition`/`getDesktopSize`), lifecycle (`clear`/`display`), frame/lighting pass (`beginFrame`/`endFrame`/`addLight`/`clearLights`), camera/view, primitives (rect, circle, rounded-rect), textured sprites via opaque `TextureHandle`, text via `FontHandle`, and raw vertex-colored geometry (`drawTriangleStrip`/`drawLines`). |
+| `GLRenderer.h/.cpp` | OpenGL 3.3 Core implementation (active renderer). Owns a `GLFWwindow*`, a `GLFWInput` instance, flat-color `Shader`, vertex-color `Shader`, textured `Shader`, text `Shader`, fullscreen blit `Shader`, persistent unit-quad VAO/VBO, fullscreen quad VAO/VBO, dynamic geometry VAO/VBO (for circles and rounded rects), vertex-color VAO/VBO (for triangle strips and lines), dynamic sprite VAO/VBO, dynamic text VAO/VBO, and an off-screen FBO (color texture + depth/stencil renderbuffer, recreated on resize). Implements all `Renderer` interface methods plus `beginFrame()` (binds FBO), `endFrame()` (blits FBO to default framebuffer via fullscreen textured quad), `addLight()` / `clearLights()` (store/clear light vector). All world drawing between `beginFrame` and `endFrame` renders to the FBO; UI rendering after `endFrame` renders directly to the default framebuffer. |
 | `Shader.h/.cpp` | Compiles and links vertex + fragment GLSL source strings into a GL program. Provides `use()`, `setMat4()`, `setVec4()`, `setInt()` uniform helpers with error logging. |
 
 All rendering and input go through the `Renderer` and `InputSystem` abstractions. The active back-end is `GLRenderer` + `GLFWInput`. All math types use GLM and custom types from `src/Math/Types.h`.
@@ -247,8 +248,11 @@ A back-end–agnostic input abstraction that isolates all input polling and even
  │     • Check ability pickups → unlock        │
  │     • Remove dead enemies                   │
  │  6. Render (all via renderer.*):            │
+ │     • renderer.beginFrame() (bind FBO)      │
+ │     • renderer.clearLights()                │
  │     • renderer.setView() for camera         │
  │     • renderer.clear() + draw calls         │
+ │     • renderer.endFrame() (blit FBO)        │
  │     • renderer.resetView() for UI overlay   │
  │     • renderer.display()                    │
  └─────────────────────────────────────────────┘

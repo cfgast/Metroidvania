@@ -475,6 +475,8 @@ int main()
                 cy = std::min(cy, mapBounds.y   + mapBounds.height - halfH);
             }
 
+            renderer.beginFrame();
+            renderer.clearLights();
             renderer.setView(cx, cy, viewW, viewH);
             renderer.clear(30/255.f, 30/255.f, 50/255.f);
             map.render(renderer);
@@ -482,6 +484,7 @@ int main()
 
             transitionMgr.render(renderer);
 
+            renderer.endFrame();
             renderer.resetView();
             debugMenu.render(renderer);
             renderer.display();
@@ -594,6 +597,8 @@ int main()
             cy = std::max(cy, mapBounds.y   + halfH);
             cy = std::min(cy, mapBounds.y   + mapBounds.height - halfH);
         }
+        renderer.beginFrame();
+        renderer.clearLights();
         renderer.setView(cx, cy, viewW, viewH);
         renderer.clear(30/255.f, 30/255.f, 50/255.f);
         map.render(renderer);
@@ -620,6 +625,7 @@ int main()
 
         transitionMgr.render(renderer);
 
+        renderer.endFrame();
         renderer.resetView();
         pauseMenu.render(renderer);
         debugMenu.render(renderer);

@@ -4,6 +4,7 @@
 #include <vector>
 #include <cstdint>
 
+struct Light;
 class InputSystem;
 
 // Pure-virtual rendering interface.
@@ -28,6 +29,12 @@ public:
     // ── Lifecycle ──────────────────────────────────────────────────────
     virtual void clear(float r, float g, float b, float a = 1.f) = 0;
     virtual void display() = 0;
+
+    // ── Frame / lighting pass ─────────────────────────────────────────
+    virtual void beginFrame() = 0;
+    virtual void endFrame() = 0;
+    virtual void addLight(const Light& light) = 0;
+    virtual void clearLights() = 0;
 
     // ── View / camera ─────────────────────────────────────────────────
     virtual void setView(float centerX, float centerY,

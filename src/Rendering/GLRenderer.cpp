@@ -124,6 +124,34 @@ void main()
 }
 )";
 
+// Fullscreen passthrough blit shader: samples the FBO color attachment
+static const char* kBlitVS = R"(
+#version 330 core
+layout (location = 0) in vec2 aPos;
+layout (location = 1) in vec2 aTexCoord;
+
+out vec2 vTexCoord;
+
+void main()
+{
+    gl_Position = vec4(aPos, 0.0, 1.0);
+    vTexCoord = aTexCoord;
+}
+)";
+
+static const char* kBlitFS = R"(
+#version 330 core
+in vec2 vTexCoord;
+out vec4 FragColor;
+
+uniform sampler2D uScreen;
+
+void main()
+{
+    FragColor = texture(uScreen, vTexCoord);
+}
+)";
+
 // ── GLFW callbacks ────────────────────────────────────────────────────────────
 
 void GLRenderer::framebufferSizeCallback(GLFWwindow* win, int w, int h)
@@ -134,6 +162,11 @@ void GLRenderer::framebufferSizeCallback(GLFWwindow* win, int w, int h)
     {
         self->m_windowW = static_cast<float>(w);
         self->m_windowH = static_cast<float>(h);
+        if (w > 0 && h > 0)
+        {
+            self->destroyFBO();
+            self->createFBO(w, h);
+        }
     }
 }
 
@@ -186,6 +219,7 @@ GLRenderer::GLRenderer(const std::string& title, unsigned int width,
     m_texShader  = std::make_unique<Shader>(kTexVS, kTexFS);
     m_textShader = std::make_unique<Shader>(kTextVS, kTextFS);
     m_vertColorShader = std::make_unique<Shader>(kVertColorVS, kVertColorFS);
+    m_blitShader = std::make_unique<Shader>(kBlitVS, kBlitFS);
 
     // Create persistent GPU buffers
     initQuadVAO();
@@ -193,6 +227,10 @@ GLRenderer::GLRenderer(const std::string& title, unsigned int width,
     initTextVAO();
     initDynamicVAO();
     initVertexColorVAO();
+    initFullscreenVAO();
+
+    // Create FBO for off-screen rendering
+    createFBO(static_cast<int>(width), static_cast<int>(height));
 
     // Initialize FreeType
     if (FT_Init_FreeType(&m_ftLib))
@@ -213,6 +251,8 @@ GLRenderer::~GLRenderer()
     // Destroy input system before the window it depends on
     m_glfwInput.reset();
 
+    destroyFBO();
+
     if (m_quadVAO) glDeleteVertexArrays(1, &m_quadVAO);
     if (m_quadVBO) glDeleteBuffers(1, &m_quadVBO);
     if (m_spriteVAO) glDeleteVertexArrays(1, &m_spriteVAO);
@@ -223,6 +263,8 @@ GLRenderer::~GLRenderer()
     if (m_dynVBO) glDeleteBuffers(1, &m_dynVBO);
     if (m_vcVAO) glDeleteVertexArrays(1, &m_vcVAO);
     if (m_vcVBO) glDeleteBuffers(1, &m_vcVBO);
+    if (m_fsVAO) glDeleteVertexArrays(1, &m_fsVAO);
+    if (m_fsVBO) glDeleteBuffers(1, &m_fsVBO);
 
     for (auto& [handle, info] : m_textures)
     {
@@ -245,6 +287,7 @@ GLRenderer::~GLRenderer()
     m_texShader.reset();
     m_textShader.reset();
     m_vertColorShader.reset();
+    m_blitShader.reset();
 
     if (m_window)
         glfwDestroyWindow(m_window);
@@ -298,6 +341,11 @@ void GLRenderer::handleWindowResize(int width, int height)
     m_windowW = static_cast<float>(width);
     m_windowH = static_cast<float>(height);
     glViewport(0, 0, width, height);
+    if (width > 0 && height > 0)
+    {
+        destroyFBO();
+        createFBO(width, height);
+    }
 }
 
 void GLRenderer::handleWindowClose()
@@ -353,7 +401,130 @@ void GLRenderer::clear(float r, float g, float b, float a)
 
 void GLRenderer::display()
 {
+    if (m_frameBegan)
+        endFrame();
     glfwSwapBuffers(m_window);
+}
+
+// ── Frame / lighting pass ─────────────────────────────────────────────────────
+
+void GLRenderer::beginFrame()
+{
+    m_frameBegan = true;
+    glBindFramebuffer(GL_FRAMEBUFFER, m_fbo);
+    glViewport(0, 0, m_fboWidth, m_fboHeight);
+}
+
+void GLRenderer::endFrame()
+{
+    if (!m_frameBegan)
+        return;
+    m_frameBegan = false;
+
+    // Blit FBO color attachment to the default framebuffer
+    glBindFramebuffer(GL_FRAMEBUFFER, 0);
+    glViewport(0, 0, static_cast<int>(m_windowW), static_cast<int>(m_windowH));
+
+    m_blitShader->use();
+    m_blitShader->setInt("uScreen", 0);
+
+    glActiveTexture(GL_TEXTURE0);
+    glBindTexture(GL_TEXTURE_2D, m_fboColorTex);
+
+    glBindVertexArray(m_fsVAO);
+    glDrawArrays(GL_TRIANGLES, 0, 6);
+    glBindVertexArray(0);
+
+    glBindTexture(GL_TEXTURE_2D, 0);
+}
+
+void GLRenderer::addLight(const Light& light)
+{
+    m_lights.push_back(light);
+}
+
+void GLRenderer::clearLights()
+{
+    m_lights.clear();
+}
+
+// ── FBO creation / destruction ────────────────────────────────────────────────
+
+void GLRenderer::createFBO(int width, int height)
+{
+    m_fboWidth  = width;
+    m_fboHeight = height;
+
+    // Color attachment
+    glGenTextures(1, &m_fboColorTex);
+    glBindTexture(GL_TEXTURE_2D, m_fboColorTex);
+    glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA8, width, height, 0,
+                 GL_RGBA, GL_UNSIGNED_BYTE, nullptr);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+    glBindTexture(GL_TEXTURE_2D, 0);
+
+    // Depth/stencil renderbuffer
+    glGenRenderbuffers(1, &m_fboDepthRb);
+    glBindRenderbuffer(GL_RENDERBUFFER, m_fboDepthRb);
+    glRenderbufferStorage(GL_RENDERBUFFER, GL_DEPTH24_STENCIL8, width, height);
+    glBindRenderbuffer(GL_RENDERBUFFER, 0);
+
+    // Framebuffer object
+    glGenFramebuffers(1, &m_fbo);
+    glBindFramebuffer(GL_FRAMEBUFFER, m_fbo);
+    glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0,
+                           GL_TEXTURE_2D, m_fboColorTex, 0);
+    glFramebufferRenderbuffer(GL_FRAMEBUFFER, GL_DEPTH_STENCIL_ATTACHMENT,
+                              GL_RENDERBUFFER, m_fboDepthRb);
+
+    if (glCheckFramebufferStatus(GL_FRAMEBUFFER) != GL_FRAMEBUFFER_COMPLETE)
+        std::cerr << "GLRenderer: FBO is not complete!\n";
+
+    glBindFramebuffer(GL_FRAMEBUFFER, 0);
+}
+
+void GLRenderer::destroyFBO()
+{
+    if (m_fbo)        { glDeleteFramebuffers(1, &m_fbo);       m_fbo = 0; }
+    if (m_fboColorTex){ glDeleteTextures(1, &m_fboColorTex);   m_fboColorTex = 0; }
+    if (m_fboDepthRb) { glDeleteRenderbuffers(1, &m_fboDepthRb); m_fboDepthRb = 0; }
+}
+
+// ── Fullscreen quad VAO (NDC -1..1, with texcoords) ──────────────────────────
+
+void GLRenderer::initFullscreenVAO()
+{
+    // Fullscreen triangle-pair in NDC with texcoords
+    float verts[] = {
+        // pos (x,y)     texcoord (u,v)
+        -1.f, -1.f,      0.f, 0.f,
+         1.f, -1.f,      1.f, 0.f,
+         1.f,  1.f,      1.f, 1.f,
+
+        -1.f, -1.f,      0.f, 0.f,
+         1.f,  1.f,      1.f, 1.f,
+        -1.f,  1.f,      0.f, 1.f,
+    };
+
+    glGenVertexArrays(1, &m_fsVAO);
+    glGenBuffers(1, &m_fsVBO);
+
+    glBindVertexArray(m_fsVAO);
+    glBindBuffer(GL_ARRAY_BUFFER, m_fsVBO);
+    glBufferData(GL_ARRAY_BUFFER, sizeof(verts), verts, GL_STATIC_DRAW);
+
+    // position (location 0)
+    glVertexAttribPointer(0, 2, GL_FLOAT, GL_FALSE, 4 * sizeof(float), nullptr);
+    glEnableVertexAttribArray(0);
+    // texcoord (location 1)
+    glVertexAttribPointer(1, 2, GL_FLOAT, GL_FALSE, 4 * sizeof(float),
+                          reinterpret_cast<void*>(2 * sizeof(float)));
+    glEnableVertexAttribArray(1);
+
+    glBindVertexArray(0);
 }
 
 // ── View / camera ─────────────────────────────────────────────────────────────

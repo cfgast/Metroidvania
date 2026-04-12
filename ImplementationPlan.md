@@ -55,46 +55,6 @@ Coordinate system:
 - Light colors are RGB, intensity is a separate multiplier
 
 ==============================================================================
-Task 1: Framebuffer infrastructure and light data structures
-==============================================================================
-Implemented: false
-
-Add the FBO render target and light data types that the rest of the system
-will build on. No visual change yet -- scene still renders identically but
-now goes through the FBO path.
-
-Files to create / modify:
-  src/Rendering/Light.h          -- NEW: LightType enum (Point, Spot),
-                                    Light struct (position, color, intensity,
-                                    radius, z, direction, innerCone, outerCone)
-  src/Rendering/Renderer.h       -- Add virtual addLight(), clearLights(),
-                                    beginFrame(), endFrame() methods
-  src/Rendering/GLRenderer.h     -- Add FBO members (m_fbo, m_fboColorTex,
-                                    m_fboDepthRb), m_lights vector,
-                                    light-map texture, fullscreen quad shader
-  src/Rendering/GLRenderer.cpp   -- Implement FBO creation/resize in
-                                    constructor and handleWindowResize(),
-                                    beginFrame() binds FBO, endFrame() resolves
-                                    to default FB with a fullscreen blit,
-                                    addLight/clearLights store into m_lights
-
-Details:
-- FBO size matches window size; recreate on resize
-- beginFrame(): bind FBO, clear it (same clear color)
-- endFrame(): bind default FB, draw fullscreen textured quad from FBO color
-  attachment (simple passthrough for now, no lighting applied yet)
-- display() calls endFrame() internally if not already called
-- The fullscreen blit uses a trivial passthrough shader (sample texture,
-  output as-is) -- lighting compositing comes in Task 3
-
-Update main.cpp:
-- Add renderer.beginFrame() before rendering
-- Add renderer.endFrame() after world rendering, before UI
-- Call renderer.clearLights() at frame start
-
-Test: game should look identical to before (passthrough FBO blit).
-
-==============================================================================
 Task 2: Normal-map-aware sprite and flat-color shaders
 ==============================================================================
 Implemented: false

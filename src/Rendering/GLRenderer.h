@@ -2,6 +2,7 @@
 
 #include "Renderer.h"
 #include "Shader.h"
+#include "Light.h"
 
 #include <glad/gl.h>
 #include <GLFW/glfw3.h>
@@ -14,6 +15,7 @@
 #include <unordered_map>
 #include <map>
 #include <string>
+#include <vector>
 
 class InputSystem;
 class GLFWInput;
@@ -75,6 +77,12 @@ public:
     void clear(float r, float g, float b, float a = 1.f) override;
     void display() override;
 
+    // ── Frame / lighting pass ─────────────────────────────────────────
+    void beginFrame() override;
+    void endFrame() override;
+    void addLight(const Light& light) override;
+    void clearLights() override;
+
     // ── View / camera ─────────────────────────────────────────────────
     void setView(float centerX, float centerY,
                  float width, float height) override;
@@ -133,6 +141,9 @@ private:
     void initTextVAO();
     void initDynamicVAO();
     void initVertexColorVAO();
+    void initFullscreenVAO();
+    void createFBO(int width, int height);
+    void destroyFBO();
     void drawQuad(float x, float y, float w, float h,
                   float r, float g, float b, float a);
     GLuint createMagentaTexture();
@@ -187,4 +198,20 @@ private:
 
     // Current projection matrix
     glm::mat4 m_projection{1.f};
+
+    // ── FBO (off-screen render target) ────────────────────────────────
+    GLuint m_fbo         = 0;
+    GLuint m_fboColorTex = 0;
+    GLuint m_fboDepthRb  = 0;
+    int    m_fboWidth    = 0;
+    int    m_fboHeight   = 0;
+    bool   m_frameBegan  = false;
+
+    // Fullscreen blit shader and VAO
+    std::unique_ptr<Shader> m_blitShader;
+    GLuint m_fsVAO = 0;
+    GLuint m_fsVBO = 0;
+
+    // ── Lights ────────────────────────────────────────────────────────
+    std::vector<Light> m_lights;
 };
