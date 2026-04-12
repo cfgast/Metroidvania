@@ -1,0 +1,57 @@
+{
+  "name": "New Map",
+  "bounds": {
+    "x": -200,
+    "y": -500,
+    "width": 3600,
+    "height": 1200
+  },
+  "spawnPoint": {
+    "x": 150,
+    "y": 475
+  },
+  "spawnPoints": {},
+  "platforms": [
+    {
+      "x": -200,
+      "y": 500,
+      "width": 3600,
+      "height": 40,
+      "r": 80,
+      "g": 80,
+      "b": 80
+    },
+    {
+      "x": 1100,
+      "y": -500,
+      "width": 30,
+      "height": 920,
+      "r": 120,
+      "g": 80,
+      "b": 40
+    },
+    {
+      "x": 1370,
+      "y": -500,
+      "width": 30,
+      "height": 930,
+      "r": 120,
+      "g": 80,
+      "b": 40
+    }
+  ],
+  "transitions": [
+    {
+      "name": "to_world_01",
+      "x": -200,
+      "y": -500,
+      "width": 3600,
+      "height": 50,
+      "targetMap": "maps/world_01.json",
+      "targetSpawn": "default",
+      "edgeAxis": "horizontal",
+      "targetBaseX": -200,
+      "targetBaseY": 640
+    }
+  ]
+}

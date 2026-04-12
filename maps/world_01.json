@@ -14,10 +14,6 @@
     "default": {
       "x": -40,
       "y": 220
-    },
-    "from_world_02": {
-      "x": 3260,
-      "y": 200
     }
   },
   "platforms": [
@@ -164,6 +160,24 @@
       "r": 120,
       "g": 80,
       "b": 40
+    },
+    {
+      "x": 1650,
+      "y": 610,
+      "width": 20,
+      "height": 90,
+      "r": 120,
+      "g": 80,
+      "b": 40
+    },
+    {
+      "x": 1850,
+      "y": 660,
+      "width": 30,
+      "height": 40,
+      "r": 120,
+      "g": 80,
+      "b": 40
     }
   ],
   "enemies": [
@@ -222,12 +236,27 @@
   "transitions": [
     {
       "name": "to_world_02",
-      "x": 3330,
-      "y": -20,
+      "x": 3350,
+      "y": -500,
       "width": 50,
-      "height": 240,
+      "height": 1200,
       "targetMap": "maps/world_02.json",
-      "targetSpawn": "from_world_01"
+      "targetSpawn": "default",
+      "edgeAxis": "vertical",
+      "targetBaseX": -140,
+      "targetBaseY": -500
+    },
+    {
+      "name": "to_world_03",
+      "x": -200,
+      "y": 650,
+      "width": 3600,
+      "height": 50,
+      "targetMap": "maps/world_03.json",
+      "targetSpawn": "default",
+      "edgeAxis": "horizontal",
+      "targetBaseX": -200,
+      "targetBaseY": -440
     }
   ],
   "abilityPickups": [
