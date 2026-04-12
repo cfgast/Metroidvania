@@ -84,7 +84,7 @@ Enemies replace `CombatComponent` with `EnemyAIComponent` (+ optional `SlimeAtta
 | `AbilityPickupDefinition.h` | Data struct: id, ability enum, position, size. |
 | `Map.h/.cpp` | Aggregates all level data. Provides AABB checks for transitions and pickups. `registerPhysXStatics()` creates `PxRigidStatic` actors for platforms. |
 | `MapLoader.h/.cpp` | Static `loadFromFile()` → parses JSON via nlohmann/json → returns `Map`. |
-| `TransitionManager.h/.cpp` | State machine `Idle → FadingOut (0.4 s) → FadingIn (0.4 s)`. Fires a load callback at midpoint (screen fully black). |
+| `TransitionManager.h/.cpp` | State machine `Idle → FadingOut (0.4 s) → FadingIn (0.4 s)`. Fires a load callback at midpoint (screen fully black). The load callback in `main.cpp` supports **relative positioning**: when a zone has `edgeAxis` set, the player's offset along the shared edge is preserved (clamped to zone bounds); otherwise falls back to `targetSpawn` (legacy). Pending zone data and player position are captured in `main.cpp` before starting the fade. |
 
 ### Map JSON schema (e.g. `world_01.json`)
 

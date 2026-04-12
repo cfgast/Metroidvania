@@ -170,6 +170,9 @@ int main()
     bool gameStarted = false;
 
     // --- Room transition manager ---
+    TransitionZone pendingZone;
+    glm::vec2      pendingPlayerPos{0.f, 0.f};
+
     TransitionManager transitionMgr;
     transitionMgr.setLoadCallback(
         [&](const std::string& targetFile, const std::string& targetSpawn)
@@ -182,7 +185,33 @@ int main()
                 map.registerPhysXStatics();
                 pruneConsumedPickups(map);
 
-                glm::vec2 spawn = map.getNamedSpawn(targetSpawn);
+                glm::vec2 spawn;
+                if (!pendingZone.edgeAxis.empty())
+                {
+                    if (pendingZone.edgeAxis == "vertical")
+                    {
+                        spawn.x = pendingZone.targetBaseX;
+                        spawn.y = pendingZone.targetBaseY
+                                + (pendingPlayerPos.y - pendingZone.bounds.y);
+                        spawn.y = std::clamp(spawn.y,
+                                             pendingZone.targetBaseY,
+                                             pendingZone.targetBaseY + pendingZone.bounds.height - playerSize.y);
+                    }
+                    else // "horizontal"
+                    {
+                        spawn.x = pendingZone.targetBaseX
+                                + (pendingPlayerPos.x - pendingZone.bounds.x);
+                        spawn.y = pendingZone.targetBaseY;
+                        spawn.x = std::clamp(spawn.x,
+                                             pendingZone.targetBaseX,
+                                             pendingZone.targetBaseX + pendingZone.bounds.width - playerSize.x);
+                    }
+                }
+                else
+                {
+                    spawn = map.getNamedSpawn(targetSpawn);
+                }
+
                 if (auto* physics = player.getComponent<PhysicsComponent>())
                     physics->teleport(spawn);
                 else
@@ -493,6 +522,8 @@ int main()
 
         if (const TransitionZone* zone = map.checkTransition(player.position, playerSize))
         {
+            pendingZone      = *zone;
+            pendingPlayerPos = player.position;
             transitionMgr.startTransition(zone->targetMap, zone->targetSpawn);
         }
 
