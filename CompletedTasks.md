@@ -1908,3 +1908,32 @@ This awards exactly 1 XP per enemy death. With xpToLevel = 5, the player
 levels up every 5 kills. Respawned enemies award XP again when re-killed.
 
 ==============================================================================
+
+==============================================================================
+Task 26: XP bar and level HUD
+==============================================================================
+Implemented: true
+
+Render an XP bar and level indicator in the screen-space UI overlay (after
+endFrame() / resetView(), alongside existing UI elements).
+
+XP bar design:
+- Position: bottom-left of screen (e.g., x=20, y=windowH-40)
+- Size: 200x10 pixels
+- Background: dark gray with black outline (drawRectOutlined)
+- Fill: gold/yellow color, width = (xp / xpToLevel) * barWidth
+- When at max level (5), bar is full and a different color (e.g. cyan)
+
+Level indicator:
+- Text "Lv N" rendered to the left of or above the XP bar
+- Use the existing font handle and drawText()
+- Font size ~18, white or gold color
+
+Implementation location: add to main.cpp's UI rendering section, after
+the existing HUD elements. Use renderer.drawRectOutlined() for the bar
+background, renderer.drawRect() for the fill, and renderer.drawText()
+for the level label.
+
+Only render when gameStarted is true and not on the save-slot screen.
+
+==============================================================================

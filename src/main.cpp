@@ -268,6 +268,9 @@ int main()
     float halfW = viewW / 2.f;
     float halfH = viewH / 2.f;
 
+    // Font for the XP / level HUD (lazy-loaded on first use)
+    Renderer::FontHandle hudFont = 0;
+
     // Simple chrono-based clock for frame timing
     struct GameClock {
         std::chrono::high_resolution_clock::time_point last =
@@ -525,6 +528,44 @@ int main()
 
             renderer.endFrame();
             renderer.resetView();
+
+            // --- XP bar and level HUD (during transition) ---
+            {
+                if (!hudFont)
+                    hudFont = renderer.loadFont("C:\\Windows\\Fonts\\arial.ttf");
+
+                constexpr float barX      = 20.f;
+                constexpr float barW      = 200.f;
+                constexpr float barH      = 10.f;
+                constexpr float barMargin = 40.f;
+                constexpr float outline   = 2.f;
+                const float barY = viewH - barMargin;
+
+                float fillRatio = static_cast<float>(playerState.xp)
+                                / static_cast<float>(playerState.getXPToLevel());
+                fillRatio = std::min(fillRatio, 1.f);
+
+                renderer.drawRectOutlined(barX, barY, barW, barH,
+                                          0.15f, 0.15f, 0.15f, 1.f,
+                                          0.f,  0.f,  0.f,  1.f,
+                                          outline);
+
+                const float fillW = fillRatio * barW;
+                if (fillW > 0.f)
+                {
+                    if (playerState.isMaxLevel())
+                        renderer.drawRect(barX, barY, fillW, barH,
+                                          0.f, 0.85f, 0.85f, 1.f);
+                    else
+                        renderer.drawRect(barX, barY, fillW, barH,
+                                          1.f, 0.84f, 0.f, 1.f);
+                }
+
+                std::string lvText = "Lv " + std::to_string(playerState.level);
+                renderer.drawText(hudFont, lvText, barX, barY - 6.f,
+                                  18, 1.f, 1.f, 1.f, 1.f);
+            }
+
             debugMenu.render(renderer);
             renderer.display();
             continue;
@@ -705,6 +746,47 @@ int main()
 
         renderer.endFrame();
         renderer.resetView();
+
+        // --- XP bar and level HUD ---
+        {
+            if (!hudFont)
+                hudFont = renderer.loadFont("C:\\Windows\\Fonts\\arial.ttf");
+
+            constexpr float barX      = 20.f;
+            constexpr float barW      = 200.f;
+            constexpr float barH      = 10.f;
+            constexpr float barMargin = 40.f;  // distance from bottom
+            constexpr float outline   = 2.f;
+            const float barY = viewH - barMargin;
+
+            float fillRatio = static_cast<float>(playerState.xp)
+                            / static_cast<float>(playerState.getXPToLevel());
+            fillRatio = std::min(fillRatio, 1.f);
+
+            // Background + outline
+            renderer.drawRectOutlined(barX, barY, barW, barH,
+                                      0.15f, 0.15f, 0.15f, 1.f,  // dark gray fill
+                                      0.f,  0.f,  0.f,  1.f,     // black outline
+                                      outline);
+
+            // Fill bar
+            const float fillW = fillRatio * barW;
+            if (fillW > 0.f)
+            {
+                if (playerState.isMaxLevel())
+                    renderer.drawRect(barX, barY, fillW, barH,
+                                      0.f, 0.85f, 0.85f, 1.f);  // cyan at max
+                else
+                    renderer.drawRect(barX, barY, fillW, barH,
+                                      1.f, 0.84f, 0.f, 1.f);    // gold
+            }
+
+            // Level text above the bar
+            std::string lvText = "Lv " + std::to_string(playerState.level);
+            renderer.drawText(hudFont, lvText, barX, barY - 6.f,
+                              18, 1.f, 1.f, 1.f, 1.f);
+        }
+
         pauseMenu.render(renderer);
         debugMenu.render(renderer);
         renderer.display();

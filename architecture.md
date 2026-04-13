@@ -269,6 +269,7 @@ A back-end–agnostic input abstraction that isolates all input polling and even
  │     • renderer.clear() + draw calls         │
  │     • renderer.endFrame() (blit FBO)        │
  │     • renderer.resetView() for UI overlay   │
+ │     • XP bar + level HUD (screen-space)     │
  │     • renderer.display()                    │
  └─────────────────────────────────────────────┘
 ```
