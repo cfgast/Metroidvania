@@ -2218,3 +2218,58 @@ death/respawn if level is preserved). Re-enable on game load if the
 saved level is 5.
 
 ==============================================================================
+Task 29: Charged spin-slash attack
+==============================================================================
+Implemented: true
+
+Add a charged spin-slash attack to CombatComponent, unlocked at level 3.
+
+CombatComponent changes (src/Components/CombatComponent.h/.cpp):
+
+Add new members:
+  bool  m_chargeUnlocked = false;   // Set to true at level 3+
+  bool  m_charging       = false;   // Currently holding attack button
+  float m_chargeTimer    = 0.f;     // How long attack has been held
+  float m_minChargeTime  = 0.6f;    // Minimum hold for spin slash
+  float m_spinDamageMult = 2.0f;    // 2x normal damage
+  float m_spinReachMult  = 1.5f;    // 1.5x normal reach
+
+Add method:
+  void setChargeUnlocked(bool unlocked);  // Called when player reaches lv3
+
+Update the attack flow in update(dt):
+1. When attack button is pressed (rising edge) and not on cooldown:
+   - If charge is unlocked: enter charging state, start m_chargeTimer
+   - If charge is NOT unlocked: start normal attack (existing behavior)
+2. While charging (button held): increment m_chargeTimer each frame
+3. When attack button is released (falling edge) while charging:
+   - If m_chargeTimer >= m_minChargeTime: execute spin slash
+     (wider hitbox, more damage, spin-slash animation)
+   - If m_chargeTimer < m_minChargeTime: execute normal attack
+4. If the player takes damage while charging, cancel the charge
+
+Spin-slash hitbox:
+- Same AABB approach as normal attack but reach *= m_spinReachMult
+- Vertical size *= 1.2 (same as normal)
+- Damage = m_damage * m_spinDamageMult
+
+Spin-slash visual:
+- Render a wider, more dramatic arc sweep than the normal attack
+- Use a brighter color or thicker triangle strip
+- Duration slightly longer than normal (0.4s vs 0.3s)
+
+Charge visual feedback:
+- While charging, render a growing glow/pulse around the player
+- Could use drawCircle with increasing radius and pulsing alpha
+- Or flash the player sprite at an increasing frequency
+
+Add a "spin-slash-right" and "spin-slash-left" animation to the player's
+AnimationComponent (can reuse existing frames with faster timing, or add
+new placeholder frames). Play this animation during the spin slash.
+
+Integration in main.cpp:
+- After awardXP(), check if playerState.level >= 3
+- If so, call combat->setChargeUnlocked(true)
+- Also check on game load (in case saved at level 3+)
+
+==============================================================================
