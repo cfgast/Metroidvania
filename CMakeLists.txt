@@ -204,6 +204,30 @@ add_custom_command(TARGET Metroidvania POST_BUILD
         $<TARGET_FILE_DIR:Metroidvania>/maps
 )
 
+# --- Generate armor sprite sheets from the base player sprite sheet ---
+find_package(Python3 QUIET COMPONENTS Interpreter)
+if(Python3_FOUND)
+    set(ARMOR_SPRITE_SCRIPT "${CMAKE_SOURCE_DIR}/tools/generate_armor_sprites.py")
+    set(BASE_SPRITESHEET    "${CMAKE_SOURCE_DIR}/assets/player_spritesheet.png")
+    set(ARMOR_OUTPUTS
+        "${CMAKE_SOURCE_DIR}/assets/player_armor_2.png"
+        "${CMAKE_SOURCE_DIR}/assets/player_armor_3.png"
+        "${CMAKE_SOURCE_DIR}/assets/player_armor_4.png"
+        "${CMAKE_SOURCE_DIR}/assets/player_armor_5.png"
+    )
+    add_custom_command(
+        OUTPUT  ${ARMOR_OUTPUTS}
+        COMMAND ${Python3_EXECUTABLE} ${ARMOR_SPRITE_SCRIPT}
+                --base "${BASE_SPRITESHEET}"
+        DEPENDS ${BASE_SPRITESHEET} ${ARMOR_SPRITE_SCRIPT}
+        WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
+        COMMENT "Generating armored player sprite sheets (tiers 2-5)"
+        VERBATIM
+    )
+    add_custom_target(armor_sprites DEPENDS ${ARMOR_OUTPUTS})
+    add_dependencies(Metroidvania armor_sprites)
+endif()
+
 # Copy assets folder next to the executable so sprite sheets are found at runtime
 add_custom_command(TARGET Metroidvania POST_BUILD
     COMMAND ${CMAKE_COMMAND} -E copy_directory

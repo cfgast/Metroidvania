@@ -68,66 +68,6 @@ pixels to approximate the look of each armor piece. This gives agents a
 concrete visual result without requiring hand-drawn art.
 
 ==============================================================================
-Task 27: Knight armor sprite generation
-==============================================================================
-Implemented: false
-
-Generate 4 additional player sprite sheets (armor tiers 2-5) that show
-the character wearing progressively more pieces of knight armor. Each
-tier must be visually distinct from the others -- not just color tints.
-
-Current sprite layout:
-- assets/player_spritesheet.png: 50x50 pixel frames, 9 rows:
-    Row 0: idle (4 frames)
-    Row 1: run-right (4 frames)
-    Row 2: run-left (4 frames)
-    Row 3: jump (2 frames)
-    Row 4: fall (2 frames)
-    Row 5: wall-slide-right (2 frames)
-    Row 6: wall-slide-left (2 frames)
-    Row 7: dash-right (3 frames) / spin-slash-right
-    Row 8: dash-left (3 frames) / spin-slash-left
-
-Create a Python or C++ tool (tools/generate_armor_sprites.py recommended)
-that loads the base player_spritesheet.png and generates 4 new sheets:
-  assets/player_armor_2.png  -- Boots: draw armored boot shapes on the
-    character's lower legs/feet area. Use a metallic gray with darker
-    outlines. The boots should be clearly visible as distinct armor.
-  assets/player_armor_3.png  -- Boots + Leg plates: add leg armor
-    (greaves/cuisses) covering the thigh and shin areas on top of boots.
-    Slightly different shade or added rivets/plate lines.
-  assets/player_armor_4.png  -- Boots + Legs + Chestplate: add a
-    breastplate/cuirass covering the torso with a distinct plate mail
-    look (horizontal plate lines, shoulder guards).
-  assets/player_armor_5.png  -- Full knight armor: add gauntlets on arms
-    and a visored helm on the head. The character should look like a
-    fully armored knight. Use brighter/shinier metallic tones.
-
-Sprite generation approach:
-- Load base sheet with stb_image (already in the project)
-- For each frame in each row, identify the character silhouette pixels
-  (non-transparent pixels) and overlay armor shapes in the appropriate
-  body regions (feet, legs, torso, arms, head)
-- Armor shapes can be simple: colored rectangles/regions overlaid with
-  darker border pixels to suggest plate edges
-- The key is that each tier looks DIFFERENT, not just more tinted
-- Save each sheet with stb_image_write
-
-The tool should be runnable standalone and also integrated into CMake so
-the sheets are regenerated if the base sheet changes.
-
-Update main.cpp to select the correct sprite sheet based on player level:
-- Add a helper function updatePlayerArmorSprites(AnimationComponent*,
-  PlayerState&) that re-registers all animations using the correct
-  atlas path for the current level:
-    Level 1: "assets/player_spritesheet.png"
-    Level 2: "assets/player_armor_2.png"
-    Level 3: "assets/player_armor_3.png"
-    Level 4: "assets/player_armor_4.png"
-    Level 5: "assets/player_armor_5.png"
-- Call this function on level-up (after awardXP()) and on game load
-
-==============================================================================
 Task 28: Max-level particle effect
 ==============================================================================
 Implemented: false

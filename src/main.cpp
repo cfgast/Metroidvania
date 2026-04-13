@@ -85,15 +85,40 @@ int main()
             m.removeAbilityPickup(id);
     };
 
-    // Returns the armor tint color for the given player level (1-5).
-    auto getArmorTint = [](uint32_t level) -> glm::vec3 {
+    // Returns the sprite sheet atlas path for the given player level (1-5).
+    auto getArmorAtlas = [](uint32_t level) -> std::string {
         switch (level) {
-            case 2:  return {1.0f, 0.85f, 0.6f};   // bronze
-            case 3:  return {0.8f, 0.85f, 0.9f};    // silver
-            case 4:  return {1.0f, 0.9f,  0.4f};    // gold
-            case 5:  return {0.9f, 0.95f, 1.0f};    // platinum
-            default: return {1.0f, 1.0f,  1.0f};    // no tint
+            case 2:  return "assets/player_armor_2.png";
+            case 3:  return "assets/player_armor_3.png";
+            case 4:  return "assets/player_armor_4.png";
+            case 5:  return "assets/player_armor_5.png";
+            default: return "assets/player_spritesheet.png";
         }
+    };
+
+    // Re-register all player animations using the correct armor sprite sheet
+    // for the current level. Call on level-up and on game load.
+    auto updatePlayerArmorSprites = [&](AnimationComponent* anim,
+                                        PlayerState& ps) {
+        const std::string atlas = getArmorAtlas(ps.level);
+        const int fw = 50, fh = 50;
+        auto makeFrames = [&](int row, int count) {
+            std::vector<AnimationComponent::FrameRect> frames;
+            for (int i = 0; i < count; ++i)
+                frames.push_back({i * fw, row * fh, fw, fh});
+            return frames;
+        };
+        anim->addAnimation("idle",      atlas, makeFrames(0, 4), 0.20f);
+        anim->addAnimation("run-right", atlas, makeFrames(1, 4), 0.10f);
+        anim->addAnimation("run-left",  atlas, makeFrames(2, 4), 0.10f);
+        anim->addAnimation("jump",      atlas, makeFrames(3, 2), 0.15f, false);
+        anim->addAnimation("fall",      atlas, makeFrames(4, 2), 0.15f, false);
+        anim->addAnimation("wall-slide-right", atlas, makeFrames(5, 2), 0.20f);
+        anim->addAnimation("wall-slide-left",  atlas, makeFrames(6, 2), 0.20f);
+        anim->addAnimation("dash-right",       atlas, makeFrames(7, 3), 0.05f, false);
+        anim->addAnimation("dash-left",        atlas, makeFrames(8, 3), 0.05f, false);
+        anim->addAnimation("spin-slash-right", atlas, makeFrames(7, 3), 0.13f, false);
+        anim->addAnimation("spin-slash-left",  atlas, makeFrames(8, 3), 0.13f, false);
     };
 
     auto setupPlayer = [&]() {
@@ -134,33 +159,9 @@ int main()
             playerLight.type      = LightType::Point;
             lightComp->setLight(playerLight);
         }
-        {
-            const std::string atlas = "assets/player_spritesheet.png";
-            const int fw = 50, fh = 50;
-            auto makeFrames = [&](int row, int count) {
-                std::vector<AnimationComponent::FrameRect> frames;
-                for (int i = 0; i < count; ++i)
-                    frames.push_back({i * fw, row * fh, fw, fh});
-                return frames;
-            };
-            anim->addAnimation("idle",      atlas, makeFrames(0, 4), 0.20f);
-            anim->addAnimation("run-right", atlas, makeFrames(1, 4), 0.10f);
-            anim->addAnimation("run-left",  atlas, makeFrames(2, 4), 0.10f);
-            anim->addAnimation("jump",      atlas, makeFrames(3, 2), 0.15f, false);
-            anim->addAnimation("fall",      atlas, makeFrames(4, 2), 0.15f, false);
-            anim->addAnimation("wall-slide-right", atlas, makeFrames(5, 2), 0.20f);
-            anim->addAnimation("wall-slide-left",  atlas, makeFrames(6, 2), 0.20f);
-            anim->addAnimation("dash-right",       atlas, makeFrames(7, 3), 0.05f, false);
-            anim->addAnimation("dash-left",        atlas, makeFrames(8, 3), 0.05f, false);
-            // Spin-slash animations (reuse dash frames with slower timing)
-            anim->addAnimation("spin-slash-right", atlas, makeFrames(7, 3), 0.13f, false);
-            anim->addAnimation("spin-slash-left",  atlas, makeFrames(8, 3), 0.13f, false);
-            anim->play("idle");
-        }
-
-        // Apply armor tint based on current level
-        glm::vec3 tint = getArmorTint(playerState.level);
-        anim->setTintColor(tint.r, tint.g, tint.b);
+        // Register animations using the correct armor sprite sheet for current level
+        updatePlayerArmorSprites(anim, playerState);
+        anim->play("idle");
 
         // Unlock charged spin-slash if player is already level 3+
         if (playerState.level >= 3)
@@ -646,11 +647,9 @@ int main()
                         playerState.awardXP(1);
                         if (playerState.level != prevLevel)
                         {
+                            // Switch to the armor sprite sheet for the new level
                             if (auto* ac = player.getComponent<AnimationComponent>())
-                            {
-                                glm::vec3 tint = getArmorTint(playerState.level);
-                                ac->setTintColor(tint.r, tint.g, tint.b);
-                            }
+                                updatePlayerArmorSprites(ac, playerState);
                             if (playerState.level >= 3)
                             {
                                 if (auto* cb = player.getComponent<CombatComponent>())

@@ -2147,3 +2147,28 @@ for the level label.
 Only render when gameStarted is true and not on the save-slot screen.
 
 ==============================================================================
+
+==============================================================================
+Task 27: Knight armor sprite generation
+==============================================================================
+Implemented: true
+
+Generate 4 additional player sprite sheets (armor tiers 2-5) that show
+the character wearing progressively more pieces of knight armor. Each
+tier must be visually distinct from the others -- not just color tints.
+
+Created tools/generate_armor_sprites.py (Python/Pillow) that loads the base
+player_spritesheet.png and overlays armor shapes per frame based on the
+character silhouette. Each tier progressively adds armor pieces:
+  Tier 2: Boots (metallic gray on lower legs/feet)
+  Tier 3: Boots + leg plates (greaves with plate lines and rivets)
+  Tier 4: Boots + legs + chestplate (torso plate mail with shoulder guards)
+  Tier 5: Full knight armor (helm with visor slit, gauntlets, gold accents)
+
+CMake integration regenerates sheets when base spritesheet or script changes.
+
+Updated main.cpp with updatePlayerArmorSprites() helper that re-registers
+all player animations with the correct armor-tier atlas path. Called on
+level-up (after awardXP()) and on initial player setup (which handles game
+load). Replaced the tint-only approach with actual sprite sheet switching.
+==============================================================================
