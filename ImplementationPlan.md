@@ -20,6 +20,12 @@ When a task is completed:
 IMPORTANT: When you finish, verify no completed tasks or finished milestone
 sections remain in this file. This file should only contain pending work.
 
+IMPORTANT: Never move a completed task back from CompletedTasks.md into
+this file. Completed tasks are permanent history. If a previous
+implementation needs to be changed, updated, or extended, create a NEW
+task in this file that describes the desired changes. Reference the
+original task if helpful (e.g., "Replaces behavior from Task 12").
+
 See CompletedTasks.md for the history of all previously completed work.
 See architecture.md for the current codebase layout.
 
@@ -60,33 +66,6 @@ build time or load time using the base sprite sheet as a template,
 drawing armor overlays (colored rectangles/shapes) onto the character
 pixels to approximate the look of each armor piece. This gives agents a
 concrete visual result without requiring hand-drawn art.
-
-==============================================================================
-Task 26: XP bar and level HUD
-==============================================================================
-Implemented: false
-
-Render an XP bar and level indicator in the screen-space UI overlay (after
-endFrame() / resetView(), alongside existing UI elements).
-
-XP bar design:
-- Position: bottom-left of screen (e.g., x=20, y=windowH-40)
-- Size: 200x10 pixels
-- Background: dark gray with black outline (drawRectOutlined)
-- Fill: gold/yellow color, width = (xp / xpToLevel) * barWidth
-- When at max level (5), bar is full and a different color (e.g. cyan)
-
-Level indicator:
-- Text "Lv N" rendered to the left of or above the XP bar
-- Use the existing font handle and drawText()
-- Font size ~18, white or gold color
-
-Implementation location: add to main.cpp's UI rendering section, after
-the existing HUD elements. Use renderer.drawRectOutlined() for the bar
-background, renderer.drawRect() for the fill, and renderer.drawText()
-for the level label.
-
-Only render when gameStarted is true and not on the save-slot screen.
 
 ==============================================================================
 Task 27: Knight armor sprite generation
