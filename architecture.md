@@ -41,9 +41,9 @@ The game uses a **Component-Based Entity System**.
 | `Component.h` | Abstract base — virtual `update(dt)` and `render(Renderer&)`. Stores owner `GameObject*`. |
 | `GameObject.h/.cpp` | Entity container. Holds `glm::vec2 position` and a `vector<unique_ptr<Component>>`. Provides `addComponent<T>()` / `getComponent<T>()` templates. |
 | `Ability.h` | Enum `{DoubleJump, WallSlide, Dash}` with string serialization helpers. |
-| `PlayerState.h` | Persistent progression: `set<Ability> unlockedAbilities`, `set<string> consumedPickups`. Carried across room transitions. |
+| `PlayerState.h` | Persistent progression: `set<Ability> unlockedAbilities`, `set<string> consumedPickups`, `uint32_t xp`, `uint32_t level` (1-5). Provides `awardXP()`, `getXPToLevel()`, `isMaxLevel()`. Carried across room transitions. |
 | `InputBindings.h/.cpp` | **Singleton.** Configurable keyboard + controller bindings using `KeyCode` enum. Persists to `saves/controls.json`. |
-| `SaveSystem.h/.cpp` | Static API. 3 save slots (`saves/save_N.json`). Serializes player position, map, HP, abilities, consumed pickups. |
+| `SaveSystem.h/.cpp` | Static API. 3 save slots (`saves/save_N.json`). Serializes player position, map, HP, abilities, consumed pickups, XP, and level. Backward-compatible with old saves (defaults: xp=0, level=1). |
 
 ---
 

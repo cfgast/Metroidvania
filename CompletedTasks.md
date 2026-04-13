@@ -1848,3 +1848,32 @@ Updated all project documentation to reflect the completed Vulkan 1.3 migration:
    - Already contains *.spv for compiled SPIR-V shaders — no changes needed
 
 ==============================================================================
+
+==============================================================================
+Task 24: XP and leveling data model
+==============================================================================
+Implemented: true
+
+Add experience and level tracking to PlayerState (src/Core/PlayerState.h):
+
+  uint32_t xp    = 0;     // Current XP within the current level
+  uint32_t level = 1;     // Current level (1-5, capped)
+
+Add methods:
+  void awardXP(uint32_t amount);  // Adds XP points; auto-levels when
+                                   // xp reaches xpToLevel (5). Caps at
+                                   // level 5. Resets xp to 0 on level-up.
+  uint32_t getXPToLevel() const;   // Returns 5 (constant, linear)
+  bool isMaxLevel() const;         // Returns level >= 5
+
+Update SaveSystem (src/Core/SaveSystem.h/.cpp):
+- Add "xp" and "level" fields to the JSON save format
+- Write them in SaveSystem::save()
+- Read them in SaveSystem::load() with defaults (0 and 1) for backward
+  compatibility with existing save files that lack these fields
+
+Update main.cpp:
+- Include xp/level in the buildSaveData() lambda
+- Restore xp/level from loaded SaveData when starting/loading a game
+
+==============================================================================

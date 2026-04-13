@@ -40,6 +40,10 @@ bool SaveSystem::save(int slot, const SaveData& data)
         pickups.push_back(id);
     j["consumedPickups"] = pickups;
 
+    // XP and level
+    j["xp"]    = data.playerState.xp;
+    j["level"] = data.playerState.level;
+
     std::ofstream file(slotPath(slot));
     if (!file.is_open())
     {
@@ -86,6 +90,10 @@ bool SaveSystem::load(int slot, SaveData& outData)
         for (const auto& p : j["consumedPickups"])
             outData.playerState.consumedPickups.insert(p.get<std::string>());
     }
+
+    // XP and level (defaults for backward compatibility with old saves)
+    outData.playerState.xp    = j.value("xp",    static_cast<uint32_t>(0));
+    outData.playerState.level = j.value("level",  static_cast<uint32_t>(1));
 
     return true;
 }
