@@ -89,7 +89,7 @@ Enemies replace `CombatComponent` with `EnemyAIComponent` (+ optional `SlimeAtta
 | `TransitionZone.h` | Data struct: trigger bounds, target map path, target spawn name, relative-positioning fields (`edgeAxis`, `targetBaseX`, `targetBaseY`). |
 | `AbilityPickupDefinition.h` | Data struct: id, ability enum, position, size. |
 | `LightDefinition.h` | Data struct: name, type, position (x/y/z), color (r/g/b), intensity, radius, spot-light cone angles. `toLight()` converts to renderable `Light`. |
-| `Map.h/.cpp` | Aggregates all level data. Provides AABB checks for transitions and pickups. `registerPhysXStatics()` creates `PxRigidStatic` actors for platforms. Stores `LightDefinition` vector accessible via `getLights()`. |
+| `Map.h/.cpp` | Aggregates all level data. `checkTransition()` uses center-point containment (player must be halfway into zone); `checkAbilityPickup()` uses AABB intersection. `registerPhysXStatics()` creates `PxRigidStatic` actors for platforms. Stores `LightDefinition` vector accessible via `getLights()`. |
 | `MapLoader.h/.cpp` | Static `loadFromFile()` → parses JSON via nlohmann/json → returns `Map`. |
 | `TransitionManager.h/.cpp` | State machine `Idle → FadingOut (0.4 s) → FadingIn (0.4 s)`. Fires a load callback at midpoint (screen fully black). The load callback in `main.cpp` supports **relative positioning**: when a zone has `edgeAxis` set, the player's offset along the shared edge is preserved (clamped to zone bounds); otherwise falls back to `targetSpawn` (legacy). Pending zone data and player position are captured in `main.cpp` before starting the fade. |
 

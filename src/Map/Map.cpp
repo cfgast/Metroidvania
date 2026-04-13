@@ -22,13 +22,9 @@ glm::vec2 Map::getNamedSpawn(const std::string& name) const
 const TransitionZone* Map::checkTransition(glm::vec2 position,
                                            glm::vec2 size) const
 {
-    Rect playerRect(position.x - size.x * 0.5f,
-                    position.y - size.y * 0.5f,
-                    size.x, size.y);
-
     for (const auto& zone : m_transitionZones)
     {
-        if (playerRect.intersects(zone.bounds))
+        if (zone.bounds.contains(position))
             return &zone;
     }
     return nullptr;

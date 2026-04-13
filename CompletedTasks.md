@@ -2273,3 +2273,13 @@ Integration in main.cpp:
 - Also check on game load (in case saved at level 3+)
 
 ==============================================================================
+==============================================================================
+Task 30: Require player halfway into transition zone
+==============================================================================
+Implemented: true
+
+Changed Map::checkTransition() (src/Map/Map.cpp) to use center-point
+containment (zone.bounds.contains(position)) instead of AABB intersection
+(playerRect.intersects(zone.bounds)). The player's center must now be
+inside the transition zone before a room transition fires, requiring the
+player to visibly walk halfway into the zone.
