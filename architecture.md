@@ -261,13 +261,15 @@ A back-end–agnostic input abstraction that isolates all input polling and even
  │     • Check transition zones → start fade   │
  │     • Check ability pickups → unlock        │
  │     • Award XP on fresh enemy kill           │
-│     • Remove dead enemies                   │
+ │     • Update max-level particles (spawn/age) │
+ │     • Remove dead enemies                   │
  │  6. Render (all via renderer.*):            │
  │     • renderer.beginFrame() (bind FBO)      │
  │     • renderer.clearLights()                │
  │     • renderer.addLight(playerLight)        │
  │     • renderer.setView() for camera         │
  │     • renderer.clear() + draw calls         │
+ │     • Render max-level particles (circles)  │
  │     • renderer.endFrame() (blit FBO)        │
  │     • renderer.resetView() for UI overlay   │
  │     • XP bar + level HUD (screen-space)     │
@@ -277,7 +279,7 @@ A back-end–agnostic input abstraction that isolates all input polling and even
 
 ### Entity setup
 
-- **Player**: `InputComponent` → `PhysicsComponent` → `RenderComponent` → `AnimationComponent` → `HealthComponent` → `CombatComponent` → `LightComponent`. Death callback teleports to spawn and refills HP. HealthComponent's `onDamage` callback forwards to `CombatComponent::onDamageTaken()` to cancel any active charge. LightComponent provides the player's dynamic light (warm white point light, registered before draw calls). AnimationComponent tint color is set on setup and on each level-up via `getArmorTint()` (Level 1: white, 2: bronze, 3: silver, 4: gold, 5: platinum). Spin-slash animations ("spin-slash-right", "spin-slash-left") reuse dash sprite frames with slower timing (0.13 s/frame, non-looping). On level-up to 3+, `CombatComponent::setChargeUnlocked(true)` is called; same check runs in `setupPlayer()` for loaded saves.
+- **Player**: `InputComponent` → `PhysicsComponent` → `RenderComponent` → `AnimationComponent` → `HealthComponent` → `CombatComponent` → `LightComponent`. Death callback teleports to spawn and refills HP. HealthComponent's `onDamage` callback forwards to `CombatComponent::onDamageTaken()` to cancel any active charge. LightComponent provides the player's dynamic light (warm white point light, registered before draw calls). AnimationComponent tint color is set on setup and on each level-up via `getArmorTint()` (Level 1: white, 2: bronze, 3: silver, 4: gold, 5: platinum). Spin-slash animations ("spin-slash-right", "spin-slash-left") reuse dash sprite frames with slower timing (0.13 s/frame, non-looping). On level-up to 3+, `CombatComponent::setChargeUnlocked(true)` is called; same check runs in `setupPlayer()` for loaded saves. At level 5 (max), a lightweight ambient particle system in `main.cpp` spawns ~3 gold/white/ember circle particles per second that drift upward and fade out over 1–2 s, rendered in world space via `drawCircle()` before `endFrame()`.
 - **Enemy**: `InputComponent` → `PhysicsComponent` → `RenderComponent` → `AnimationComponent` → `HealthComponent` → `EnemyAIComponent` → (optional) `SlimeAttackComponent`. Death callback erases enemy from list. On first detection of death (before respawn queue), `playerState.awardXP(1)` grants 1 XP per kill.
 
 ---

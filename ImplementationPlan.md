@@ -68,50 +68,6 @@ pixels to approximate the look of each armor piece. This gives agents a
 concrete visual result without requiring hand-drawn art.
 
 ==============================================================================
-Task 28: Max-level particle effect
-==============================================================================
-Implemented: false
-
-When the player reaches level 5 (full knight armor), add a persistent
-ambient particle effect -- small glowing sparks or embers that drift
-off the player character, giving a "legendary" feel.
-
-Create a simple ParticleEmitter component or a lightweight particle
-system embedded in main.cpp that:
-- Spawns 2-4 small particles per second around the player position
-- Each particle:
-  - Starts at a random offset within the player bounding box
-  - Drifts upward and slightly sideways (randomized velocity)
-  - Fades from bright (gold/white, alpha=0.8) to transparent over 1-2s
-  - Size: 2-4 pixels (small sparkle)
-- Uses the existing drawRect() or drawCircle() API for rendering
-  (no new textures needed)
-- Particles are rendered in world space (before endFrame(), so they
-  benefit from lighting) at the player's position
-
-Implementation:
-- Add a simple Particle struct: { vec2 pos, vec2 vel, float life,
-  float maxLife, float size }
-- Store a vector<Particle> in main.cpp (or a new ParticleComponent)
-- In the update loop, if playerState.level >= 5:
-  - Spawn new particles at a timed interval
-  - Update existing particles (move, age, remove dead ones)
-- In the render loop, draw surviving particles as small colored circles
-  or rects with alpha based on remaining life
-
-Particle colors (cycle/randomize between):
-- Warm gold: (1.0, 0.85, 0.3)
-- White-hot: (1.0, 1.0, 0.9)
-- Ember orange: (1.0, 0.6, 0.2)
-
-The effect should be subtle but noticeable -- a visual reward for
-reaching max level, not an overwhelming particle storm.
-
-Disable particles when the player is below level 5 (including after
-death/respawn if level is preserved). Re-enable on game load if the
-saved level is 5.
-
-==============================================================================
 Task 29: Charged spin-slash attack
 ==============================================================================
 Implemented: false

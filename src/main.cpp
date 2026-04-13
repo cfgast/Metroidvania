@@ -3,6 +3,7 @@
 #include <memory>
 #include <algorithm>
 #include <chrono>
+#include <cstdlib>
 
 #include <glm/vec2.hpp>
 
@@ -325,6 +326,28 @@ int main()
     std::vector<DashGhost> dashGhosts;
     float dashGhostSpawnTimer = 0.f;
 
+    // --- Max-level ambient particle effect ---
+    struct LevelParticle {
+        glm::vec2 pos;
+        glm::vec2 vel;
+        float life;
+        float maxLife;
+        float size;
+        int   colorIndex; // 0=gold, 1=white-hot, 2=ember
+    };
+    std::vector<LevelParticle> levelParticles;
+    float particleSpawnAccum = 0.f;
+    // Particle color palette
+    static constexpr float PARTICLE_COLORS[][3] = {
+        { 1.0f, 0.85f, 0.3f },   // warm gold
+        { 1.0f, 1.0f,  0.9f },   // white-hot
+        { 1.0f, 0.6f,  0.2f },   // ember orange
+    };
+    auto randFloat = [](float lo, float hi) -> float {
+        float t = static_cast<float>(std::rand()) / static_cast<float>(RAND_MAX);
+        return lo + t * (hi - lo);
+    };
+
     while (renderer.isOpen())
     {
         InputEvent event;
@@ -629,6 +652,43 @@ int main()
                 dashGhosts.end());
         }
 
+        // --- Max-level ambient particles: spawn and update ---
+        if (playerState.isMaxLevel() && dt > 0.f)
+        {
+            constexpr float SPAWN_RATE = 3.f; // particles per second
+            particleSpawnAccum += dt;
+            float spawnInterval = 1.f / SPAWN_RATE;
+            while (particleSpawnAccum >= spawnInterval)
+            {
+                particleSpawnAccum -= spawnInterval;
+                LevelParticle p;
+                p.pos.x      = player.position.x + randFloat(-playerSize.x * 0.4f, playerSize.x * 0.4f);
+                p.pos.y      = player.position.y + randFloat(-playerSize.y * 0.4f, playerSize.y * 0.4f);
+                p.vel.x      = randFloat(-15.f, 15.f);
+                p.vel.y      = randFloat(-40.f, -15.f); // drift upward
+                p.maxLife    = randFloat(1.0f, 2.0f);
+                p.life       = 0.f;
+                p.size       = randFloat(2.f, 4.f);
+                p.colorIndex = std::rand() % 3;
+                levelParticles.push_back(p);
+            }
+
+            for (auto& p : levelParticles)
+            {
+                p.pos += p.vel * dt;
+                p.life += dt;
+            }
+            levelParticles.erase(
+                std::remove_if(levelParticles.begin(), levelParticles.end(),
+                               [](const LevelParticle& p) { return p.life >= p.maxLife; }),
+                levelParticles.end());
+        }
+        else if (!playerState.isMaxLevel())
+        {
+            levelParticles.clear();
+            particleSpawnAccum = 0.f;
+        }
+
         // Update living enemies; queue dead ones for respawn
         {
             const auto& defs = map.getEnemyDefinitions();
@@ -782,6 +842,16 @@ int main()
         }
 
         player.render(renderer);
+
+        // --- Max-level ambient particles (world space) ---
+        for (const auto& p : levelParticles)
+        {
+            float t     = p.life / p.maxLife;          // 0..1
+            float alpha = 0.8f * (1.f - t);            // fade from 0.8 to 0
+            const float* c = PARTICLE_COLORS[p.colorIndex];
+            renderer.drawCircle(p.pos.x, p.pos.y, p.size * 0.5f,
+                                c[0], c[1], c[2], alpha);
+        }
 
         transitionMgr.render(renderer);
 
