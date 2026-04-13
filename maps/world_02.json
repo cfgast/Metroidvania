@@ -102,20 +102,85 @@
   "enemies": [
     {
       "x": 400,
-      "y": 475,
+      "y": 460,
       "waypointA": {
         "x": 200,
-        "y": 475
+        "y": 460
       },
       "waypointB": {
         "x": 700,
-        "y": 475
+        "y": 460
       },
       "speed": 90,
       "damage": 15,
       "hp": 40,
       "width": 40,
       "height": 40
+    },
+    {
+      "x": 870,
+      "y": 460,
+      "waypointA": {
+        "x": 770,
+        "y": 460
+      },
+      "waypointB": {
+        "x": 970,
+        "y": 460
+      },
+      "speed": 100,
+      "damage": 10,
+      "hp": 50,
+      "width": 40,
+      "height": 40
+    },
+    {
+      "x": 1170,
+      "y": 460,
+      "waypointA": {
+        "x": 1030,
+        "y": 460
+      },
+      "waypointB": {
+        "x": 1380,
+        "y": 460
+      },
+      "speed": 100,
+      "damage": 10,
+      "hp": 50,
+      "width": 40,
+      "height": 40
+    },
+    {
+      "x": 1140,
+      "y": 310,
+      "waypointA": {
+        "x": 1060,
+        "y": 310
+      },
+      "waypointB": {
+        "x": 1220,
+        "y": 310
+      },
+      "speed": 100,
+      "damage": 10,
+      "hp": 50,
+      "width": 40,
+      "height": 40
+    }
+  ],
+  "transitions": [
+    {
+      "name": "to_world_01",
+      "x": -200,
+      "y": -500,
+      "width": 50,
+      "height": 1200,
+      "targetMap": "../../../../../maps/world_01.json",
+      "targetSpawn": "default",
+      "edgeAxis": "vertical",
+      "targetBaseX": 3340,
+      "targetBaseY": -500
     }
   ],
   "abilityPickups": [
@@ -128,18 +193,70 @@
       "height": 30
     }
   ],
-  "transitions": [
+  "lights": [
     {
-      "name": "to_world_01",
-      "x": -200,
-      "y": -500,
-      "width": 50,
-      "height": 1200,
-      "targetMap": "maps/world_01.json",
-      "targetSpawn": "default",
-      "edgeAxis": "vertical",
-      "targetBaseX": 3340,
-      "targetBaseY": -500
+      "name": "light_1",
+      "type": "point",
+      "x": 20,
+      "y": 330,
+      "z": 80,
+      "r": 1,
+      "g": 1,
+      "b": 1,
+      "intensity": 1,
+      "radius": 200,
+      "directionX": 0,
+      "directionY": 1,
+      "innerCone": 30,
+      "outerCone": 45
+    },
+    {
+      "name": "light_2",
+      "type": "point",
+      "x": 570,
+      "y": 250,
+      "z": 80,
+      "r": 1,
+      "g": 1,
+      "b": 1,
+      "intensity": 1,
+      "radius": 200,
+      "directionX": 0,
+      "directionY": 1,
+      "innerCone": 30,
+      "outerCone": 45
+    },
+    {
+      "name": "light_3",
+      "type": "point",
+      "x": 1130,
+      "y": 210,
+      "z": 80,
+      "r": 1,
+      "g": 1,
+      "b": 1,
+      "intensity": 1,
+      "radius": 200,
+      "directionX": 0,
+      "directionY": 1,
+      "innerCone": 30,
+      "outerCone": 45
+    },
+    {
+      "name": "light_4",
+      "type": "point",
+      "x": 1690,
+      "y": 130,
+      "z": 80,
+      "r": 1,
+      "g": 1,
+      "b": 1,
+      "intensity": 1,
+      "radius": 200,
+      "directionX": 0,
+      "directionY": 1,
+      "innerCone": 30,
+      "outerCone": 45
     }
   ]
 }

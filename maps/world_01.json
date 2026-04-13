@@ -110,7 +110,7 @@
     {
       "x": 2400,
       "y": 220,
-      "width": 980,
+      "width": 1000,
       "height": 290,
       "r": 120,
       "g": 80,
@@ -153,9 +153,9 @@
       "b": 40
     },
     {
-      "x": 1850,
+      "x": 1870,
       "y": 630,
-      "width": 1510,
+      "width": 1490,
       "height": 30,
       "r": 120,
       "g": 80,
@@ -171,7 +171,7 @@
       "b": 40
     },
     {
-      "x": 1850,
+      "x": 1870,
       "y": 660,
       "width": 30,
       "height": 40,
@@ -231,6 +231,40 @@
       "hp": 50,
       "width": 40,
       "height": 40
+    },
+    {
+      "x": 1860,
+      "y": 230,
+      "waypointA": {
+        "x": 1030,
+        "y": 230
+      },
+      "waypointB": {
+        "x": 2380,
+        "y": 230
+      },
+      "speed": 100,
+      "damage": 10,
+      "hp": 50,
+      "width": 40,
+      "height": 40
+    },
+    {
+      "x": 2730,
+      "y": 170,
+      "waypointA": {
+        "x": 2390,
+        "y": 170
+      },
+      "waypointB": {
+        "x": 3030,
+        "y": 170
+      },
+      "speed": 100,
+      "damage": 10,
+      "hp": 50,
+      "width": 40,
+      "height": 40
     }
   ],
   "transitions": [
@@ -240,7 +274,7 @@
       "y": -500,
       "width": 50,
       "height": 1200,
-      "targetMap": "maps/world_02.json",
+      "targetMap": "../../../../../maps/world_02.json",
       "targetSpawn": "default",
       "edgeAxis": "vertical",
       "targetBaseX": -140,
@@ -252,7 +286,7 @@
       "y": 650,
       "width": 3600,
       "height": 50,
-      "targetMap": "maps/world_03.json",
+      "targetMap": "../../../../../maps/world_03.json",
       "targetSpawn": "default",
       "edgeAxis": "horizontal",
       "targetBaseX": -200,
@@ -276,11 +310,79 @@
       "x": 340,
       "y": 140,
       "z": 80,
-      "r": 1.0,
+      "r": 1,
       "g": 0.8,
       "b": 0.3,
       "intensity": 1.2,
-      "radius": 250
+      "radius": 250,
+      "directionX": 0,
+      "directionY": 1,
+      "innerCone": 30,
+      "outerCone": 45
+    },
+    {
+      "name": "light_2",
+      "type": "point",
+      "x": 1100,
+      "y": 0,
+      "z": 80,
+      "r": 1,
+      "g": 1,
+      "b": 1,
+      "intensity": 1,
+      "radius": 200,
+      "directionX": 0,
+      "directionY": 1,
+      "innerCone": 30,
+      "outerCone": 45
+    },
+    {
+      "name": "light_3",
+      "type": "point",
+      "x": 1670,
+      "y": 100,
+      "z": 80,
+      "r": 1,
+      "g": 1,
+      "b": 1,
+      "intensity": 1,
+      "radius": 200,
+      "directionX": 0,
+      "directionY": 1,
+      "innerCone": 30,
+      "outerCone": 45
+    },
+    {
+      "name": "light_4",
+      "type": "point",
+      "x": 2250,
+      "y": -30,
+      "z": 80,
+      "r": 1,
+      "g": 1,
+      "b": 1,
+      "intensity": 1,
+      "radius": 200,
+      "directionX": 0,
+      "directionY": 1,
+      "innerCone": 30,
+      "outerCone": 45
+    },
+    {
+      "name": "light_5",
+      "type": "point",
+      "x": 3220,
+      "y": 590,
+      "z": 80,
+      "r": 1,
+      "g": 1,
+      "b": 1,
+      "intensity": 1,
+      "radius": 200,
+      "directionX": 0,
+      "directionY": 1,
+      "innerCone": 30,
+      "outerCone": 45
     }
   ]
 }

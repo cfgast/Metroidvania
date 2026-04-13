@@ -1,5 +1,6 @@
 #include "MapLoader.h"
 
+#include <filesystem>
 #include <fstream>
 #include <stdexcept>
 
@@ -110,6 +111,17 @@ Map MapLoader::loadFromFile(const std::string& filePath)
                 t.at("height").get<float>()
             };
             zone.targetMap   = t.at("targetMap").get<std::string>();
+
+            // Resolve targetMap so it's loadable from the game's working dir.
+            // The JSON may contain deep relative paths from an editor; since
+            // all maps live in the same directory, just take the filename and
+            // place it in the source map's directory.
+            {
+                namespace fs = std::filesystem;
+                fs::path target(zone.targetMap);
+                fs::path sourceDir = fs::path(filePath).parent_path();
+                zone.targetMap = (sourceDir / target.filename()).generic_string();
+            }
             zone.targetSpawn = t.value("targetSpawn", "default");
             zone.edgeAxis    = t.value("edgeAxis", "");
             zone.targetBaseX = t.value("targetBaseX", 0.0f);

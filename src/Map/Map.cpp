@@ -22,6 +22,8 @@ glm::vec2 Map::getNamedSpawn(const std::string& name) const
 const TransitionZone* Map::checkTransition(glm::vec2 position,
                                            glm::vec2 size) const
 {
+    // Require the player's center to be inside the zone, meaning at least
+    // half the sprite has crossed into the zone before the transition fires.
     for (const auto& zone : m_transitionZones)
     {
         if (zone.bounds.contains(position))

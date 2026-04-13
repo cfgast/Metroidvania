@@ -21,22 +21,36 @@
       "b": 80
     },
     {
-      "x": 1649.0352,
-      "y": -496.75385,
-      "width": 30,
+      "x": 1650,
+      "y": -500,
+      "width": 20,
       "height": 920,
       "r": 120,
       "g": 80,
       "b": 40
     },
     {
-      "x": 1864.8242,
-      "y": -499.03516,
+      "x": 1870,
+      "y": -500,
       "width": 30,
       "height": 930,
       "r": 120,
       "g": 80,
       "b": 40
+    }
+  ],
+  "transitions": [
+    {
+      "name": "to_world_01",
+      "x": -200,
+      "y": -500,
+      "width": 3600,
+      "height": 50,
+      "targetMap": "../../../../../maps/world_01.json",
+      "targetSpawn": "default",
+      "edgeAxis": "horizontal",
+      "targetBaseX": -200,
+      "targetBaseY": 640
     }
   ],
   "abilityPickups": [
@@ -49,18 +63,54 @@
       "height": 30
     }
   ],
-  "transitions": [
+  "lights": [
     {
-      "name": "to_world_01",
-      "x": -200,
-      "y": -500,
-      "width": 3600,
-      "height": 50,
-      "targetMap": "maps/world_01.json",
-      "targetSpawn": "default",
-      "edgeAxis": "horizontal",
-      "targetBaseX": -200,
-      "targetBaseY": 640
+      "name": "light_1",
+      "type": "point",
+      "x": 1780,
+      "y": -370,
+      "z": 80,
+      "r": 1,
+      "g": 1,
+      "b": 1,
+      "intensity": 1,
+      "radius": 200,
+      "directionX": 0,
+      "directionY": 1,
+      "innerCone": 30,
+      "outerCone": 45
+    },
+    {
+      "name": "light_2",
+      "type": "point",
+      "x": 1790,
+      "y": -50,
+      "z": 80,
+      "r": 1,
+      "g": 1,
+      "b": 1,
+      "intensity": 1,
+      "radius": 200,
+      "directionX": 0,
+      "directionY": 1,
+      "innerCone": 30,
+      "outerCone": 45
+    },
+    {
+      "name": "light_3",
+      "type": "point",
+      "x": 1780,
+      "y": 310,
+      "z": 80,
+      "r": 1,
+      "g": 1,
+      "b": 1,
+      "intensity": 1,
+      "radius": 200,
+      "directionX": 0,
+      "directionY": 1,
+      "innerCone": 30,
+      "outerCone": 45
     }
   ]
 }

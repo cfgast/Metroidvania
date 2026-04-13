@@ -241,3 +241,19 @@ add_custom_command(TARGET Metroidvania POST_BUILD
         ${CMAKE_CURRENT_BINARY_DIR}/assets/shaders
         $<TARGET_FILE_DIR:Metroidvania>/assets/shaders
 )
+
+# --- Tests ---
+# Lightweight test executables that don't depend on Vulkan/PhysX/Renderer.
+# Build with: cmake --build build --target MetroidvaniaTests
+add_executable(MetroidvaniaTests
+    tests/test_transitions.cpp
+)
+target_include_directories(MetroidvaniaTests PRIVATE
+    ${CMAKE_SOURCE_DIR}
+    ${CMAKE_SOURCE_DIR}/third_party
+)
+# GLM is needed for vec2
+target_link_libraries(MetroidvaniaTests PRIVATE glm::glm)
+set_target_properties(MetroidvaniaTests PROPERTIES
+    RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/tests
+)

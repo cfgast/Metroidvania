@@ -232,6 +232,7 @@ int main()
     TransitionZone pendingZone;
     glm::vec2      pendingPlayerPos{0.f, 0.f};
     float          transitionCooldown = 0.f;
+    std::string    suppressedZone;   // zone name to suppress until player leaves it
 
     TransitionManager transitionMgr;
     transitionMgr.setLoadCallback(
@@ -240,6 +241,7 @@ int main()
             try
             {
                 enemies.clear();
+                const std::string previousMap = currentMapFile;
                 map = MapLoader::loadFromFile(targetFile);
                 currentMapFile = targetFile;
                 map.registerPhysXStatics();
@@ -280,8 +282,18 @@ int main()
                 enemies = spawnEnemies(map, player);
                 respawnQueue.clear();
 
-                // Brief cooldown so the player isn't immediately re-triggered
-                // by the return transition zone they spawn inside of.
+                // Suppress the return zone to prevent ping-pong.
+                suppressedZone.clear();
+                auto extractStem = [](const std::string& path) {
+                    auto pos = path.find_last_of("/\\");
+                    return (pos != std::string::npos) ? path.substr(pos + 1) : path;
+                };
+                const std::string prevStem = extractStem(previousMap);
+                for (const auto& z : map.getTransitionZones())
+                {
+                    if (suppressedZone.empty() && extractStem(z.targetMap) == prevStem)
+                        suppressedZone = z.name;
+                }
                 transitionCooldown = 0.3f;
 
                 // Auto-save on room transition.
@@ -740,12 +752,23 @@ int main()
         }
 
         if (transitionCooldown > 0.f)
-            transitionCooldown -= dt;
-        else if (const TransitionZone* zone = map.checkTransition(player.position, playerSize))
         {
-            pendingZone      = *zone;
-            pendingPlayerPos = player.position;
-            transitionMgr.startTransition(zone->targetMap, zone->targetSpawn);
+            transitionCooldown -= dt;
+        }
+        else
+        {
+            const TransitionZone* zone = map.checkTransition(player.position, playerSize);
+            if (zone && zone->name != suppressedZone)
+            {
+                pendingZone      = *zone;
+                pendingPlayerPos = player.position;
+                transitionMgr.startTransition(zone->targetMap, zone->targetSpawn);
+            }
+            else if (!zone)
+            {
+                suppressedZone.clear();
+            }
+            // If zone matches suppressedZone, keep suppressing (do nothing)
         }
 
         if (const AbilityPickupDefinition* pickup = map.checkAbilityPickup(player.position, playerSize))
