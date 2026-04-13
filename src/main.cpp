@@ -117,6 +117,12 @@ int main()
         auto* combat = player.addComponent<CombatComponent>(17.f, 0.3f, 0.2f, 45.f);
         combat->setEnemies(&enemies);
 
+        // Cancel charge if the player takes damage
+        health->onDamage = [&player]() {
+            if (auto* cb = player.getComponent<CombatComponent>())
+                cb->onDamageTaken();
+        };
+
         // Warm white dynamic glow that follows the player.
         {
             auto* lightComp = player.addComponent<LightComponent>();
@@ -146,12 +152,19 @@ int main()
             anim->addAnimation("wall-slide-left",  atlas, makeFrames(6, 2), 0.20f);
             anim->addAnimation("dash-right",       atlas, makeFrames(7, 3), 0.05f, false);
             anim->addAnimation("dash-left",        atlas, makeFrames(8, 3), 0.05f, false);
+            // Spin-slash animations (reuse dash frames with slower timing)
+            anim->addAnimation("spin-slash-right", atlas, makeFrames(7, 3), 0.13f, false);
+            anim->addAnimation("spin-slash-left",  atlas, makeFrames(8, 3), 0.13f, false);
             anim->play("idle");
         }
 
         // Apply armor tint based on current level
         glm::vec3 tint = getArmorTint(playerState.level);
         anim->setTintColor(tint.r, tint.g, tint.b);
+
+        // Unlock charged spin-slash if player is already level 3+
+        if (playerState.level >= 3)
+            combat->setChargeUnlocked(true);
     };
 
     auto spawnSingleEnemy = [&](const EnemyDefinition& def, Map& m, GameObject& p)
@@ -637,6 +650,11 @@ int main()
                             {
                                 glm::vec3 tint = getArmorTint(playerState.level);
                                 ac->setTintColor(tint.r, tint.g, tint.b);
+                            }
+                            if (playerState.level >= 3)
+                            {
+                                if (auto* cb = player.getComponent<CombatComponent>())
+                                    cb->setChargeUnlocked(true);
                             }
                         }
                         respawnQueue.push_back({i, ENEMY_RESPAWN_TIME});

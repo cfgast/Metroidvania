@@ -18,8 +18,14 @@ public:
     void render(Renderer& renderer) override;
 
     bool isAttacking() const { return m_attacking; }
+    bool isCharging()  const { return m_charging; }
 
     void setEnemies(std::vector<std::unique_ptr<GameObject>>* enemies) { m_enemies = enemies; }
+
+    void setChargeUnlocked(bool unlocked) { m_chargeUnlocked = unlocked; }
+
+    // Call this when the player takes damage to cancel any active charge.
+    void onDamageTaken();
 
 private:
     void checkHits();
@@ -33,6 +39,15 @@ private:
     float m_attackTimer   = 0.f;
     float m_cooldownTimer = 0.f;
     bool  m_attackWasDown = false;
+
+    // Charged spin-slash state
+    bool  m_chargeUnlocked = false;
+    bool  m_charging       = false;
+    float m_chargeTimer    = 0.f;
+    float m_minChargeTime  = 0.6f;
+    float m_spinDamageMult = 2.0f;
+    float m_spinReachMult  = 1.5f;
+    bool  m_spinSlashing   = false;   // True during a spin-slash attack
 
     std::set<GameObject*> m_hitEnemies;
     std::vector<std::unique_ptr<GameObject>>* m_enemies = nullptr;

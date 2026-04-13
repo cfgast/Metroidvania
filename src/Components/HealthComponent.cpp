@@ -17,6 +17,10 @@ void HealthComponent::takeDamage(float amount)
         return;
 
     m_currentHp = std::max(0.f, m_currentHp - amount);
+    m_timeSinceDmg = 0.f;
+
+    if (onDamage)
+        onDamage();
 
     if (m_currentHp <= 0.f && onDeath)
         onDeath();
@@ -28,6 +32,22 @@ void HealthComponent::heal(float amount)
         return;
 
     m_currentHp = std::min(m_maxHp, m_currentHp + amount);
+}
+
+void HealthComponent::setRegen(float regenRate, float regenDelay)
+{
+    m_regenRate  = regenRate;
+    m_regenDelay = regenDelay;
+}
+
+void HealthComponent::update(float dt)
+{
+    if (m_regenRate <= 0.f || m_currentHp <= 0.f || m_currentHp >= m_maxHp)
+        return;
+
+    m_timeSinceDmg += dt;
+    if (m_timeSinceDmg >= m_regenDelay)
+        heal(m_regenRate * dt);
 }
 
 void HealthComponent::render(Renderer& renderer)
