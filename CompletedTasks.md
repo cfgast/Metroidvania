@@ -1820,3 +1820,31 @@ Test all rendering features:
 Profile GPU frame time and compare against the old OpenGL backend to ensure
 no significant performance regression.
 ==============================================================================
+
+==============================================================================
+Task 23: Update documentation and architecture
+==============================================================================
+Implemented: true
+
+Updated all project documentation to reflect the completed Vulkan 1.3 migration:
+
+1. ReadMe.md:
+   - Fixed typos, added Build Requirements section (Vulkan SDK, CMake, C++17,
+     PhysX) and detailed Build Instructions (configure, build, shader
+     compilation, run)
+   - Noted that GLSL→SPIR-V compilation happens automatically at build time
+     via glslc from the Vulkan SDK
+
+2. CMakePresets.json:
+   - Removed stale SFML cache variables (SFML_BUILD_EXAMPLES, SFML_BUILD_DOC,
+     SFML_BUILD_TEST_SUITE) left over from the pre-OpenGL era
+
+3. architecture.md:
+   - Already up to date from prior migration tasks — verified Vulkan 1.3
+     references, VulkanRenderer documentation, Build & Dependencies table,
+     shader pipeline description, and removal of all OpenGL/GLAD references
+
+4. .gitignore:
+   - Already contains *.spv for compiled SPIR-V shaders — no changes needed
+
+==============================================================================

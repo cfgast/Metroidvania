@@ -102,27 +102,3 @@ constants. The camera-follows-player behavior in main.cpp calls setView()
 each frame with the player's position — no changes needed in main.cpp.
 
 ==============================================================================
-Task 23: Update documentation and architecture
-==============================================================================
-Implemented: false
-
-Update architecture.md:
-- Change "OpenGL 3.3 Core" references to "Vulkan 1.3"
-- Update the Rendering section: VulkanRenderer replaces GLRenderer,
-  describe new pipeline (swap chain, dynamic rendering, push constants,
-  descriptor sets, VMA, SPIR-V shaders)
-- Update the Build & Dependencies table: remove GLAD and opengl32,
-  add Vulkan SDK, VMA, vk-bootstrap
-- Update shader information: external .glsl/.spv files in assets/shaders/
-  instead of inline GLSL strings
-- Note the offline SPIR-V compilation step in the build instructions
-
-Update ReadMe.md:
-- Add Vulkan SDK as a build requirement
-- Update build instructions if any CMake steps changed
-
-Update .gitignore:
-- Add *.spv if compiled shaders are not committed
-- Add any Vulkan-specific build artifacts
-
-==============================================================================

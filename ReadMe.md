@@ -1,15 +1,51 @@
 ==============================================================================
 Project Description
 ==============================================================================
-This project is a 4-8 mutliplayer metroidvania written in C++
+This project is a 4-8 multiplayer metroidvania written in C++17.
 
 ==============================================================================
 Project Parts
 ==============================================================================
-The game should have a component based object structure that makes is easy to create game objects that are a group of funtionality.
+The game uses a component-based object structure that makes it easy to create
+game objects composed of reusable functionality slices.
 
 Game Renderer: Vulkan 1.3 (via GLFW + VMA + vk-bootstrap)
-Game Physics: Nvidia PhysX (integrated via PhysXWorld singleton; PhysX SDK in third_party/PhysX-src)
+Game Physics:  Nvidia PhysX (integrated via PhysXWorld singleton; PhysX SDK in third_party/PhysX-src)
+
+==============================================================================
+Build Requirements
+==============================================================================
+- CMake ≥ 3.20
+- C++17-capable compiler (MSVC / GCC / Clang)
+- Vulkan SDK 1.3+ (provides Vulkan headers, loader, validation layers,
+  and glslc for SPIR-V shader compilation)
+- Nvidia PhysX pre-built libraries in third_party/PhysX-install/
+
+All other dependencies (GLFW, GLM, nlohmann/json, FreeType, VMA,
+vk-bootstrap, stb_image) are fetched automatically via CMake FetchContent.
+
+==============================================================================
+Build Instructions
+==============================================================================
+1. Install the Vulkan SDK (https://vulkan.lunarg.com/) and ensure the
+   VULKAN_SDK environment variable is set (the installer does this).
+2. Configure and build:
+
+     cmake --preset windows-debug
+     cmake --build build --config Debug
+
+   Or for a release build:
+
+     cmake --preset windows-release
+     cmake --build build --config Release
+
+3. The build automatically:
+   - Compiles GLSL 450 shaders in assets/shaders/ to SPIR-V (.spv) via
+     glslc (bundled with the Vulkan SDK)
+   - Copies PhysX DLLs, maps/, and assets/ (including compiled .spv
+     shaders) next to the executable
+
+4. Run:   build/Debug/Metroidvania.exe  (or build/Release/...)
 
 ==============================================================================
 Key Project Files

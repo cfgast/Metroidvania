@@ -11,10 +11,7 @@
         "strategy": "set"
       },
       "cacheVariables": {
-        "CMAKE_BUILD_TYPE": "Debug",
-        "SFML_BUILD_EXAMPLES": "OFF",
-        "SFML_BUILD_DOC": "OFF",
-        "SFML_BUILD_TEST_SUITE": "OFF"
+        "CMAKE_BUILD_TYPE": "Debug"
       }
     },
     {
@@ -27,10 +24,7 @@
         "strategy": "set"
       },
       "cacheVariables": {
-        "CMAKE_BUILD_TYPE": "Release",
-        "SFML_BUILD_EXAMPLES": "OFF",
-        "SFML_BUILD_DOC": "OFF",
-        "SFML_BUILD_TEST_SUITE": "OFF"
+        "CMAKE_BUILD_TYPE": "Release"
       }
     }
   ],
