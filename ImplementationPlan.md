@@ -102,34 +102,6 @@ constants. The camera-follows-player behavior in main.cpp calls setView()
 each frame with the player's position — no changes needed in main.cpp.
 
 ==============================================================================
-Task 22: Validation and testing
-==============================================================================
-Implemented: false
-
-Run the game with Vulkan validation layers enabled (VK_LAYER_KHRONOS_validation)
-and verify zero validation errors during normal gameplay.
-
-Test all rendering features:
-- Flat-color rectangles: platforms, HP bars, transition fade overlays
-- Outlined rectangles: HP bar outlines, UI elements
-- Textured sprites: player animation, slime animation, sprite sheets
-- Normal-mapped lighting: point lights, spot lights, player dynamic light,
-  normal map interaction on sprites and flat surfaces
-- Text rendering: UI labels, menu text, debug text at multiple sizes
-- UI menus: save slot screen, pause menu, controls menu
-- Circles: slime attack particles (drawCircle)
-- Rounded rectangles: UI buttons and panels
-- Vertex-colored geometry: combat arc VFX (drawTriangleStrip), debug lines
-- Transition fades: room transitions with fade-out/fade-in
-- Debug menu: F1 overlay with map loader dialog
-- Window resize: verify swap chain recreation, no artifacts
-- V-sync: verify smooth 60 FPS frame pacing
-- Camera: verify player-following camera, setView/resetView transitions
-
-Profile GPU frame time and compare against the old OpenGL backend to ensure
-no significant performance regression.
-
-==============================================================================
 Task 23: Update documentation and architecture
 ==============================================================================
 Implemented: false

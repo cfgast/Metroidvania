@@ -1,5 +1,6 @@
 #pragma once
 
+#include <cstdint>
 #include <string>
 
 #include "../Input/InputTypes.h"
@@ -32,4 +33,9 @@ private:
     // Layout cache for hit-testing
     struct ItemLayout { float x, y, w, h; };
     ItemLayout m_buttonLayout = {};
+
+    // Cached validation/perf stats displayed in overlay
+    float    m_gpuFrameTimeMs     = 0.f;
+    uint32_t m_validationErrors   = 0;
+    uint32_t m_validationWarnings = 0;
 };

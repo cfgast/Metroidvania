@@ -12,6 +12,45 @@
 #include <fstream>
 #include <iostream>
 #include <stdexcept>
+#include <atomic>
+
+// ── Validation layer diagnostics ─────────────────────────────────────────────
+
+static std::atomic<uint32_t> s_validationErrors{0};
+static std::atomic<uint32_t> s_validationWarnings{0};
+
+static VKAPI_ATTR VkBool32 VKAPI_CALL vulkanDebugCallback(
+    VkDebugUtilsMessageSeverityFlagBitsEXT      severity,
+    VkDebugUtilsMessageTypeFlagsEXT             type,
+    const VkDebugUtilsMessengerCallbackDataEXT* callbackData,
+    void* /*userData*/)
+{
+    const char* typeStr = "GENERAL";
+    if (type & VK_DEBUG_UTILS_MESSAGE_TYPE_VALIDATION_BIT_EXT)
+        typeStr = "VALIDATION";
+    else if (type & VK_DEBUG_UTILS_MESSAGE_TYPE_PERFORMANCE_BIT_EXT)
+        typeStr = "PERFORMANCE";
+
+    if (severity & VK_DEBUG_UTILS_MESSAGE_SEVERITY_ERROR_BIT_EXT)
+    {
+        s_validationErrors.fetch_add(1, std::memory_order_relaxed);
+        std::cerr << "[Vulkan ERROR][" << typeStr << "] "
+                  << callbackData->pMessage << "\n";
+    }
+    else if (severity & VK_DEBUG_UTILS_MESSAGE_SEVERITY_WARNING_BIT_EXT)
+    {
+        s_validationWarnings.fetch_add(1, std::memory_order_relaxed);
+        std::cerr << "[Vulkan WARNING][" << typeStr << "] "
+                  << callbackData->pMessage << "\n";
+    }
+    else if (severity & VK_DEBUG_UTILS_MESSAGE_SEVERITY_INFO_BIT_EXT)
+    {
+        std::cout << "[Vulkan INFO][" << typeStr << "] "
+                  << callbackData->pMessage << "\n";
+    }
+
+    return VK_FALSE;
+}
 
 // ── std140-aligned GPU lighting structs ──────────────────────────────────────
 
@@ -60,7 +99,14 @@ void VulkanRenderer::initVulkan()
 
 #ifndef NDEBUG
     instanceBuilder.request_validation_layers()
-                   .use_default_debug_messenger();
+                   .set_debug_callback(vulkanDebugCallback)
+                   .set_debug_messenger_severity(
+                       VK_DEBUG_UTILS_MESSAGE_SEVERITY_ERROR_BIT_EXT |
+                       VK_DEBUG_UTILS_MESSAGE_SEVERITY_WARNING_BIT_EXT)
+                   .set_debug_messenger_type(
+                       VK_DEBUG_UTILS_MESSAGE_TYPE_GENERAL_BIT_EXT |
+                       VK_DEBUG_UTILS_MESSAGE_TYPE_VALIDATION_BIT_EXT |
+                       VK_DEBUG_UTILS_MESSAGE_TYPE_PERFORMANCE_BIT_EXT);
 #endif
 
     auto instResult = instanceBuilder.build();
@@ -104,9 +150,11 @@ void VulkanRenderer::initVulkan()
 
     vkb::PhysicalDevice vkbPhysDev = physResult.value();
     m_physicalDevice = vkbPhysDev.physical_device;
+    m_gpuDeviceName  = vkbPhysDev.properties.deviceName;
+    m_timestampPeriod = vkbPhysDev.properties.limits.timestampPeriod;
+    m_timestampSupported = (m_timestampPeriod > 0.f);
 
-    std::cout << "[Vulkan] Selected GPU: "
-              << vkbPhysDev.properties.deviceName << "\n";
+    std::cout << "[Vulkan] Selected GPU: " << m_gpuDeviceName << "\n";
 
     // Logical device with graphics + present queues
     vkb::DeviceBuilder devBuilder(vkbPhysDev);
@@ -303,6 +351,25 @@ void VulkanRenderer::createSyncObjects()
     }
 }
 
+void VulkanRenderer::createTimestampQueries()
+{
+    if (!m_timestampSupported)
+        return;
+
+    VkQueryPoolCreateInfo queryInfo{};
+    queryInfo.sType      = VK_STRUCTURE_TYPE_QUERY_POOL_CREATE_INFO;
+    queryInfo.queryType  = VK_QUERY_TYPE_TIMESTAMP;
+    queryInfo.queryCount = TIMESTAMPS_PER_FRAME * MAX_FRAMES_IN_FLIGHT;
+
+    if (vkCreateQueryPool(m_device, &queryInfo, nullptr,
+                          &m_timestampQueryPool) != VK_SUCCESS)
+    {
+        std::cerr << "[Vulkan] Failed to create timestamp query pool "
+                     "(GPU frame timing disabled)\n";
+        m_timestampSupported = false;
+    }
+}
+
 void VulkanRenderer::cleanupVulkan()
 {
     if (m_device != VK_NULL_HANDLE)
@@ -326,6 +393,10 @@ void VulkanRenderer::cleanupVulkan()
         // ── Destroy quad vertex buffer ───────────────────────────────
         if (m_quadBuffer != VK_NULL_HANDLE)
             vmaDestroyBuffer(m_allocator, m_quadBuffer, m_quadAllocation);
+
+        // ── Destroy timestamp query pool ─────────────────────────────
+        if (m_timestampQueryPool != VK_NULL_HANDLE)
+            vkDestroyQueryPool(m_device, m_timestampQueryPool, nullptr);
 
         for (uint32_t i = 0; i < MAX_FRAMES_IN_FLIGHT; ++i)
         {
@@ -2032,6 +2103,7 @@ VulkanRenderer::VulkanRenderer(const std::string& title, unsigned int width,
     createOffscreenImage();
     createCommandPool();
     createSyncObjects();
+    createTimestampQueries();
     createFlatPipeline();
     createQuadBuffer();
     createDynamicBuffers();
@@ -2074,6 +2146,14 @@ VulkanRenderer::~VulkanRenderer()
     if (m_window)
         glfwDestroyWindow(m_window);
     glfwTerminate();
+
+    // Print validation summary on shutdown
+    uint32_t errors   = s_validationErrors.load(std::memory_order_relaxed);
+    uint32_t warnings = s_validationWarnings.load(std::memory_order_relaxed);
+    std::cout << "[Vulkan] Shutdown — validation errors: " << errors
+              << ", warnings: " << warnings << "\n";
+    if (errors == 0 && warnings == 0)
+        std::cout << "[Vulkan] Clean session: zero validation issues.\n";
 }
 
 // ── Input ────────────────────────────────────────────────────────────────────
@@ -2138,6 +2218,25 @@ void VulkanRenderer::ensureFrameStarted()
     // Reset dynamic buffer for this frame (GPU is done with it)
     m_dynamicBuffers[m_currentFrame].offset = 0;
 
+    // Read back GPU timestamps from this frame slot's previous submission
+    if (m_timestampSupported && m_timestampQueryPool != VK_NULL_HANDLE)
+    {
+        uint64_t timestamps[TIMESTAMPS_PER_FRAME];
+        uint32_t firstQuery = m_currentFrame * TIMESTAMPS_PER_FRAME;
+        VkResult tsResult = vkGetQueryPoolResults(
+            m_device, m_timestampQueryPool,
+            firstQuery, TIMESTAMPS_PER_FRAME,
+            sizeof(timestamps), timestamps, sizeof(uint64_t),
+            VK_QUERY_RESULT_64_BIT);
+
+        if (tsResult == VK_SUCCESS && timestamps[1] >= timestamps[0])
+        {
+            uint64_t deltaTicks = timestamps[1] - timestamps[0];
+            m_gpuFrameTimeMs = static_cast<float>(deltaTicks)
+                             * m_timestampPeriod / 1'000'000.f;
+        }
+    }
+
     // 2. Acquire next swap chain image
     VkResult acquireResult = vkAcquireNextImageKHR(
         m_device, m_swapchain, UINT64_MAX,
@@ -2165,6 +2264,15 @@ void VulkanRenderer::ensureFrameStarted()
     beginInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
     beginInfo.flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT;
     vkBeginCommandBuffer(cmd, &beginInfo);
+
+    // Reset and write start timestamp for GPU frame timing
+    if (m_timestampSupported && m_timestampQueryPool != VK_NULL_HANDLE)
+    {
+        uint32_t firstQuery = m_currentFrame * TIMESTAMPS_PER_FRAME;
+        vkCmdResetQueryPool(cmd, m_timestampQueryPool, firstQuery, TIMESTAMPS_PER_FRAME);
+        vkCmdWriteTimestamp(cmd, VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT,
+                            m_timestampQueryPool, firstQuery);
+    }
 
     // 5. Transition swap chain image: UNDEFINED → COLOR_ATTACHMENT_OPTIMAL
     transitionImageLayout(cmd, m_swapchainImages[m_currentImageIndex],
@@ -2212,6 +2320,14 @@ void VulkanRenderer::display()
     transitionImageLayout(cmd, m_swapchainImages[m_currentImageIndex],
                           VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
                           VK_IMAGE_LAYOUT_PRESENT_SRC_KHR);
+
+    // Write end timestamp for GPU frame timing
+    if (m_timestampSupported && m_timestampQueryPool != VK_NULL_HANDLE)
+    {
+        uint32_t endQuery = m_currentFrame * TIMESTAMPS_PER_FRAME + 1;
+        vkCmdWriteTimestamp(cmd, VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT,
+                            m_timestampQueryPool, endQuery);
+    }
 
     vkEndCommandBuffer(cmd);
 
@@ -2454,6 +2570,28 @@ void VulkanRenderer::getWindowSize(float& w, float& h) const
 {
     w = m_windowW;
     h = m_windowH;
+}
+
+// ── Diagnostics ──────────────────────────────────────────────────────────────
+
+uint32_t VulkanRenderer::getValidationErrorCount() const
+{
+    return s_validationErrors.load(std::memory_order_relaxed);
+}
+
+uint32_t VulkanRenderer::getValidationWarningCount() const
+{
+    return s_validationWarnings.load(std::memory_order_relaxed);
+}
+
+float VulkanRenderer::getGpuFrameTimeMs() const
+{
+    return m_gpuFrameTimeMs;
+}
+
+std::string VulkanRenderer::getGpuDeviceName() const
+{
+    return m_gpuDeviceName;
 }
 
 // ── Primitives ───────────────────────────────────────────────────────────────

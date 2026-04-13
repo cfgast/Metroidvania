@@ -103,6 +103,12 @@ public:
     void drawTriangleStrip(const std::vector<Vertex>& verts) override;
     void drawLines(const std::vector<Vertex>& verts) override;
 
+    // ── Diagnostics ───────────────────────────────────────────────────
+    uint32_t    getValidationErrorCount()   const override;
+    uint32_t    getValidationWarningCount() const override;
+    float       getGpuFrameTimeMs()         const override;
+    std::string getGpuDeviceName()          const override;
+
     GLFWwindow* getWindow() const { return m_window; }
 
 private:
@@ -114,6 +120,7 @@ private:
     void destroyOffscreenImage();
     void createCommandPool();
     void createSyncObjects();
+    void createTimestampQueries();
     void cleanupVulkan();
 
     void recreateSwapchain();
@@ -364,4 +371,14 @@ private:
     std::unordered_map<FontHandle, FontData>  m_fonts;
     std::unordered_map<std::string, FontHandle> m_fontPaths;
     FontHandle m_nextFontHandle = 1;
+
+    // ── GPU timestamp queries (frame profiling) ──────────────────────
+    VkQueryPool m_timestampQueryPool = VK_NULL_HANDLE;
+    float       m_timestampPeriod    = 0.f;   // nanoseconds per tick
+    float       m_gpuFrameTimeMs     = 0.f;   // last measured GPU frame time
+    bool        m_timestampSupported = false;
+    static constexpr uint32_t TIMESTAMPS_PER_FRAME = 2; // begin + end
+
+    // ── GPU device name ──────────────────────────────────────────────
+    std::string m_gpuDeviceName;
 };

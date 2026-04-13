@@ -84,4 +84,10 @@ public:
     struct Vertex { float x, y, r, g, b, a; };
     virtual void drawTriangleStrip(const std::vector<Vertex>& verts) = 0;
     virtual void drawLines(const std::vector<Vertex>& verts) = 0;
+
+    // ── Diagnostics (optional overrides) ──────────────────────────────
+    virtual uint32_t    getValidationErrorCount()   const { return 0; }
+    virtual uint32_t    getValidationWarningCount() const { return 0; }
+    virtual float       getGpuFrameTimeMs()         const { return 0.f; }
+    virtual std::string getGpuDeviceName()          const { return ""; }
 };

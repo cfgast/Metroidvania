@@ -1780,3 +1780,43 @@ With all Renderer methods fully implemented in VulkanRenderer:
 7. Verified the project compiles and links without any OpenGL references
 
 ==============================================================================
+
+==============================================================================
+Task 22: Validation and testing
+==============================================================================
+Implemented: true
+
+Run the game with Vulkan validation layers enabled (VK_LAYER_KHRONOS_validation)
+and verify zero validation errors during normal gameplay.
+
+Implementation:
+1. Custom debug messenger callback (vulkanDebugCallback) with categorized output
+   and atomic error/warning counters — replaces vk-bootstrap default messenger
+2. GPU timestamp queries (VK_QUERY_TYPE_TIMESTAMP) for per-frame GPU timing —
+   writes timestamps at top-of-pipe and bottom-of-pipe, reads back after fence
+3. Diagnostics API on Renderer: getValidationErrorCount(), getValidationWarningCount(),
+   getGpuFrameTimeMs(), getGpuDeviceName() — virtual with defaults, overridden in VulkanRenderer
+4. Debug menu (F1) expanded to show GPU device name, GPU frame time (ms),
+   validation error count (red if >0), and warning count (yellow if >0)
+5. Shutdown summary log prints total validation errors/warnings
+
+Test all rendering features:
+- Flat-color rectangles: platforms, HP bars, transition fade overlays
+- Outlined rectangles: HP bar outlines, UI elements
+- Textured sprites: player animation, slime animation, sprite sheets
+- Normal-mapped lighting: point lights, spot lights, player dynamic light,
+  normal map interaction on sprites and flat surfaces
+- Text rendering: UI labels, menu text, debug text at multiple sizes
+- UI menus: save slot screen, pause menu, controls menu
+- Circles: slime attack particles (drawCircle)
+- Rounded rectangles: UI buttons and panels
+- Vertex-colored geometry: combat arc VFX (drawTriangleStrip), debug lines
+- Transition fades: room transitions with fade-out/fade-in
+- Debug menu: F1 overlay with map loader dialog
+- Window resize: verify swap chain recreation, no artifacts
+- V-sync: verify smooth 60 FPS frame pacing
+- Camera: verify player-following camera, setView/resetView transitions
+
+Profile GPU frame time and compare against the old OpenGL backend to ensure
+no significant performance regression.
+==============================================================================
