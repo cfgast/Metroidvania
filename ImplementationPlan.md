@@ -74,35 +74,6 @@ Architecture notes for agents:
   for backward compatibility (missing = level 1, xp 0)
 
 ==============================================================================
-Task 25: XP award on enemy kill
-==============================================================================
-Implemented: false
-
-In main.cpp's enemy update loop (the dead-enemy detection block), award
-XP when an enemy is first detected as dead:
-
-Currently, the code detects isDead() and queues respawns. Add XP award
-BEFORE the respawn queue check, but only once per death. Use the existing
-`alreadyQueued` check -- if the enemy is dead and NOT yet in the respawn
-queue, it's a fresh kill:
-
-  if (hp && hp->isDead())
-  {
-      bool alreadyQueued = false;
-      for (const auto& entry : respawnQueue)
-          if (entry.definitionIndex == i) { alreadyQueued = true; break; }
-      if (!alreadyQueued && i < defs.size())
-      {
-          playerState.awardXP(1);   // <-- NEW: award 1 XP per kill
-          respawnQueue.push_back({i, ENEMY_RESPAWN_TIME});
-      }
-      continue;
-  }
-
-This awards exactly 1 XP per enemy death. With xpToLevel = 5, the player
-levels up every 5 kills. Respawned enemies award XP again when re-killed.
-
-==============================================================================
 Task 26: XP bar and level HUD
 ==============================================================================
 Implemented: false

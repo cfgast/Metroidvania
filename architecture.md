@@ -259,7 +259,8 @@ A back-end–agnostic input abstraction that isolates all input polling and even
  │     • Update all components (player+enemies)│
  │     • Check transition zones → start fade   │
  │     • Check ability pickups → unlock        │
- │     • Remove dead enemies                   │
+ │     • Award XP on fresh enemy kill           │
+│     • Remove dead enemies                   │
  │  6. Render (all via renderer.*):            │
  │     • renderer.beginFrame() (bind FBO)      │
  │     • renderer.clearLights()                │
@@ -275,7 +276,7 @@ A back-end–agnostic input abstraction that isolates all input polling and even
 ### Entity setup
 
 - **Player**: `InputComponent` → `PhysicsComponent` → `RenderComponent` → `AnimationComponent` → `HealthComponent` → `CombatComponent` → `LightComponent`. Death callback teleports to spawn and refills HP. LightComponent provides the player's dynamic light (warm white point light, registered before draw calls).
-- **Enemy**: `InputComponent` → `PhysicsComponent` → `RenderComponent` → `AnimationComponent` → `HealthComponent` → `EnemyAIComponent` → (optional) `SlimeAttackComponent`. Death callback erases enemy from list.
+- **Enemy**: `InputComponent` → `PhysicsComponent` → `RenderComponent` → `AnimationComponent` → `HealthComponent` → `EnemyAIComponent` → (optional) `SlimeAttackComponent`. Death callback erases enemy from list. On first detection of death (before respawn queue), `playerState.awardXP(1)` grants 1 XP per kill.
 
 ---
 

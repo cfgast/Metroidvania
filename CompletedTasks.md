@@ -1877,3 +1877,34 @@ Update main.cpp:
 - Restore xp/level from loaded SaveData when starting/loading a game
 
 ==============================================================================
+
+==============================================================================
+Task 25: XP award on enemy kill
+==============================================================================
+Implemented: true
+
+In main.cpp's enemy update loop (the dead-enemy detection block), award
+XP when an enemy is first detected as dead:
+
+Currently, the code detects isDead() and queues respawns. Add XP award
+BEFORE the respawn queue check, but only once per death. Use the existing
+`alreadyQueued` check -- if the enemy is dead and NOT yet in the respawn
+queue, it's a fresh kill:
+
+  if (hp && hp->isDead())
+  {
+      bool alreadyQueued = false;
+      for (const auto& entry : respawnQueue)
+          if (entry.definitionIndex == i) { alreadyQueued = true; break; }
+      if (!alreadyQueued && i < defs.size())
+      {
+          playerState.awardXP(1);   // <-- NEW: award 1 XP per kill
+          respawnQueue.push_back({i, ENEMY_RESPAWN_TIME});
+      }
+      continue;
+  }
+
+This awards exactly 1 XP per enemy death. With xpToLevel = 5, the player
+levels up every 5 kills. Respawned enemies award XP again when re-killed.
+
+==============================================================================

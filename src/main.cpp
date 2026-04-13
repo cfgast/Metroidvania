@@ -49,6 +49,15 @@ int main()
     std::vector<std::unique_ptr<GameObject>> enemies;
     GameObject player;
 
+    // Enemy respawn tracking: when an enemy dies, record which definition
+    // index it was and count down a timer to respawn it.
+    static constexpr float ENEMY_RESPAWN_TIME = 30.f;
+    struct RespawnEntry {
+        size_t definitionIndex;
+        float  timer;
+    };
+    std::vector<RespawnEntry> respawnQueue;
+
     // Helper: build a SaveData snapshot from current game state.
     auto buildSaveData = [&]() -> SaveData {
         SaveData sd;
@@ -83,6 +92,7 @@ int main()
         if (auto* physics = player.getComponent<PhysicsComponent>())
             physics->setPlayerState(&playerState);
         auto* health = player.addComponent<HealthComponent>(100.f);
+        health->setRegen(5.f, 3.f);  // 5 HP/s after 3s without damage
         health->onDeath = [&player, &map]() {
             if (auto* physics = player.getComponent<PhysicsComponent>())
                 physics->teleport(map.getSpawnPoint());
@@ -129,39 +139,43 @@ int main()
         }
     };
 
+    auto spawnSingleEnemy = [&](const EnemyDefinition& def, Map& m, GameObject& p)
+        -> std::unique_ptr<GameObject>
+    {
+        auto enemy = std::make_unique<GameObject>();
+        enemy->position = def.position;
+        enemy->addComponent<EnemyAIComponent>(p, def.waypointA, def.waypointB,
+                                              def.damage, 0.5f);
+        enemy->addComponent<InputComponent>();
+        enemy->addComponent<RenderComponent>(def.size.x, def.size.y, 0.f, 1.f, 0.f);
+        enemy->addComponent<PhysicsComponent>(m, def.size, def.speed);
+        enemy->addComponent<HealthComponent>(def.hp);
+        enemy->addComponent<SlimeAttackComponent>(p, 5.f);
+
+        auto* anim = enemy->addComponent<AnimationComponent>();
+        {
+            const std::string atlas = "assets/slime_spritesheet.png";
+            const int fw = 40, fh = 40;
+            auto makeFrames = [&](int row, int count) {
+                std::vector<AnimationComponent::FrameRect> frames;
+                for (int i = 0; i < count; ++i)
+                    frames.push_back({i * fw, row * fh, fw, fh});
+                return frames;
+            };
+            anim->addAnimation("idle",       atlas, makeFrames(0, 4), 0.25f);
+            anim->addAnimation("move-right", atlas, makeFrames(1, 4), 0.12f);
+            anim->addAnimation("move-left",  atlas, makeFrames(2, 4), 0.12f);
+            anim->addAnimation("jitter",     atlas, makeFrames(3, 4), 0.05f);
+            anim->play("idle");
+        }
+        return enemy;
+    };
+
     auto spawnEnemies = [&](Map& m, GameObject& p)
     {
         std::vector<std::unique_ptr<GameObject>> result;
         for (const auto& def : m.getEnemyDefinitions())
-        {
-            auto enemy = std::make_unique<GameObject>();
-            enemy->position = def.position;
-            enemy->addComponent<EnemyAIComponent>(p, def.waypointA, def.waypointB,
-                                                  def.damage, 0.5f);
-            enemy->addComponent<InputComponent>();
-            enemy->addComponent<RenderComponent>(def.size.x, def.size.y, 0.f, 1.f, 0.f);
-            enemy->addComponent<PhysicsComponent>(m, def.size, def.speed);
-            enemy->addComponent<HealthComponent>(def.hp);
-            enemy->addComponent<SlimeAttackComponent>(p, 5.f);
-
-            auto* anim = enemy->addComponent<AnimationComponent>();
-            {
-                const std::string atlas = "assets/slime_spritesheet.png";
-                const int fw = 40, fh = 40;
-                auto makeFrames = [&](int row, int count) {
-                    std::vector<AnimationComponent::FrameRect> frames;
-                    for (int i = 0; i < count; ++i)
-                        frames.push_back({i * fw, row * fh, fw, fh});
-                    return frames;
-                };
-                anim->addAnimation("idle",       atlas, makeFrames(0, 4), 0.25f);
-                anim->addAnimation("move-right", atlas, makeFrames(1, 4), 0.12f);
-                anim->addAnimation("move-left",  atlas, makeFrames(2, 4), 0.12f);
-                anim->addAnimation("jitter",     atlas, makeFrames(3, 4), 0.05f);
-                anim->play("idle");
-            }
-            result.push_back(std::move(enemy));
-        }
+            result.push_back(spawnSingleEnemy(def, m, p));
         return result;
     };
 
@@ -176,6 +190,7 @@ int main()
         else
             player.position = spawnPos;
         enemies = spawnEnemies(map, player);
+        respawnQueue.clear();
     };
 
     // Save-slot selection screen (shown at launch)
@@ -233,6 +248,7 @@ int main()
                     player.position = spawn;
 
                 enemies = spawnEnemies(map, player);
+                respawnQueue.clear();
 
                 // Brief cooldown so the player isn't immediately re-triggered
                 // by the return transition zone they spawn inside of.
@@ -543,12 +559,42 @@ int main()
                 dashGhosts.end());
         }
 
-        for (auto& enemy : enemies)
+        // Update living enemies; queue dead ones for respawn
         {
-            auto* hp = enemy->getComponent<HealthComponent>();
-            if (hp && hp->isDead())
-                continue;
-            enemy->update(dt);
+            const auto& defs = map.getEnemyDefinitions();
+            for (size_t i = 0; i < enemies.size(); ++i)
+            {
+                auto* hp = enemies[i]->getComponent<HealthComponent>();
+                if (hp && hp->isDead())
+                {
+                    // Check if this enemy is already queued for respawn
+                    bool alreadyQueued = false;
+                    for (const auto& entry : respawnQueue)
+                        if (entry.definitionIndex == i) { alreadyQueued = true; break; }
+                    if (!alreadyQueued && i < defs.size())
+                    {
+                        playerState.awardXP(1);
+                        respawnQueue.push_back({i, ENEMY_RESPAWN_TIME});
+                    }
+                    continue;
+                }
+                enemies[i]->update(dt);
+            }
+
+            // Tick respawn timers and respawn expired entries
+            for (auto it = respawnQueue.begin(); it != respawnQueue.end(); )
+            {
+                it->timer -= dt;
+                if (it->timer <= 0.f)
+                {
+                    size_t idx = it->definitionIndex;
+                    if (idx < defs.size() && idx < enemies.size())
+                        enemies[idx] = spawnSingleEnemy(defs[idx], map, player);
+                    it = respawnQueue.erase(it);
+                }
+                else
+                    ++it;
+            }
         }
 
         if (transitionCooldown > 0.f)
