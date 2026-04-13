@@ -88,7 +88,8 @@ public:
     TextureHandle loadTexture(const std::string& path) override;
     void drawSprite(TextureHandle tex, float x, float y,
                     int frameX, int frameY, int frameW, int frameH,
-                    float originX, float originY) override;
+                    float originX, float originY,
+                    float tintR = 1.f, float tintG = 1.f, float tintB = 1.f) override;
 
     // ── Text ──────────────────────────────────────────────────────────
     FontHandle loadFont(const std::string& path) override;

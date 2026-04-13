@@ -6,6 +6,9 @@ layout(location = 1) in vec2 aTexCoord;
 layout(push_constant) uniform PushConstants {
     mat4 uProjection;
     int  uHasNormalMap;
+    float uTintR;
+    float uTintG;
+    float uTintB;
 } pc;
 
 layout(location = 0) out vec2 vTexCoord;

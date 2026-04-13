@@ -68,7 +68,8 @@ public:
     virtual TextureHandle loadTexture(const std::string& path) = 0;
     virtual void drawSprite(TextureHandle tex, float x, float y,
                             int frameX, int frameY, int frameW, int frameH,
-                            float originX, float originY) = 0;
+                            float originX, float originY,
+                            float tintR = 1.f, float tintG = 1.f, float tintB = 1.f) = 0;
 
     // ── Text ──────────────────────────────────────────────────────────
     using FontHandle = uint64_t;

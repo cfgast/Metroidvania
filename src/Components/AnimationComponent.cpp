@@ -95,5 +95,6 @@ void AnimationComponent::render(Renderer& renderer)
 
     renderer.drawSprite(anim.textureHandle, x, y,
                         frame.x, frame.y, frame.w, frame.h,
-                        frame.w * 0.5f, frame.h * 0.5f);
+                        frame.w * 0.5f, frame.h * 0.5f,
+                        m_tintR, m_tintG, m_tintB);
 }

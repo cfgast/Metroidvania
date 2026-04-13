@@ -8,6 +8,9 @@ layout(location = 1) in vec2 vWorldPos;
 layout(push_constant) uniform PushConstants {
     mat4 uProjection;
     int  uHasNormalMap;
+    float uTintR;
+    float uTintG;
+    float uTintB;
 } pc;
 
 layout(set = 1, binding = 0) uniform sampler2D uTexture;
@@ -32,6 +35,7 @@ void main()
         normal = vec3(0.0, 0.0, 1.0);
     }
 
+    vec3 tint = vec3(pc.uTintR, pc.uTintG, pc.uTintB);
     vec3 lighting = calcLighting(vWorldPos, normal);
-    FragColor = vec4(texColor.rgb * lighting, texColor.a);
+    FragColor = vec4(texColor.rgb * lighting * tint, texColor.a);
 }

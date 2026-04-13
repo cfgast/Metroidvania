@@ -1937,3 +1937,49 @@ for the level label.
 Only render when gameStarted is true and not on the save-slot screen.
 
 ==============================================================================
+
+==============================================================================
+Task 27: Armor sprite progression
+==============================================================================
+Implemented: true
+
+Create or extend the player sprite sheet to include 5 armor tiers. Each
+tier has the same animation set as the base character (idle, run-right,
+run-left, jump, fall, wall-slide-right, wall-slide-left, dash-right,
+dash-left) but with progressively more armor drawn on the character.
+
+Sprite sheet layout (assets/player_spritesheet.png):
+- The current sheet has 9 rows (rows 0-8) for the base character
+- Add 4 more sets of 9 rows each for armor tiers 2-5
+  OR create separate sprite sheets per tier:
+    assets/player_armor_1.png (existing base)
+    assets/player_armor_2.png (boots)
+    assets/player_armor_3.png (boots + legs)
+    assets/player_armor_4.png (boots + legs + chest)
+    assets/player_armor_5.png (full armor)
+
+Since this is a code task (not art), create placeholder sprites:
+- Tier 2-5: copy the base frames but tint them with progressively
+  stronger color overlays to visually indicate armor level:
+    Tier 2: slight bronze tint
+    Tier 3: silver tint
+    Tier 4: gold tint
+    Tier 5: bright platinum/white tint
+- Use stb_image to load the base sheet, apply per-pixel color multiply
+  in a build-time or startup tool, and save the tinted versions
+  OR simply reuse the same sprite sheet and change the draw tint
+
+Simpler alternative (recommended for now): add a tint/color overlay to
+the AnimationComponent or drawSprite system, so the same sprites render
+with a level-based color wash. This avoids creating new art assets.
+
+Add a function in main.cpp (or a helper) that updates the player's
+visual appearance based on playerState.level. Call it on level-up and
+on game load. If using the tint approach, store the tint color per level:
+  Level 1: no tint (1.0, 1.0, 1.0)
+  Level 2: bronze (1.0, 0.85, 0.6)
+  Level 3: silver (0.8, 0.85, 0.9)
+  Level 4: gold (1.0, 0.9, 0.4)
+  Level 5: platinum (0.9, 0.95, 1.0) with slight glow
+
+==============================================================================

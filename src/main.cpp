@@ -85,6 +85,17 @@ int main()
             m.removeAbilityPickup(id);
     };
 
+    // Returns the armor tint color for the given player level (1-5).
+    auto getArmorTint = [](uint32_t level) -> glm::vec3 {
+        switch (level) {
+            case 2:  return {1.0f, 0.85f, 0.6f};   // bronze
+            case 3:  return {0.8f, 0.85f, 0.9f};    // silver
+            case 4:  return {1.0f, 0.9f,  0.4f};    // gold
+            case 5:  return {0.9f, 0.95f, 1.0f};    // platinum
+            default: return {1.0f, 1.0f,  1.0f};    // no tint
+        }
+    };
+
     auto setupPlayer = [&]() {
         player.addComponent<InputComponent>();
         player.addComponent<RenderComponent>(playerSize.x, playerSize.y, 0.f, 1.f, 0.f);
@@ -137,6 +148,10 @@ int main()
             anim->addAnimation("dash-left",        atlas, makeFrames(8, 3), 0.05f, false);
             anim->play("idle");
         }
+
+        // Apply armor tint based on current level
+        glm::vec3 tint = getArmorTint(playerState.level);
+        anim->setTintColor(tint.r, tint.g, tint.b);
     };
 
     auto spawnSingleEnemy = [&](const EnemyDefinition& def, Map& m, GameObject& p)
@@ -614,7 +629,16 @@ int main()
                         if (entry.definitionIndex == i) { alreadyQueued = true; break; }
                     if (!alreadyQueued && i < defs.size())
                     {
+                        uint32_t prevLevel = playerState.level;
                         playerState.awardXP(1);
+                        if (playerState.level != prevLevel)
+                        {
+                            if (auto* ac = player.getComponent<AnimationComponent>())
+                            {
+                                glm::vec3 tint = getArmorTint(playerState.level);
+                                ac->setTintColor(tint.r, tint.g, tint.b);
+                            }
+                        }
                         respawnQueue.push_back({i, ENEMY_RESPAWN_TIME});
                     }
                     continue;

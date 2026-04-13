@@ -29,6 +29,8 @@ public:
     const std::string& currentAnimation() const { return m_current; }
     bool isPlaying() const { return m_playing; }
 
+    void setTintColor(float r, float g, float b) { m_tintR = r; m_tintG = g; m_tintB = b; }
+
 private:
     using TextureHandle = uint64_t;
 
@@ -47,4 +49,8 @@ private:
     int m_frameIndex = 0;
     float m_elapsed  = 0.f;
     bool m_playing   = false;
+
+    float m_tintR = 1.f;
+    float m_tintG = 1.f;
+    float m_tintB = 1.f;
 };

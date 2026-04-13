@@ -52,6 +52,20 @@ static VKAPI_ATTR VkBool32 VKAPI_CALL vulkanDebugCallback(
     return VK_FALSE;
 }
 
+// Vulkan negative-height viewport: flips Y to match OpenGL convention so
+// existing Y-down ortho projections and UV coords work unchanged.
+static VkViewport makeFlippedViewport(VkExtent2D extent)
+{
+    VkViewport vp{};
+    vp.x        = 0.f;
+    vp.y        = static_cast<float>(extent.height);
+    vp.width    = static_cast<float>(extent.width);
+    vp.height   = -static_cast<float>(extent.height);
+    vp.minDepth = 0.f;
+    vp.maxDepth = 1.f;
+    return vp;
+}
+
 // ── std140-aligned GPU lighting structs ──────────────────────────────────────
 
 struct GpuLight {
@@ -759,11 +773,12 @@ void VulkanRenderer::createTexturedPipeline()
         m_flatDescriptorSetLayout, m_textureDescriptorSetLayout
     };
 
-    // Push constants: mat4 projection (64 bytes) + int hasNormalMap (4 bytes) = 68
+    // Push constants: mat4 projection (64 bytes) + int hasNormalMap (4 bytes)
+    //               + float tintR (4) + float tintG (4) + float tintB (4) = 80
     VkPushConstantRange pushRange{};
     pushRange.stageFlags = VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT;
     pushRange.offset     = 0;
-    pushRange.size       = 68;
+    pushRange.size       = 80;
 
     VkPipelineLayoutCreateInfo layoutInfo{};
     layoutInfo.sType                  = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO;
@@ -2407,13 +2422,7 @@ void VulkanRenderer::beginFrame()
     vkCmdBeginRendering(cmd, &renderInfo);
 
     // Set viewport and scissor to off-screen image dimensions
-    VkViewport viewport{};
-    viewport.x        = 0.f;
-    viewport.y        = 0.f;
-    viewport.width    = static_cast<float>(m_swapchainExtent.width);
-    viewport.height   = static_cast<float>(m_swapchainExtent.height);
-    viewport.minDepth = 0.f;
-    viewport.maxDepth = 1.f;
+    VkViewport viewport = makeFlippedViewport(m_swapchainExtent);
     vkCmdSetViewport(cmd, 0, 1, &viewport);
 
     VkRect2D scissor{};
@@ -2607,13 +2616,7 @@ static void bindVertColorPipeline(VkCommandBuffer cmd, VkPipeline pipeline,
 {
     vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, pipeline);
 
-    VkViewport viewport{};
-    viewport.x        = 0.f;
-    viewport.y        = 0.f;
-    viewport.width    = static_cast<float>(extent.width);
-    viewport.height   = static_cast<float>(extent.height);
-    viewport.minDepth = 0.f;
-    viewport.maxDepth = 1.f;
+    VkViewport viewport = makeFlippedViewport(extent);
     vkCmdSetViewport(cmd, 0, 1, &viewport);
 
     VkRect2D scissor{};
@@ -2642,13 +2645,7 @@ void VulkanRenderer::drawRect(float x, float y, float w, float h,
                             0, nullptr);
 
     // Set dynamic viewport
-    VkViewport viewport{};
-    viewport.x        = 0.f;
-    viewport.y        = 0.f;
-    viewport.width    = static_cast<float>(m_swapchainExtent.width);
-    viewport.height   = static_cast<float>(m_swapchainExtent.height);
-    viewport.minDepth = 0.f;
-    viewport.maxDepth = 1.f;
+    VkViewport viewport = makeFlippedViewport(m_swapchainExtent);
     vkCmdSetViewport(cmd, 0, 1, &viewport);
 
     // Set dynamic scissor
@@ -3290,7 +3287,8 @@ Renderer::TextureHandle VulkanRenderer::loadNormalMapForDiffuse(
 
 void VulkanRenderer::drawSprite(TextureHandle tex, float x, float y,
                                 int frameX, int frameY, int frameW, int frameH,
-                                float originX, float originY)
+                                float originX, float originY,
+                                float tintR, float tintG, float tintB)
 {
     auto it = m_textures.find(tex);
     if (it == m_textures.end())
@@ -3335,13 +3333,7 @@ void VulkanRenderer::drawSprite(TextureHandle tex, float x, float y,
 
     vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, m_texturedPipeline);
 
-    VkViewport viewport{};
-    viewport.x        = 0.f;
-    viewport.y        = 0.f;
-    viewport.width    = static_cast<float>(m_swapchainExtent.width);
-    viewport.height   = static_cast<float>(m_swapchainExtent.height);
-    viewport.minDepth = 0.f;
-    viewport.maxDepth = 1.f;
+    VkViewport viewport = makeFlippedViewport(m_swapchainExtent);
     vkCmdSetViewport(cmd, 0, 1, &viewport);
 
     VkRect2D scissor{};
@@ -3349,10 +3341,13 @@ void VulkanRenderer::drawSprite(TextureHandle tex, float x, float y,
     scissor.extent = m_swapchainExtent;
     vkCmdSetScissor(cmd, 0, 1, &scissor);
 
-    // Push projection matrix + hasNormalMap flag
+    // Push projection matrix + hasNormalMap flag + tint color
     struct {
         glm::mat4 projection;
         int32_t   hasNormalMap;
+        float     tintR;
+        float     tintG;
+        float     tintB;
     } pushData;
 
     // Look up the normal map for this diffuse texture
@@ -3367,6 +3362,9 @@ void VulkanRenderer::drawSprite(TextureHandle tex, float x, float y,
 
     pushData.projection   = m_projection;
     pushData.hasNormalMap  = hasNormal;
+    pushData.tintR         = tintR;
+    pushData.tintG         = tintG;
+    pushData.tintB         = tintB;
     vkCmdPushConstants(cmd, m_texturedPipelineLayout,
                        VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT,
                        0, sizeof(pushData), &pushData);
@@ -3793,13 +3791,7 @@ void VulkanRenderer::drawText(FontHandle font, const std::string& str,
 
     vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, m_textPipeline);
 
-    VkViewport viewport{};
-    viewport.x        = 0.f;
-    viewport.y        = 0.f;
-    viewport.width    = static_cast<float>(m_swapchainExtent.width);
-    viewport.height   = static_cast<float>(m_swapchainExtent.height);
-    viewport.minDepth = 0.f;
-    viewport.maxDepth = 1.f;
+    VkViewport viewport = makeFlippedViewport(m_swapchainExtent);
     vkCmdSetViewport(cmd, 0, 1, &viewport);
 
     VkRect2D scissor{};
